@@ -43,7 +43,9 @@ docker run --rm -p 3000:3000 \
   aetherknowledge/safehub:latest
 ```
 
-The SQLite database is stored in `/app/data/local.db`; keep `/app/data` on a persistent volume. Set `ORIGIN` to the public URL when deploying behind a domain or proxy. Apply database migrations as part of deployment when the schema changes.
+The SQLite database is stored in `./data/local.db` beside the Compose file. On startup, the container creates the database if needed and applies any pending SQL migrations from `drizzle/`. When you change the schema, generate and commit a migration with `pnpm db:generate`; the next container start applies it.
+
+Set `ORIGIN` to the public URL when deploying behind a domain or proxy.
 
 ## Building
 

@@ -24,13 +24,19 @@ ENV NODE_ENV=production \
     DATABASE_URL=/app/data/local.db
 
 WORKDIR /app
-RUN mkdir -p /app/data && chown -R node:node /app
+RUN apk add --no-cache su-exec \
+    && mkdir -p /app/data \
+    && chown -R node:node /app
 
 COPY --from=build --chown=node:node /app/build ./build
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/drizzle ./drizzle
+COPY --chown=root:root docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY --chown=node:node scripts/migrate.mjs ./scripts/migrate.mjs
 
-USER node
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 3000
 
-CMD ["node", "build"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
