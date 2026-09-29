@@ -1,10 +1,56 @@
 <script lang="ts">
+	type User = {
+		email: string;
+		password: string;
+		role: 'student' | 'registrar';
+	};
+
+	const users: User[] = [
+		{
+			email: 'student@student.com',
+			password: 'student123',
+			role: 'student'
+		},
+		{
+			email: 'registrar@registrar.com',
+			password: 'registrar123',
+			role: 'registrar'
+		}
+	];
+
+	function handleLogin(event: Event) {
+		event.preventDefault();
+
+		const form = event.target as HTMLFormElement;
+		const emailInput = form.querySelector<HTMLInputElement>('#email');
+		const passwordInput = form.querySelector<HTMLInputElement>('#password');
+
+		if (!emailInput || !passwordInput) {
+			alert('Email or password input not found.');
+			return;
+		}
+
+		const email = emailInput.value.trim();
+		const password = passwordInput.value.trim();
+
+		const user = users.find((u) => u.email === email && u.password === password);
+
+		if (user) {
+			if (user.role === 'student') {
+				window.location.href = '/user/dashboard';
+			} else if (user.role === 'registrar') {
+				window.location.href = '/user/dashboard';
+			}
+		} else {
+			alert('Invalid email or password. Please try again.');
+		}
+	}
 </script>
 
 <div class="min-h-dvh bg-base-100">
 	<div class="flex min-h-dvh w-full">
 		<aside
-			class="sticky top-0 h-dvh w-72 shrink-0 overflow-hidden bg-slate-900 text-base-100 sm:w-80 lg:w-105"
+			class="sticky top-0 hidden h-dvh w-72 shrink-0 overflow-hidden bg-slate-900 text-base-100 sm:block sm:w-80 lg:w-105"
 		>
 			<div
 				class="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(22,163,74,0.16),transparent_45%)]"
@@ -41,16 +87,40 @@
 		<main
 			class="flex min-w-0 flex-1 items-center justify-center bg-slate-50 px-4 py-10 sm:px-8 lg:px-14"
 		>
-			<div class="w-full space-y-8">
-				<header class="space-y-2">
+			<div class="flex w-full max-w-xl flex-col items-center space-y-6 sm:space-y-8">
+				<header
+					class="flex w-full items-center gap-4 rounded-3xl bg-slate-900 px-5 py-4 text-base-100 shadow-lg shadow-slate-900/20 sm:hidden"
+				>
+					<div
+						class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-700 text-lg font-bold tracking-wide text-white"
+					>
+						BPC
+					</div>
+
+					<div class="min-w-0 space-y-1">
+						<p class="truncate text-xs font-semibold tracking-[0.3em] text-slate-300 uppercase">
+							Bulacan Polytechnic College
+						</p>
+						<h1 class="truncate text-lg font-black tracking-tight text-white">
+							College Enrollment System
+						</h1>
+						<p class="truncate text-[11px] font-medium tracking-widest text-slate-300 uppercase">
+							Student / Registrar Login
+						</p>
+					</div>
+				</header>
+
+				<header class="hidden space-y-2 text-center sm:block">
 					<h1 class="text-4xl font-extrabold tracking-tight text-slate-800 sm:text-5xl">
 						BPC Enrollment Portal
 					</h1>
 					<p class="text-xl text-slate-500">Student / Registrar Login</p>
 				</header>
 
-				<section class="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
-					<form class="space-y-7">
+				<section
+					class="w-full max-w-xl rounded-4xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"
+				>
+					<form class="space-y-7" onsubmit={handleLogin}>
 						<div class="space-y-2">
 							<label class="text-sm font-bold tracking-wide text-slate-500 uppercase" for="email"
 								>Email</label

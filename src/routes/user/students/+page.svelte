@@ -1,1 +1,166 @@
-<h1>Students</h1>
+<script lang="ts">
+	import { Plus, Search, SlidersHorizontal } from '@lucide/svelte';
+
+	const students = [
+		{
+			id: '2026-100214',
+			name: 'Mark Dela Cruz',
+			program: 'BSIS',
+			yearLevel: '3rd Year',
+			section: 'A'
+		},
+		{
+			id: '2026-100213',
+			name: 'Jessa Navarro',
+			program: 'ACT',
+			yearLevel: '2nd Year',
+			section: 'B'
+		},
+		{
+			id: '2026-100212',
+			name: 'Alyssa Reyes',
+			program: 'DHRMT',
+			yearLevel: '4th Year',
+			section: 'A'
+		},
+		{
+			id: '2026-100211',
+			name: 'Kiel Santos',
+			program: 'BSIS',
+			yearLevel: '1st Year',
+			section: 'C'
+		},
+		{
+			id: '2026-100210',
+			name: 'Paula Garcia',
+			program: 'ACT',
+			yearLevel: '3rd Year',
+			section: 'B'
+		},
+		{
+			id: '2026-100209',
+			name: 'Noel Mendoza',
+			program: 'DHRMT',
+			yearLevel: '2nd Year',
+			section: 'A'
+		}
+	];
+</script>
+
+<section class="space-y-6">
+	<!-- Toolbar -->
+	<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+		<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+			<!-- Search -->
+			<label class="input-bordered input flex w-full items-center gap-3 bg-slate-50 lg:max-w-md">
+				<Search class="h-4 w-4 text-slate-400" />
+
+				<input
+					type="text"
+					placeholder="Search by name, student ID, or program..."
+					class="grow text-sm"
+				/>
+			</label>
+
+			<!-- Actions -->
+			<div class="flex flex-wrap gap-2">
+				<button class="btn gap-2 border-slate-300 bg-white btn-outline btn-sm">
+					<SlidersHorizontal class="h-4 w-4" />
+					Filter
+				</button>
+
+				<button class="btn gap-2 bg-emerald-700 text-white btn-sm hover:bg-emerald-800">
+					<Plus class="h-4 w-4" />
+					New Student
+				</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Table Card -->
+	<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+		<!-- Table header -->
+		<div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+			<div>
+				<h2 class="font-bold text-slate-800">Students</h2>
+				<p class="mt-0.5 text-xs text-slate-400">View enrolled student records</p>
+			</div>
+
+			<span class="badge badge-ghost font-semibold text-slate-500">
+				{students.length} records
+			</span>
+		</div>
+
+		<!-- Responsive table -->
+		<div class="overflow-x-auto">
+			<table class="table w-full">
+				<thead>
+					<tr
+						class="border-b border-slate-200 bg-slate-50 text-[11px] font-extrabold tracking-wider text-slate-500 uppercase"
+					>
+						<th class="py-4 pl-5">Student</th>
+						<th>Program</th>
+						<th>Year Level</th>
+						<th class="pr-5">Section</th>
+					</tr>
+				</thead>
+
+				<tbody>
+					{#each students as row (row.id)}
+						<tr
+							class="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80"
+						>
+							<!-- Student -->
+							<td class="py-4 pl-5">
+								<div class="flex items-center gap-3">
+									<div
+										class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700"
+									>
+										{row.name.charAt(0)}
+									</div>
+
+									<div class="min-w-0">
+										<p class="truncate font-bold text-slate-800">{row.name}</p>
+
+										<p class="mt-0.5 font-mono text-[11px] text-slate-400">{row.id}</p>
+									</div>
+								</div>
+							</td>
+
+							<!-- Program -->
+							<td>
+								<span class="font-semibold text-slate-600">{row.program}</span>
+							</td>
+
+							<!-- Year Level -->
+							<td class="text-sm font-medium text-slate-500">{row.yearLevel}</td>
+
+							<!-- Section -->
+							<td class="pr-5 text-sm font-semibold text-slate-600">{row.section}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+
+		<!-- Footer -->
+		<div
+			class="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+		>
+			<p class="text-xs font-medium text-slate-500">
+				Showing <span class="font-bold text-slate-700">1–{students.length}</span>
+				of <span class="font-bold text-slate-700">{students.length}</span> students
+			</p>
+
+			<div class="join">
+				<button class="btn join-item btn-sm" disabled>«</button>
+				<button class="btn join-item bg-emerald-700 text-white btn-sm hover:bg-emerald-800"
+					>1</button
+				>
+				<button class="btn join-item btn-sm">2</button>
+				<button class="btn join-item btn-sm">3</button>
+				<button class="btn join-item btn-sm">»</button>
+			</div>
+		</div>
+	</div>
+</section>
