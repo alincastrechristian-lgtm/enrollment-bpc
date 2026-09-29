@@ -1,8 +1,30 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import { ArrowLeft } from '@lucide/svelte';
+
+	const defaultPageTitle =
+		page.url.pathname.at(-1) === '/'
+			? 'DASHBOARD'
+			: page.url.pathname.split('/').at(-1)?.toUpperCase();
+
+	let isRootPath = $derived(
+		page.url.pathname.split('/').filter((segment) => segment !== '').length <= 2
+	);
+
+	const pagePath = page.url.pathname
+		.split('/')
+		.filter((segment) => segment !== '')
+		.map((segment) => segment.toUpperCase())
+		.join(' / ');
+
 	let {
-		pageTitle = 'REGISTRAR DASHBOARD',
-		pagePath = 'GENERAL / DASHBOARD',
-		drawerToggleId = 'user-sidebar-drawer'
+		drawerToggleId = 'user-sidebar-drawer',
+		pageTitle = defaultPageTitle,
+		pageDescription
+	}: {
+		drawerToggleId?: string;
+		pageTitle?: string;
+		pageDescription?: string;
 	} = $props();
 </script>
 
@@ -26,7 +48,10 @@
 			>
 				Bulacan Polytechnic College
 			</p>
-			<span class="hidden text-xl font-semibold text-emerald-700/90 xl:inline">- Main Campus</span>
+
+			<span class="hidden text-xl font-semibold text-emerald-700/90 xl:inline">
+				- Main Campus
+			</span>
 		</div>
 
 		<div class="flex items-center gap-4">
@@ -34,15 +59,41 @@
 				<p class="text-xs font-bold tracking-wide text-slate-500 uppercase">Registrar</p>
 				<p class="text-sm font-semibold text-slate-700">R. Coordinator</p>
 			</div>
+
 			<button
 				class="btn btn-circle border-none bg-slate-900 text-base font-bold text-white hover:bg-slate-800"
-				>R</button
 			>
+				R
+			</button>
 		</div>
 	</div>
 
-	<div class="border-t border-slate-100 bg-slate-50/70 px-6 py-5 lg:px-10">
-		<h1 class="text-3xl font-black tracking-tight text-slate-800">{pageTitle}</h1>
-		<p class="mt-1 text-xs font-medium tracking-wide text-slate-500">{pagePath}</p>
+	<div
+		class="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-6 py-5 lg:px-10"
+	>
+		<div>
+			<h1 class="text-3xl font-black tracking-tight text-slate-800">
+				{pageTitle}
+			</h1>
+
+			{#if pageDescription}
+				<p class="mt-1 text-sm text-slate-500">{pageDescription}</p>
+			{/if}
+
+			<p class="mt-1 text-xs font-medium tracking-wide text-slate-400">
+				{pagePath}
+			</p>
+		</div>
+
+		{#if !isRootPath}
+			<button
+				type="button"
+				class="btn gap-2 btn-ghost text-slate-500 btn-sm hover:bg-slate-200/60 hover:text-slate-800"
+				onclick={() => history.back()}
+			>
+				<ArrowLeft size={17} strokeWidth={2} />
+				Back
+			</button>
+		{/if}
 	</div>
 </header>

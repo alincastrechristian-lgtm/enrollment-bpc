@@ -2,7 +2,8 @@
 	import Sidebar from '$lib/components/Sidebar/Sidebar.svelte';
 	import UserTopbar from '$lib/components/Topbar/Topbar.svelte';
 
-	let { children } = $props();
+	let { children, data } = $props();
+
 	const drawerId = 'user-sidebar-drawer';
 </script>
 
@@ -10,7 +11,7 @@
 	<input id={drawerId} type="checkbox" class="drawer-toggle" />
 
 	<div class="drawer-content flex min-h-dvh min-w-0 flex-col">
-		<UserTopbar drawerToggleId={drawerId} />
+		<UserTopbar drawerToggleId={drawerId} pageTitle={data.pageTitle} pageDescription={data.pageDescription} />
 		<main class="flex-1 px-4 py-6 md:px-6 lg:px-8">
 			{@render children()}
 		</main>
