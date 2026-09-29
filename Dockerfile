@@ -1,6 +1,8 @@
 FROM node:22-alpine AS build
 
-ENV DATABASE_URL=/tmp/build.db
+ENV DATABASE_URL=/tmp/build.db \
+    BETTER_AUTH_SECRET=build-only-placeholder-secret-do-not-use-in-production \
+    ORIGIN=http://localhost:3000
 
 RUN apk add --no-cache python3 make g++
 RUN corepack enable
