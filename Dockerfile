@@ -1,5 +1,7 @@
 FROM node:22-alpine AS build
 
+ENV DATABASE_URL=/tmp/build.db
+
 RUN apk add --no-cache python3 make g++
 RUN corepack enable
 RUN corepack prepare pnpm@11.9.0 --activate
