@@ -2,7 +2,7 @@ FROM node:22-alpine AS build
 
 RUN apk add --no-cache python3 make g++
 RUN corepack enable
-RUN corepack prepare pnpm@9.15.9 --activate
+RUN corepack prepare pnpm@11.9.0 --activate
 
 WORKDIR /app
 
