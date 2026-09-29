@@ -29,6 +29,22 @@ npm run dev
 npm run dev -- --open
 ```
 
+## Docker
+
+The GitHub Actions workflow builds the Docker image for pull requests to `master` and publishes it to Docker Hub on pushes to `master` or manual runs. Add the repository secrets `DOCKER_USERNAME` and `DOCKER_PASSWORD` (a Docker Hub access token) before publishing. The workflow publishes `aetherknowledge/safehub:latest` and a commit-specific tag.
+
+To run the published image locally:
+
+```sh
+docker run --rm -p 3000:3000 \
+  -e ORIGIN=http://localhost:3000 \
+  -e BETTER_AUTH_SECRET="replace-with-a-long-random-secret" \
+  -v enrollment-data:/app/data \
+  aetherknowledge/safehub:latest
+```
+
+The SQLite database is stored in `/app/data/local.db`; keep `/app/data` on a persistent volume. Set `ORIGIN` to the public URL when deploying behind a domain or proxy. Apply database migrations as part of deployment when the schema changes.
+
 ## Building
 
 To create a production version of your app:

@@ -1,0 +1,14 @@
+.git
+.github
+.svelte-kit
+node_modules
+.pnpm-store
+build
+.output
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+npm-debug.log*
+pnpm-debug.log*
