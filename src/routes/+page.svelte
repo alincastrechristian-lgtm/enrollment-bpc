@@ -1,24 +1,7 @@
 <script lang="ts">
-	type User = {
-		email: string;
-		password: string;
-		role: 'student' | 'registrar';
-	};
+	import { authClient } from '$lib/auth-client';
 
-	const users: User[] = [
-		{
-			email: 'student@student.com',
-			password: 'student123',
-			role: 'student'
-		},
-		{
-			email: 'registrar@registrar.com',
-			password: 'registrar123',
-			role: 'registrar'
-		}
-	];
-
-	function handleLogin(event: Event) {
+	async function handleLogin(event: Event) {
 		event.preventDefault();
 
 		const form = event.target as HTMLFormElement;
@@ -33,17 +16,23 @@
 		const email = emailInput.value.trim();
 		const password = passwordInput.value.trim();
 
-		const user = users.find((u) => u.email === email && u.password === password);
-
-		if (user) {
-			if (user.role === 'student') {
-				window.location.href = '/user/dashboard';
-			} else if (user.role === 'registrar') {
-				window.location.href = '/user/dashboard';
-			}
-		} else {
-			alert('Invalid email or password. Please try again.');
-		}
+		await authClient.signIn
+			.email({
+				email,
+				password
+			})
+			.then((result) => {
+				if (result.data?.user) {
+					// Redirect to the dashboard or another page after successful login
+					window.location.href = '/user/dashboard';
+				} else {
+					alert(`Login failed: ${result.error?.message || 'Unknown error'}`);
+				}
+			})
+			.catch((error) => {
+				console.error('Login error:', error);
+				alert('An error occurred during login. Please try again.');
+			});
 	}
 </script>
 

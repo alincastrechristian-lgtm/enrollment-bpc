@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { authClient } from '$lib/auth-client';
 	import {
 		Bell,
 		BookOpen,
@@ -13,6 +14,7 @@
 		SquareUserRound,
 		Users
 	} from '@lucide/svelte';
+	import { showYesNo } from '../Popup/Popup.svelte';
 
 	const menuItems = [
 		{ label: 'Dashboard', href: '/user/dashboard', icon: Gauge },
@@ -57,6 +59,15 @@
 		observer.observe(activeItem);
 		return () => observer.disconnect();
 	});
+
+	async function logout() {
+		if (!(await showYesNo('Are you sure you want to log out?'))) {
+			return;
+		}
+
+		await authClient.signOut();
+		window.location.href = '/';
+	}
 </script>
 
 <aside
@@ -120,6 +131,7 @@
 		<div class="px-3 pb-3">
 			<button
 				type="button"
+				onclick={logout}
 				class="group flex w-full items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-red-400/50 hover:bg-red-500/15 hover:text-red-200"
 			>
 				<LogOut class="h-4.5 w-4.5 text-slate-400 group-hover:text-red-300" strokeWidth={2.2} />
