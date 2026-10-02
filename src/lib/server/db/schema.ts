@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const task = sqliteTable('task', {
 	id: text('id')
@@ -22,10 +22,53 @@ export const user = sqliteTable('user', {
 		.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
-	role: text('role'),
+	role: text('role', { enum: ['admin', 'registrar', 'user'] }),
 	banned: integer('banned', { mode: 'boolean' }).default(false),
 	banReason: text('ban_reason'),
 	banExpires: integer('ban_expires', { mode: 'timestamp_ms' })
+});
+
+export const applicant = sqliteTable(
+	'applicant',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+
+		applicationId: text('application_id').notNull().unique(),
+
+		name: text('name').notNull(),
+		program: text('program').notNull(),
+		yearLevel: integer('year_level').notNull(),
+		status: text('status', { enum: ['Pending', 'Approved', 'Rejected'] })
+			.notNull()
+			.$default(() => 'Pending'),
+		dateApplied: integer('date_applied', { mode: 'timestamp_ms' }).notNull(),
+		email: text('email').notNull(),
+		contactNumber: text('contact_number').notNull(),
+		address: text('address').notNull(),
+
+		hasBirthCertificate: integer('has_birth_certificate', { mode: 'boolean' })
+			.default(false)
+			.notNull(),
+		hasForm138: integer('has_form_138', { mode: 'boolean' }).default(false).notNull(),
+		hasGoodMoral: integer('has_good_moral', { mode: 'boolean' }).default(false).notNull(),
+		hasPicture: integer('has_picture', { mode: 'boolean' }).default(false).notNull(),
+
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+			.notNull(),
+		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull()
+	},
+	(table) => [check('year_level_range', sql`${table.yearLevel} BETWEEN 1 AND 4`)]
+);
+
+export const applicantSequence = sqliteTable('applicant_sequence', {
+	year: integer('year').primaryKey(),
+	lastNumber: integer('last_number').notNull().default(0)
 });
 
 export const session = sqliteTable(

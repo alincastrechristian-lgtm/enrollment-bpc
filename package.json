@@ -50,7 +50,9 @@
 		"@lucide/svelte": "^1.48.0",
 		"@tanstack/svelte-query": "^6.2.3",
 		"better-sqlite3": "^13.0.2",
-		"daisyui": "^5.7.43"
+		"daisyui": "^5.7.43",
+		"drizzle-zod": "^0.8.3",
+		"zod": "^4.6.5"
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",

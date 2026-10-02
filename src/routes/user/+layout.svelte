@@ -7,7 +7,7 @@
 	const drawerId = 'user-sidebar-drawer';
 </script>
 
-<div class="drawer min-h-dvh bg-slate-100 xl:drawer-open">
+<div class="drawer min-h-dvh bg-base-200 xl:drawer-open">
 	<input id={drawerId} type="checkbox" class="drawer-toggle" />
 
 	<div class="drawer-content flex min-h-dvh min-w-0 flex-col">

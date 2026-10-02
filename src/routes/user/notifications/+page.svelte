@@ -42,21 +42,21 @@
 </svelte:head>
 
 <section class="mx-auto max-w-7xl">
-	<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+	<div class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
 		<!-- Header -->
 		<div
-			class="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+			class="flex flex-col gap-4 border-b border-base-300 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
 		>
 			<div class="flex items-center gap-3">
 				<div
-					class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"
+					class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
 				>
 					<Bell size={19} strokeWidth={2} />
 				</div>
 
 				<div>
-					<h2 class="font-bold text-slate-800">Notifications</h2>
-					<p class="text-xs text-slate-400">
+					<h2 class="font-bold text-base-content">Notifications</h2>
+					<p class="text-xs text-base-content/50">
 						{notifications.length} sent notifications
 					</p>
 				</div>
@@ -64,7 +64,7 @@
 
 			<button
 				type="button"
-				class="btn gap-2 border-0 bg-emerald-700 px-5 text-white shadow-sm hover:bg-emerald-800"
+				class="btn gap-2 border-0 bg-primary px-5 text-primary-content shadow-sm hover:bg-primary/80"
 				onclick={() => (showCompose = true)}
 			>
 				<Plus size={17} />
@@ -74,10 +74,10 @@
 
 		<!-- Toolbar -->
 		<div
-			class="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+			class="flex flex-col gap-3 border-b border-base-300 bg-base-200/50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6"
 		>
-			<label class="input-bordered input flex w-full items-center gap-3 bg-white sm:max-w-md">
-				<Search size={16} class="text-slate-400" />
+			<label class="input-bordered input flex w-full items-center gap-3 bg-base-100 sm:max-w-md">
+				<Search size={16} class="text-base-content/50" />
 
 				<input type="text" placeholder="Search sent notifications..." class="grow text-sm" />
 			</label>
@@ -87,11 +87,11 @@
 		<div>
 			{#each notifications as notification (notification.id)}
 				<div
-					class="group flex items-start gap-4 border-b border-slate-100 px-5 py-4 transition-colors last:border-0 hover:bg-slate-50 sm:px-6"
+					class="group flex items-start gap-4 border-b border-base-200 px-5 py-4 transition-colors last:border-0 hover:bg-base-200 sm:px-6"
 				>
 					<!-- Mail icon -->
 					<div
-						class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 sm:flex"
+						class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:flex"
 					>
 						<Send size={16} />
 					</div>
@@ -103,20 +103,20 @@
 						onclick={() => console.log('Open notification:', notification.id)}
 					>
 						<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-							<p class="truncate text-sm font-semibold text-slate-700">
+							<p class="truncate text-sm font-semibold text-base-content/80">
 								{notification.recipient}
 							</p>
 
-							<span class="shrink-0 text-xs font-medium text-slate-400">
+							<span class="shrink-0 text-xs font-medium text-base-content/50">
 								{notification.date}
 							</span>
 						</div>
 
-						<p class="mt-0.5 truncate text-sm font-medium text-slate-700">
+						<p class="mt-0.5 truncate text-sm font-medium text-base-content/80">
 							{notification.subject}
 						</p>
 
-						<p class="mt-1 line-clamp-1 text-xs text-slate-400">
+						<p class="mt-1 line-clamp-1 text-xs text-base-content/50">
 							{notification.preview}
 						</p>
 					</button>
@@ -127,7 +127,7 @@
 					>
 						<button
 							type="button"
-							class="btn btn-circle btn-ghost text-slate-400 btn-xs hover:bg-slate-200 hover:text-slate-700"
+							class="btn btn-circle btn-ghost text-base-content/50 btn-xs hover:bg-base-300 hover:text-base-content/80"
 							aria-label="Archive"
 							title="Archive"
 						>
@@ -136,7 +136,7 @@
 
 						<button
 							type="button"
-							class="btn btn-circle btn-ghost text-slate-400 btn-xs hover:bg-red-50 hover:text-red-600"
+							class="btn btn-circle btn-ghost text-base-content/50 btn-xs hover:bg-error/10 hover:text-error"
 							aria-label="Delete"
 							title="Delete"
 						>
@@ -149,15 +149,15 @@
 
 		<!-- Footer -->
 		<div
-			class="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-5 py-3 sm:px-6"
+			class="flex items-center justify-between border-t border-base-300 bg-base-200/50 px-5 py-3 sm:px-6"
 		>
-			<p class="text-xs font-medium text-slate-400">
+			<p class="text-xs font-medium text-base-content/50">
 				{notifications.length} notifications
 			</p>
 
 			<div class="join">
 				<button class="btn join-item btn-sm" disabled>«</button>
-				<button class="btn join-item bg-emerald-700 text-white btn-sm hover:bg-emerald-800">
+				<button class="btn join-item bg-primary text-primary-content btn-sm hover:bg-primary/80">
 					1
 				</button>
 				<button class="btn join-item btn-sm">2</button>
@@ -172,23 +172,23 @@
 	<dialog class="modal modal-open">
 		<div class="modal-box max-w-2xl overflow-hidden p-0">
 			<!-- Modal header -->
-			<div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+			<div class="flex items-center justify-between border-b border-base-300 px-5 py-4">
 				<div class="flex items-center gap-3">
 					<div
-						class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"
+						class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"
 					>
 						<Mail size={17} />
 					</div>
 
 					<div>
-						<h3 class="font-bold text-slate-800">New Notification</h3>
-						<p class="text-xs text-slate-400">Compose an email to an applicant.</p>
+						<h3 class="font-bold text-base-content">New Notification</h3>
+						<p class="text-xs text-base-content/50">Compose an email to an applicant.</p>
 					</div>
 				</div>
 
 				<button
 					type="button"
-					class="btn btn-circle btn-ghost text-slate-400 btn-sm"
+					class="btn btn-circle btn-ghost text-base-content/50 btn-sm"
 					onclick={() => (showCompose = false)}
 					aria-label="Close"
 				>
@@ -206,7 +206,7 @@
 			>
 				<div class="space-y-5">
 					<div>
-						<label for="recipient" class="mb-2 block text-sm font-bold text-slate-700">
+						<label for="recipient" class="mb-2 block text-sm font-bold text-base-content/80">
 							Recipient
 						</label>
 
@@ -216,12 +216,12 @@
 							type="email"
 							placeholder="applicant@email.com"
 							required
-							class="input-bordered input w-full border-slate-200 bg-slate-50/50 text-sm focus:border-emerald-600 focus:outline-none"
+							class="input-bordered input w-full border-base-300 bg-base-200/50 text-sm focus:border-primary focus:outline-none"
 						/>
 					</div>
 
 					<div>
-						<label for="subject" class="mb-2 block text-sm font-bold text-slate-700">
+						<label for="subject" class="mb-2 block text-sm font-bold text-base-content/80">
 							Subject
 						</label>
 
@@ -231,12 +231,12 @@
 							type="text"
 							placeholder="Enter email subject"
 							required
-							class="input-bordered input w-full border-slate-200 bg-slate-50/50 text-sm focus:border-emerald-600 focus:outline-none"
+							class="input-bordered input w-full border-base-300 bg-base-200/50 text-sm focus:border-primary focus:outline-none"
 						/>
 					</div>
 
 					<div>
-						<label for="message" class="mb-2 block text-sm font-bold text-slate-700">
+						<label for="message" class="mb-2 block text-sm font-bold text-base-content/80">
 							Message
 						</label>
 
@@ -246,15 +246,15 @@
 							rows="7"
 							placeholder="Write your message..."
 							required
-							class="textarea-bordered textarea w-full resize-y border-slate-200 bg-slate-50/50 text-sm leading-relaxed focus:border-emerald-600 focus:outline-none"
+							class="textarea-bordered textarea w-full resize-y border-base-300 bg-base-200/50 text-sm leading-relaxed focus:border-primary focus:outline-none"
 						></textarea>
 					</div>
 				</div>
 
-				<div class="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-5">
+				<div class="mt-6 flex justify-end gap-2 border-t border-base-200 pt-5">
 					<button
 						type="button"
-						class="btn btn-ghost text-slate-500"
+						class="btn btn-ghost text-base-content/60"
 						onclick={() => (showCompose = false)}
 					>
 						Cancel
@@ -262,7 +262,7 @@
 
 					<button
 						type="submit"
-						class="btn gap-2 border-0 bg-emerald-700 px-5 text-white hover:bg-emerald-800"
+						class="btn gap-2 border-0 bg-primary px-5 text-primary-content hover:bg-primary/80"
 					>
 						<Send size={16} />
 						Send Email

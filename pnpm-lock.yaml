@@ -20,6 +20,12 @@ importers:
       daisyui:
         specifier: ^5.7.43
         version: 5.7.43
+      drizzle-zod:
+        specifier: ^0.8.3
+        version: 0.8.3(drizzle-orm@0.45.3(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(kysely@0.29.6))(zod@4.6.5)
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -1585,6 +1591,12 @@ packages:
         optional: true
       sqlite3:
         optional: true
+
+  drizzle-zod@0.8.3:
+    resolution: {integrity: sha512-66yVOuvGhKJnTdiqj1/Xaaz9/qzOdRJADpDa68enqS6g3t0kpNkwNYjUuaeXgZfO/UWuIM9HIhSlJ6C5ZraMww==}
+    peerDependencies:
+      drizzle-orm: '>=0.36.0'
+      zod: ^3.25.0 || ^4.0.0
 
   electron-to-chromium@1.5.433:
     resolution: {integrity: sha512-5lCAbyZBjtmUt/RAGHRqrL2q0oEFRThDAsZHHDn9XHa89Qw7gMYOeSicBTy+AHfvo0r6vwsZvqNJTQIQy1BLzA==}
@@ -3618,6 +3630,11 @@ snapshots:
       '@types/better-sqlite3': 7.6.13
       better-sqlite3: 13.0.3
       kysely: 0.29.6
+
+  drizzle-zod@0.8.3(drizzle-orm@0.45.3(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(kysely@0.29.6))(zod@4.6.5):
+    dependencies:
+      drizzle-orm: 0.45.3(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(kysely@0.29.6)
+      zod: 4.6.5
 
   electron-to-chromium@1.5.433: {}
 

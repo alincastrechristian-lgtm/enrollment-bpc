@@ -25,23 +25,23 @@
 
 <section class="space-y-6">
 	<!-- Toolbar -->
-	<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+	<div class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm sm:p-5">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 			<!-- Search -->
-			<label class="input-bordered input flex w-full items-center gap-3 bg-slate-50 lg:max-w-md">
-				<Search class="h-4 w-4 text-slate-400" />
+			<label class="input-bordered input flex w-full items-center gap-3 bg-base-200 lg:max-w-md">
+				<Search class="h-4 w-4 text-base-content/50" />
 
 				<input type="text" placeholder="Search by subject name or code..." class="grow text-sm" />
 			</label>
 
 			<!-- Actions -->
 			<div class="flex flex-wrap gap-2">
-				<button class="btn gap-2 border-slate-300 bg-white btn-outline btn-sm">
+				<button class="btn gap-2 border-base-300 bg-base-100 btn-outline btn-sm">
 					<SlidersHorizontal class="h-4 w-4" />
 					Filter
 				</button>
 
-				<button class="btn gap-2 bg-emerald-700 text-white btn-sm hover:bg-emerald-800">
+				<button class="btn gap-2 bg-primary text-primary-content btn-sm hover:bg-primary/80">
 					<Plus class="h-4 w-4" />
 					New Subject
 				</button>
@@ -50,15 +50,15 @@
 	</div>
 
 	<!-- Table Card -->
-	<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+	<div class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
 		<!-- Table header -->
-		<div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+		<div class="flex items-center justify-between border-b border-base-300 px-5 py-4">
 			<div>
-				<h2 class="font-bold text-slate-800">Subjects</h2>
-				<p class="mt-0.5 text-xs text-slate-400">Manage the catalog of subjects offered</p>
+				<h2 class="font-bold text-base-content">Subjects</h2>
+				<p class="mt-0.5 text-xs text-base-content/50">Manage the catalog of subjects offered</p>
 			</div>
 
-			<span class="badge badge-ghost font-semibold text-slate-500">
+			<span class="badge badge-ghost font-semibold text-base-content/60">
 				{subjects.length} records
 			</span>
 		</div>
@@ -68,7 +68,7 @@
 			<table class="table w-full">
 				<thead>
 					<tr
-						class="border-b border-slate-200 bg-slate-50 text-[11px] font-extrabold tracking-wider text-slate-500 uppercase"
+						class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
 					>
 						<th class="py-4 pl-5">Subject</th>
 						<th>Code</th>
@@ -80,35 +80,35 @@
 				<tbody>
 					{#each subjects as row (row.id)}
 						<tr
-							class="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80"
+							class="border-b border-base-200 transition-colors last:border-0 hover:bg-base-200/80"
 						>
 							<!-- Subject -->
 							<td class="py-4 pl-5">
 								<div class="flex items-center gap-3">
 									<div
-										class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700"
+										class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
 									>
 										{row.code.charAt(0)}
 									</div>
 
 									<div class="min-w-0">
-										<p class="truncate font-bold text-slate-800">{row.name}</p>
+										<p class="truncate font-bold text-base-content">{row.name}</p>
 
-										<p class="mt-0.5 font-mono text-[11px] text-slate-400">{row.id}</p>
+										<p class="mt-0.5 font-mono text-[11px] text-base-content/50">{row.id}</p>
 									</div>
 								</div>
 							</td>
 
 							<!-- Code -->
 							<td>
-								<span class="font-semibold text-slate-600">{row.code}</span>
+								<span class="font-semibold text-base-content/70">{row.code}</span>
 							</td>
 
 							<!-- Units -->
-							<td class="text-sm font-medium text-slate-500">{row.units}</td>
+							<td class="text-sm font-medium text-base-content/60">{row.units}</td>
 
 							<!-- Program -->
-							<td class="pr-5 text-sm font-semibold text-slate-600">{row.program}</td>
+							<td class="pr-5 text-sm font-semibold text-base-content/70">{row.program}</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -117,16 +117,16 @@
 
 		<!-- Footer -->
 		<div
-			class="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+			class="flex flex-col gap-3 border-t border-base-300 bg-base-200/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
 		>
-			<p class="text-xs font-medium text-slate-500">
-				Showing <span class="font-bold text-slate-700">1–{subjects.length}</span>
-				of <span class="font-bold text-slate-700">{subjects.length}</span> subjects
+			<p class="text-xs font-medium text-base-content/60">
+				Showing <span class="font-bold text-base-content/80">1–{subjects.length}</span>
+				of <span class="font-bold text-base-content/80">{subjects.length}</span> subjects
 			</p>
 
 			<div class="join">
 				<button class="btn join-item btn-sm" disabled>«</button>
-				<button class="btn join-item bg-emerald-700 text-white btn-sm hover:bg-emerald-800"
+				<button class="btn join-item bg-primary text-primary-content btn-sm hover:bg-primary/80"
 					>1</button
 				>
 				<button class="btn join-item btn-sm">2</button>

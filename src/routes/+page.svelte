@@ -40,34 +40,34 @@
 <div class="min-h-dvh bg-base-100">
 	<div class="flex min-h-dvh w-full">
 		<aside
-			class="sticky top-0 hidden h-dvh w-72 shrink-0 overflow-hidden bg-slate-900 text-base-100 sm:block sm:w-80 lg:w-105"
+			class="sticky top-0 hidden h-dvh w-72 shrink-0 overflow-hidden bg-neutral text-base-100 sm:block sm:w-80 lg:w-105"
 		>
 			<div
-				class="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(22,163,74,0.16),transparent_45%)]"
+				class="absolute inset-0 bg-primary/10"
 			></div>
 			<div class="relative flex h-full w-full flex-col justify-between p-16">
 				<div class="space-y-10">
 					<div
-						class="flex h-24 w-24 items-center justify-center rounded-full bg-green-700 text-4xl font-bold tracking-wide text-white"
+						class="flex h-24 w-24 items-center justify-center rounded-full bg-primary text-4xl font-bold tracking-wide text-primary-content"
 					>
 						BPC
 					</div>
 
 					<div class="space-y-3">
-						<h2 class="text-5xl leading-tight font-black tracking-tight text-white uppercase">
+						<h2 class="text-5xl leading-tight font-black tracking-tight text-primary-content uppercase">
 							Bulacan Polytechnic College
 						</h2>
-						<p class="text-lg tracking-widest text-slate-300 uppercase">
+						<p class="text-lg tracking-widest text-base-content/30 uppercase">
 							College Enrollment System
 						</p>
 					</div>
 				</div>
 
-				<div class="rounded-2xl border border-slate-600/60 bg-slate-800/60 p-8 backdrop-blur-sm">
-					<p class="text-center text-sm font-semibold tracking-wider text-slate-100 uppercase">
+				<div class="rounded-2xl border border-neutral-content/20 bg-neutral/60 p-8 backdrop-blur-sm">
+					<p class="text-center text-sm font-semibold tracking-wider text-neutral-content uppercase">
 						Secure • Simple • Centralized
 					</p>
-					<p class="mt-4 text-center text-sm text-slate-300">
+					<p class="mt-4 text-center text-sm text-base-content/30">
 						Registrar-assisted enrollment workflow
 					</p>
 				</div>
@@ -75,71 +75,71 @@
 		</aside>
 
 		<main
-			class="flex min-w-0 flex-1 items-center justify-center bg-slate-50 px-4 py-10 sm:px-8 lg:px-14"
+			class="flex min-w-0 flex-1 items-center justify-center bg-base-200 px-4 py-10 sm:px-8 lg:px-14"
 		>
 			<div class="flex w-full max-w-xl flex-col items-center space-y-6 sm:space-y-8">
 				<header
-					class="flex w-full items-center gap-4 rounded-3xl bg-slate-900 px-5 py-4 text-base-100 shadow-lg shadow-slate-900/20 sm:hidden"
+					class="flex w-full items-center gap-4 rounded-3xl bg-neutral px-5 py-4 text-base-100 shadow-lg shadow-neutral/20 sm:hidden"
 				>
 					<div
-						class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-700 text-lg font-bold tracking-wide text-white"
+						class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold tracking-wide text-primary-content"
 					>
 						BPC
 					</div>
 
 					<div class="min-w-0 space-y-1">
-						<p class="truncate text-xs font-semibold tracking-[0.3em] text-slate-300 uppercase">
+						<p class="truncate text-xs font-semibold tracking-[0.3em] text-base-content/30 uppercase">
 							Bulacan Polytechnic College
 						</p>
-						<h1 class="truncate text-lg font-black tracking-tight text-white">
+						<h1 class="truncate text-lg font-black tracking-tight text-primary-content">
 							College Enrollment System
 						</h1>
-						<p class="truncate text-[11px] font-medium tracking-widest text-slate-300 uppercase">
+						<p class="truncate text-[11px] font-medium tracking-widest text-base-content/30 uppercase">
 							Student / Registrar Login
 						</p>
 					</div>
 				</header>
 
 				<header class="hidden space-y-2 text-center sm:block">
-					<h1 class="text-4xl font-extrabold tracking-tight text-slate-800 sm:text-5xl">
+					<h1 class="text-4xl font-extrabold tracking-tight text-base-content sm:text-5xl">
 						BPC Enrollment Portal
 					</h1>
-					<p class="text-xl text-slate-500">Student / Registrar Login</p>
+					<p class="text-xl text-base-content/60">Student / Registrar Login</p>
 				</header>
 
 				<section
-					class="w-full max-w-xl rounded-4xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"
+					class="w-full max-w-xl rounded-4xl border border-base-300 bg-base-100 p-6 shadow-sm sm:p-10"
 				>
 					<form class="space-y-7" onsubmit={handleLogin}>
 						<div class="space-y-2">
-							<label class="text-sm font-bold tracking-wide text-slate-500 uppercase" for="email"
+							<label class="text-sm font-bold tracking-wide text-base-content/60 uppercase" for="email"
 								>Email</label
 							>
 							<input
 								id="email"
 								type="email"
 								placeholder="student@email.com"
-								class="input-bordered input h-14 w-full rounded-lg border-slate-200 bg-white text-lg text-slate-700 placeholder:text-slate-400 focus:border-green-700 focus:outline-none"
+								class="input-bordered input h-14 w-full rounded-lg border-base-300 bg-base-100 text-lg text-base-content/80 placeholder:text-base-content/50 focus:border-primary focus:outline-none"
 								required
 							/>
 						</div>
 
 						<div class="space-y-2">
-							<label class="text-sm font-bold tracking-wide text-slate-500 uppercase" for="password"
+							<label class="text-sm font-bold tracking-wide text-base-content/60 uppercase" for="password"
 								>Password</label
 							>
 							<input
 								id="password"
 								type="password"
 								placeholder="••••••••"
-								class="input-bordered input h-14 w-full rounded-lg border-slate-200 bg-white text-lg text-slate-700 placeholder:text-slate-400 focus:border-green-700 focus:outline-none"
+								class="input-bordered input h-14 w-full rounded-lg border-base-300 bg-base-100 text-lg text-base-content/80 placeholder:text-base-content/50 focus:border-primary focus:outline-none"
 								required
 							/>
 						</div>
 
 						<button
 							type="submit"
-							class="btn h-14 w-full border-none bg-green-700 text-base font-bold tracking-wide text-white hover:bg-green-800"
+							class="btn h-14 w-full border-none bg-primary text-base font-bold tracking-wide text-primary-content hover:bg-primary/80"
 						>
 							LOGIN
 						</button>
@@ -147,12 +147,12 @@
 						<div>
 							<a
 								href="/"
-								class="text-sm font-semibold text-green-700 hover:text-green-800 hover:underline"
+								class="text-sm font-semibold text-primary hover:text-primary/80 hover:underline"
 								>Forgot Password?</a
 							>
 						</div>
 
-						<p class="pt-4 text-sm text-slate-400">
+						<p class="pt-4 text-sm text-base-content/50">
 							Incoming first-year applicants: submit requirements physically to the Registrar's
 							Office.
 						</p>

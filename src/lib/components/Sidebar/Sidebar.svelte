@@ -9,9 +9,11 @@
 		Gauge,
 		GraduationCap,
 		LogOut,
+		Moon,
 		Settings,
 		SquareChartGantt,
 		SquareUserRound,
+		Sun,
 		Users
 	} from '@lucide/svelte';
 	import { showYesNo } from '../Popup/Popup.svelte';
@@ -44,19 +46,24 @@
 
 	$effect(() => {
 		if (!navEl) return;
+
 		const items = navEl.querySelectorAll<HTMLElement>('[data-menu-item]');
 		const activeItem = items[activeIndex];
+
 		if (!activeItem) return;
 
 		const update = () => {
 			const rect = activeItem.getBoundingClientRect();
 			const navRect = navEl!.getBoundingClientRect();
+
 			indicatorStyle = `top:${rect.top - navRect.top}px;height:${rect.height}px;`;
 		};
 
 		update();
+
 		const observer = new ResizeObserver(update);
 		observer.observe(activeItem);
+
 		return () => observer.disconnect();
 	});
 
@@ -71,38 +78,40 @@
 </script>
 
 <aside
-	class="h-full w-full overflow-hidden bg-slate-900 text-slate-100 shadow-2xl shadow-slate-900/30"
+	class="h-full w-full overflow-hidden bg-base-300 text-base-content shadow-2xl shadow-base-content/10"
 >
-	<div
-		class="border-b border-slate-700/60 bg-linear-to-r from-emerald-700 to-emerald-600 px-5 py-4"
-	>
+	<!-- Header -->
+	<div class="border-b border-base-content/10 bg-primary px-5 py-4 text-primary-content">
 		<div class="flex items-center">
 			<div class="flex items-center gap-3">
 				<div
-					class="grid h-16 w-16 place-content-center rounded-full bg-white text-sm font-black text-slate-800"
+					class="grid h-16 w-16 place-content-center rounded-full bg-base-100 text-sm font-black text-base-content"
 				>
 					BPC
 				</div>
+
 				<div>
-					<p class="text-xs leading-tight font-bold tracking-wide text-white/90">ENROLLMENT</p>
-					<p class="text-xs leading-tight font-bold tracking-wide text-white/90">SYSTEM</p>
+					<p class="text-xs leading-tight font-bold tracking-wide opacity-90">ENROLLMENT</p>
+					<p class="text-xs leading-tight font-bold tracking-wide opacity-90">SYSTEM</p>
 				</div>
 			</div>
 		</div>
 	</div>
 
 	<div class="flex h-[calc(100%-5.5rem)] flex-col">
+		<!-- Section title -->
 		<div class="px-5 py-4">
-			<p class="text-2xl font-extrabold tracking-tight text-white">REGISTRAR</p>
+			<p class="text-2xl font-extrabold tracking-tight text-base-content">REGISTRAR</p>
 		</div>
 
+		<!-- Navigation -->
 		<nav class="relative flex-1 overflow-y-auto px-3 pb-4" bind:this={navEl}>
-			<!-- sliding highlight indicator -->
+			<!-- Sliding active indicator -->
 			<div
 				class="pointer-events-none absolute left-0 w-full transition-all duration-300 ease-in-out"
 				style={indicatorStyle}
 			>
-				<div class="mx-3 h-full rounded-xl bg-emerald-700 shadow-lg shadow-emerald-900/30"></div>
+				<div class="mx-3 h-full rounded-xl bg-primary shadow-lg shadow-primary/20"></div>
 			</div>
 
 			<ul class="space-y-1">
@@ -113,14 +122,19 @@
 							data-menu-item
 							class={`group relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${
 								activeIndex === index
-									? 'text-white'
-									: 'text-slate-200 hover:bg-slate-800 hover:text-white'
+									? 'text-primary-content'
+									: 'text-base-content/80 hover:bg-base-200 hover:text-base-content'
 							}`}
 						>
 							<item.icon
-								class={`h-4.5 w-4.5 ${activeIndex === index ? 'text-white' : 'text-slate-400 group-hover:text-slate-100'}`}
+								class={`h-4.5 w-4.5 ${
+									activeIndex === index
+										? 'text-primary-content'
+										: 'text-base-content/50 group-hover:text-base-content'
+								}`}
 								strokeWidth={2.2}
 							/>
+
 							{item.label}
 						</a>
 					</li>
@@ -128,19 +142,39 @@
 			</ul>
 		</nav>
 
+		<!-- Theme -->
+		<div class="px-3 pb-3">
+			<label
+				class="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-base-content/10 bg-base-200 px-4 py-2.5 transition-colors hover:bg-base-content/10"
+			>
+				<div class="swap swap-rotate">
+					<input type="checkbox" class="theme-controller" value="dark" />
+
+					<Sun class="h-5 w-5 swap-on text-base-content/70" />
+
+					<Moon class="h-5 w-5 swap-off text-base-content/70" />
+				</div>
+
+				<span class="text-sm font-semibold text-base-content"> Theme </span>
+			</label>
+		</div>
+
+		<!-- Logout -->
 		<div class="px-3 pb-3">
 			<button
 				type="button"
 				onclick={logout}
-				class="group flex w-full items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-red-400/50 hover:bg-red-500/15 hover:text-red-200"
+				class="group flex w-full items-center gap-3 rounded-xl border border-base-content/10 bg-base-200 px-4 py-3 text-sm font-semibold text-base-content/80 transition-colors hover:border-error/30 hover:bg-error/10 hover:text-error"
 			>
-				<LogOut class="h-4.5 w-4.5 text-slate-400 group-hover:text-red-300" strokeWidth={2.2} />
+				<LogOut class="h-4.5 w-4.5 text-base-content/50 group-hover:text-error" strokeWidth={2.2} />
+
 				Logout
 			</button>
 		</div>
 
-		<div class="border-t border-slate-800 px-5 py-4">
-			<p class="text-[10px] tracking-wide text-slate-500">BPC • COLLEGE ENROLLMENT SYSTEM</p>
+		<!-- Footer -->
+		<div class="border-t border-base-content/10 px-5 py-4">
+			<p class="text-[10px] tracking-wide text-base-content/40">BPC • COLLEGE ENROLLMENT SYSTEM</p>
 		</div>
 	</div>
 </aside>
