@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { authClient } from '#lib/auth-client.js';
 	import { page } from '$app/state';
 	import { ArrowLeft } from '@lucide/svelte';
+
+	const session = authClient.useSession();
 
 	const defaultPageTitle =
 		page.url.pathname.at(-1) === '/'
@@ -28,7 +31,9 @@
 	} = $props();
 </script>
 
-<header class="sticky top-0 z-20 border-b border-base-300 bg-base-100/85 shadow-sm backdrop-blur-md">
+<header
+	class="sticky top-0 z-20 border-b border-base-300 bg-base-100/85 shadow-sm backdrop-blur-md"
+>
 	<div class="flex h-19 items-center justify-between px-6 lg:px-10">
 		<div class="flex min-w-0 items-center gap-3">
 			<label
@@ -49,21 +54,25 @@
 				Bulacan Polytechnic College
 			</p>
 
-			<span class="hidden text-xl font-semibold text-primary/90 xl:inline">
-				- Main Campus
-			</span>
+			<span class="hidden text-xl font-semibold text-primary/90 xl:inline"> - Main Campus </span>
 		</div>
 
 		<div class="flex items-center gap-4">
 			<div class="hidden text-right lg:block">
-				<p class="text-xs font-bold tracking-wide text-base-content/60 uppercase">Registrar</p>
-				<p class="text-sm font-semibold text-base-content/80">R. Coordinator</p>
+				<p class="text-xs font-bold tracking-wide text-base-content/60 uppercase">
+					{$session.data?.user.role}
+				</p>
+				<p class="text-sm font-semibold text-base-content/80">{$session.data?.user.name}</p>
 			</div>
 
 			<button
 				class="btn btn-circle border-none bg-neutral text-base font-bold text-primary-content hover:bg-neutral/80"
 			>
-				R
+				{$session.data?.user.name
+					.split(' ')
+					.map((name) => name.charAt(0))
+					.join('')
+					.toUpperCase()}
 			</button>
 		</div>
 	</div>

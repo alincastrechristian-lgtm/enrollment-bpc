@@ -42,9 +42,7 @@
 		<aside
 			class="sticky top-0 hidden h-dvh w-72 shrink-0 overflow-hidden bg-neutral text-base-100 sm:block sm:w-80 lg:w-105"
 		>
-			<div
-				class="absolute inset-0 bg-primary/10"
-			></div>
+			<div class="absolute inset-0 bg-primary/10"></div>
 			<div class="relative flex h-full w-full flex-col justify-between p-16">
 				<div class="space-y-10">
 					<div
@@ -54,20 +52,26 @@
 					</div>
 
 					<div class="space-y-3">
-						<h2 class="text-5xl leading-tight font-black tracking-tight text-primary-content uppercase">
+						<h2
+							class="text-5xl leading-tight font-black tracking-tight text-primary-content uppercase"
+						>
 							Bulacan Polytechnic College
 						</h2>
-						<p class="text-lg tracking-widest text-base-content/30 uppercase">
+						<p class="text-lg tracking-widest text-neutral-content/60 uppercase">
 							College Enrollment System
 						</p>
 					</div>
 				</div>
 
-				<div class="rounded-2xl border border-neutral-content/20 bg-neutral/60 p-8 backdrop-blur-sm">
-					<p class="text-center text-sm font-semibold tracking-wider text-neutral-content uppercase">
+				<div
+					class="rounded-2xl border border-neutral-content/20 bg-neutral/60 p-8 backdrop-blur-sm"
+				>
+					<p
+						class="text-center text-sm font-semibold tracking-wider text-neutral-content uppercase"
+					>
 						Secure • Simple • Centralized
 					</p>
-					<p class="mt-4 text-center text-sm text-base-content/30">
+					<p class="mt-4 text-center text-sm text-neutral-content/60">
 						Registrar-assisted enrollment workflow
 					</p>
 				</div>
@@ -88,13 +92,17 @@
 					</div>
 
 					<div class="min-w-0 space-y-1">
-						<p class="truncate text-xs font-semibold tracking-[0.3em] text-base-content/30 uppercase">
+						<p
+							class="truncate text-xs font-semibold tracking-[0.3em] text-base-content/30 uppercase"
+						>
 							Bulacan Polytechnic College
 						</p>
 						<h1 class="truncate text-lg font-black tracking-tight text-primary-content">
 							College Enrollment System
 						</h1>
-						<p class="truncate text-[11px] font-medium tracking-widest text-base-content/30 uppercase">
+						<p
+							class="truncate text-[11px] font-medium tracking-widest text-base-content/30 uppercase"
+						>
 							Student / Registrar Login
 						</p>
 					</div>
@@ -112,8 +120,9 @@
 				>
 					<form class="space-y-7" onsubmit={handleLogin}>
 						<div class="space-y-2">
-							<label class="text-sm font-bold tracking-wide text-base-content/60 uppercase" for="email"
-								>Email</label
+							<label
+								class="text-sm font-bold tracking-wide text-base-content/60 uppercase"
+								for="email">Email</label
 							>
 							<input
 								id="email"
@@ -125,8 +134,9 @@
 						</div>
 
 						<div class="space-y-2">
-							<label class="text-sm font-bold tracking-wide text-base-content/60 uppercase" for="password"
-								>Password</label
+							<label
+								class="text-sm font-bold tracking-wide text-base-content/60 uppercase"
+								for="password">Password</label
 							>
 							<input
 								id="password"

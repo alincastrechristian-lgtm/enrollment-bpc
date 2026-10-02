@@ -12,7 +12,9 @@ export const auth = betterAuth({
 	database: drizzleAdapter(db, { provider: 'sqlite' }),
 	emailAndPassword: { enabled: true, disableSignUp: process.env.NODE_ENV === 'production' },
 	plugins: [
-		admin(),
+		admin({
+			defaultRole: 'student'
+		}),
 		sveltekitCookies(getRequestEvent) // make sure this is the last plugin in the array
 	]
 });

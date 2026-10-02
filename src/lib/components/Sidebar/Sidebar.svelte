@@ -18,7 +18,15 @@
 	} from '@lucide/svelte';
 	import { showYesNo } from '../Popup/Popup.svelte';
 
-	const menuItems = [
+	const session = authClient.useSession();
+
+	type SidebarItem = {
+		label: string;
+		href: string;
+		icon: typeof Gauge;
+	};
+
+	const adminItems: SidebarItem[] = [
 		{ label: 'Dashboard', href: '/user/dashboard', icon: Gauge },
 		{ label: 'Applicants', href: '/user/applicants', icon: SquareUserRound },
 		{ label: 'Students', href: '/user/students', icon: Users },
@@ -30,6 +38,34 @@
 		{ label: 'Settings', href: '/user/settings', icon: Settings }
 	] as const;
 
+	const registrarItems: SidebarItem[] = [
+		{ label: 'Dashboard', href: '/user/dashboard', icon: Gauge },
+		{ label: 'Applicants', href: '/user/applicants', icon: SquareUserRound },
+		{ label: 'Students', href: '/user/students', icon: Users },
+		{ label: 'Enrollment', href: '/user/enrollment', icon: ClipboardCheck },
+		{ label: 'Notifications', href: '/user/notifications', icon: Bell },
+		{ label: 'Reports', href: '/user/reports', icon: SquareChartGantt },
+		{ label: 'Settings', href: '/user/settings', icon: Settings }
+	] as const;
+
+	const studentItems: SidebarItem[] = [
+		{ label: 'Dashboard', href: '/user/dashboard', icon: Gauge },
+		{ label: 'Enrollment', href: '/user/enrollment', icon: ClipboardCheck },
+		{ label: 'Subjects', href: '/user/subjects', icon: BookOpen },
+		{ label: 'Notifications', href: '/user/notifications', icon: Bell },
+		{ label: 'Settings', href: '/user/settings', icon: Settings }
+	] as const;
+
+	const sidebarItems = $derived.by(() => {
+		if (!$session || !$session.data) return [] as SidebarItem[];
+
+		return $session.data.user.role === 'admin'
+			? adminItems
+			: $session.data.user.role === 'registrar'
+				? registrarItems
+				: studentItems;
+	});
+
 	const isActive = (href: string) => {
 		const currentPath = page.url.pathname;
 		return currentPath === href || currentPath.startsWith(href + '/');
@@ -40,11 +76,12 @@
 	let indicatorStyle = $state('');
 
 	$effect(() => {
-		const idx = menuItems.findIndex((item) => isActive(item.href));
-		activeIndex = idx === -1 ? 0 : idx;
-	});
+		// Make this effect rerun when the sidebar items are populated
 
-	$effect(() => {
+		// Make this effect rerun when the page URL changes
+		const idx = sidebarItems.findIndex((item) => isActive(item.href));
+		activeIndex = idx === -1 ? 0 : idx;
+
 		if (!navEl) return;
 
 		const items = navEl.querySelectorAll<HTMLElement>('[data-menu-item]');
@@ -99,13 +136,8 @@
 	</div>
 
 	<div class="flex h-[calc(100%-5.5rem)] flex-col">
-		<!-- Section title -->
-		<div class="px-5 py-4">
-			<p class="text-2xl font-extrabold tracking-tight text-base-content">REGISTRAR</p>
-		</div>
-
 		<!-- Navigation -->
-		<nav class="relative flex-1 overflow-y-auto px-3 pb-4" bind:this={navEl}>
+		<nav class="relative flex-1 overflow-y-auto px-3 py-4" bind:this={navEl}>
 			<!-- Sliding active indicator -->
 			<div
 				class="pointer-events-none absolute left-0 w-full transition-all duration-300 ease-in-out"
@@ -115,7 +147,7 @@
 			</div>
 
 			<ul class="space-y-1">
-				{#each menuItems as item, index (item.label)}
+				{#each sidebarItems as item, index (item.label)}
 					<li>
 						<a
 							href={resolve(item.href)}
