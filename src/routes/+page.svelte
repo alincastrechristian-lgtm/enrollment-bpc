@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { authClient } from '$lib/auth-client';
+	import { showError } from '$lib/components/Popup/Popup.svelte';
 
 	async function handleLogin(event: Event) {
 		event.preventDefault();
@@ -9,7 +10,7 @@
 		const passwordInput = form.querySelector<HTMLInputElement>('#password');
 
 		if (!emailInput || !passwordInput) {
-			alert('Email or password input not found.');
+			showError('Email or password input not found.');
 			return;
 		}
 
@@ -26,12 +27,12 @@
 					// Redirect to the dashboard or another page after successful login
 					window.location.href = '/user/dashboard';
 				} else {
-					alert(`Login failed: ${result.error?.message || 'Unknown error'}`);
+					showError(`Login failed: ${result.error?.message || 'Unknown error'}`);
 				}
 			})
 			.catch((error) => {
 				console.error('Login error:', error);
-				alert('An error occurred during login. Please try again.');
+				showError('An error occurred during login. Please try again.');
 			});
 	}
 </script>

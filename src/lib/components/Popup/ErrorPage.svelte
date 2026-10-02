@@ -15,7 +15,7 @@
 		title = 'Something went wrong',
 		message = 'An unexpected error occurred. Please try again.',
 		buttonText = 'Close',
-		hintText = 'If the problem persists, check your connection and try again.',
+		hintText,
 		onClose
 	}: ErrorProps = $props();
 
@@ -51,15 +51,17 @@
 				</div>
 
 				<!-- Error hint -->
-				<div class="rounded-xl border border-error/20 bg-error/5 p-4">
-					<div class="flex items-start gap-3">
-						<TriangleAlert class="mt-0.5 size-4 shrink-0 text-error" />
+				{#if hintText}
+					<div class="rounded-xl border border-error/20 bg-error/5 p-4">
+						<div class="flex items-start gap-3">
+							<TriangleAlert class="mt-0.5 size-4 shrink-0 text-error" />
 
-						<p class="text-sm text-base-content/70">
-							{hintText}
-						</p>
+							<p class="text-sm text-base-content/70">
+								{hintText}
+							</p>
+						</div>
 					</div>
-				</div>
+				{/if}
 
 				<!-- Action -->
 				<button class="btn w-full btn-error" onclick={close}>
