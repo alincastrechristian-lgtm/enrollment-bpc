@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
+	import { ROLES } from '#lib/Roles.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import {
@@ -59,9 +60,9 @@
 	const sidebarItems = $derived.by(() => {
 		if (!$session || !$session.data) return [] as SidebarItem[];
 
-		return $session.data.user.role === 'admin'
+		return $session.data.user.role === ROLES.ADMIN
 			? adminItems
-			: $session.data.user.role === 'registrar'
+			: $session.data.user.role === ROLES.REGISTRAR
 				? registrarItems
 				: studentItems;
 	});

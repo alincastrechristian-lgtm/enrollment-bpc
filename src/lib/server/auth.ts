@@ -1,3 +1,4 @@
+import { ROLES } from '#lib/Roles.js';
 import { db } from '#lib/server/db/index.js';
 import { BETTER_AUTH_SECRET, ORIGIN } from '$app/env/private';
 import { getRequestEvent } from '$app/server';
@@ -13,7 +14,7 @@ export const auth = betterAuth({
 	emailAndPassword: { enabled: true, disableSignUp: process.env.NODE_ENV === 'production' },
 	plugins: [
 		admin({
-			defaultRole: 'student'
+			defaultRole: ROLES.STUDENT
 		}),
 		sveltekitCookies(getRequestEvent) // make sure this is the last plugin in the array
 	]
