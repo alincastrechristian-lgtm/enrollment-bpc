@@ -1,14 +1,14 @@
+import { db } from '#lib/server/db/index.js';
+import { BETTER_AUTH_SECRET, ORIGIN } from '$app/env/private';
 import { getRequestEvent } from '$app/server';
-import { env } from '$env/dynamic/private';
-import { db } from '$lib/server/db';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { betterAuth } from 'better-auth/minimal';
 import { admin } from 'better-auth/plugins/admin';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 
 export const auth = betterAuth({
-	baseURL: env.ORIGIN,
-	secret: env.BETTER_AUTH_SECRET,
+	baseURL: ORIGIN,
+	secret: BETTER_AUTH_SECRET,
 	database: drizzleAdapter(db, { provider: 'sqlite' }),
 	emailAndPassword: { enabled: true, disableSignUp: process.env.NODE_ENV === 'production' },
 	plugins: [

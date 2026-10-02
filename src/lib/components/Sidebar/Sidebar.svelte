@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { authClient } from '#lib/auth-client.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { authClient } from '$lib/auth-client';
 	import {
 		Bell,
 		BookOpen,

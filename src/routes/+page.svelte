@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { authClient } from '$lib/auth-client';
-	import { showError } from '$lib/components/Popup/Popup.svelte';
+	import { authClient } from '#lib/auth-client.js';
+	import { showError } from '#lib/components/Popup/Popup.svelte.js';
 
 	async function handleLogin(event: Event) {
 		event.preventDefault();

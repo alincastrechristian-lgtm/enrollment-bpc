@@ -1,6 +1,6 @@
 <script lang="ts">
-	import favicon from '$lib/assets/favicon.svg';
-	import PopupHost from '$lib/components/Popup/PopupHost.svelte';
+	import favicon from '#lib/assets/favicon.svg';
+	import PopupHost from '#lib/components/Popup/PopupHost.svelte';
 	import './layout.css';
 
 	let { children } = $props();
