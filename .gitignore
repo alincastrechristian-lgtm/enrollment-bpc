@@ -25,3 +25,6 @@ vite.config.ts.timestamp-*
 *.db
 .kilo
 .pnpm-store
+
+/src/routes/demo
+/src/routes/test
