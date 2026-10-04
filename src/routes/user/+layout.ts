@@ -1,7 +1,4 @@
-const routeMeta: Record<
-	string,
-	{ pageTitle?: string; pageDescription?: string }
-> = {
+const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }> = {
 	'/user/dashboard': {
 		pageTitle: 'DASHBOARD',
 		pageDescription: 'View an overview of your enrollment system.'
@@ -9,6 +6,10 @@ const routeMeta: Record<
 	'/user/applicants': {
 		pageTitle: 'APPLICANTS',
 		pageDescription: 'Manage and review all incoming applicant records.'
+	},
+	'/user/registrars': {
+		pageTitle: 'REGISTRARS',
+		pageDescription: 'Manage and maintain registrar accounts and access.'
 	},
 	'/user/applicants/view': {
 		pageTitle: 'APPLICANT DETAILS',

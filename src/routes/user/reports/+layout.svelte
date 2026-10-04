@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
-	import ErrorPage from '#lib/components/Popup/ErrorPage.svelte';
-	import { ROLES } from '#lib/Roles.js';
+	import ErrorPage from '#lib/components/Popup/ErrorPopup.svelte';
+	import { Role } from '#lib/Roles.js';
 
 	let { children } = $props();
 
@@ -9,7 +9,7 @@
 </script>
 
 {#if $session && $session.data}
-	{#if $session.data.user.role === ROLES.ADMIN}
+	{#if $session.data.user.role === Role.ADMIN}
 		{@render children()}
 	{:else}
 		<ErrorPage

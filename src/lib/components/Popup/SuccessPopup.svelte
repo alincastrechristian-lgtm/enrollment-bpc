@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { Check, CircleCheck } from '@lucide/svelte';
-	import BlurPage from './BlurPage.svelte';
 	import PopupCard from './PopupCard.svelte';
 
 	export type SuccessProps = {
@@ -15,7 +14,7 @@
 		title = 'Success!',
 		message = 'The operation completed successfully.',
 		buttonText = 'Done',
-		hintText = 'Your changes have been applied successfully.',
+		hintText,
 		onClose
 	}: SuccessProps = $props();
 
@@ -28,29 +27,29 @@
 </script>
 
 {#if visible}
-	<BlurPage>
-		<PopupCard>
-			<div class="card-body gap-6 p-6">
-				<!-- Header -->
-				<div class="flex items-center gap-4">
-					<div
-						class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-success/10 text-success"
-					>
-						<CircleCheck class="size-7" />
-					</div>
-
-					<div class="min-w-0">
-						<h2 class="text-lg font-semibold">
-							{title}
-						</h2>
-
-						<p class="mt-1 text-sm wrap-break-word text-base-content/60">
-							{message}
-						</p>
-					</div>
+	<PopupCard onClose={close}>
+		<div class="card-body gap-6 p-6">
+			<!-- Header -->
+			<div class="flex items-center gap-4">
+				<div
+					class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-success/10 text-success"
+				>
+					<CircleCheck class="size-7" />
 				</div>
 
-				<!-- Success hint -->
+				<div class="min-w-0">
+					<h2 class="text-lg font-semibold">
+						{title}
+					</h2>
+
+					<p class="mt-1 text-sm wrap-break-word text-base-content/60">
+						{message}
+					</p>
+				</div>
+			</div>
+
+			<!-- Success hint -->
+			{#if hintText}
 				<div class="rounded-xl border border-success/20 bg-success/5 p-4">
 					<div class="flex items-start gap-3">
 						<Check class="mt-0.5 size-4 shrink-0 text-success" />
@@ -60,13 +59,13 @@
 						</p>
 					</div>
 				</div>
+			{/if}
 
-				<!-- Action -->
-				<button class="btn w-full btn-success" onclick={close}>
-					<Check class="size-4" />
-					{buttonText}
-				</button>
-			</div>
-		</PopupCard>
-	</BlurPage>
+			<!-- Action -->
+			<button class="btn w-full btn-success" onclick={close}>
+				<Check class="size-4" />
+				{buttonText}
+			</button>
+		</div>
+	</PopupCard>
 {/if}

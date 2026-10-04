@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Table from '#lib/components/Table/Table.svelte';
 	import { Plus, Search, SlidersHorizontal } from '@lucide/svelte';
 
 	const students = [
@@ -77,90 +78,53 @@
 		</div>
 	</div>
 
-	<!-- Table Card -->
-	<div class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<!-- Table header -->
-		<div class="flex items-center justify-between border-b border-base-300 px-5 py-4">
-			<div>
-				<h2 class="font-bold text-base-content">Students</h2>
-				<p class="mt-0.5 text-xs text-base-content/50">View enrolled student records</p>
-			</div>
+	<Table
+		title="Students"
+		description="View enrolled student records"
+		count={students.length}
+		itemLabel="students"
+	>
+		{#snippet header()}
+			<tr
+				class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
+			>
+				<th class="py-4 pl-5">Student</th>
+				<th>Program</th>
+				<th>Year Level</th>
+				<th class="pr-5">Section</th>
+			</tr>
+		{/snippet}
 
-			<span class="badge badge-ghost font-semibold text-base-content/60">
-				{students.length} records
-			</span>
-		</div>
-
-		<!-- Responsive table -->
-		<div class="overflow-x-auto">
-			<table class="table w-full">
-				<thead>
-					<tr
-						class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
-					>
-						<th class="py-4 pl-5">Student</th>
-						<th>Program</th>
-						<th>Year Level</th>
-						<th class="pr-5">Section</th>
-					</tr>
-				</thead>
-
-				<tbody>
-					{#each students as row (row.id)}
-						<tr
-							class="border-b border-base-200 transition-colors last:border-0 hover:bg-base-200/80"
+		{#each students as row (row.id)}
+			<tr class="border-b border-base-200 transition-colors last:border-0 hover:bg-base-200/80">
+				<!-- Student -->
+				<td class="py-4 pl-5">
+					<div class="flex items-center gap-3">
+						<div
+							class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
 						>
-							<!-- Student -->
-							<td class="py-4 pl-5">
-								<div class="flex items-center gap-3">
-									<div
-										class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
-									>
-										{row.name.charAt(0)}
-									</div>
+							{row.name.charAt(0)}
+						</div>
 
-									<div class="min-w-0">
-										<p class="truncate font-bold text-base-content">{row.name}</p>
+						<div class="min-w-0">
+							<p class="truncate font-bold text-base-content">{row.name}</p>
 
-										<p class="mt-0.5 font-mono text-[11px] text-base-content/50">{row.id}</p>
-									</div>
-								</div>
-							</td>
+							<p class="mt-0.5 font-mono text-[11px] text-base-content/50">{row.id}</p>
+						</div>
+					</div>
+				</td>
 
-							<!-- Program -->
-							<td>
-								<span class="font-semibold text-base-content/70">{row.program}</span>
-							</td>
+				<!-- Program -->
+				<td>
+					<span class="font-semibold text-base-content/70">{row.program}</span>
+				</td>
 
-							<!-- Year Level -->
-							<td class="text-sm font-medium text-base-content/60">{row.yearLevel}</td>
+				<!-- Year Level -->
+				<td class="text-sm font-medium text-base-content/60">{row.yearLevel}</td>
 
-							<!-- Section -->
-							<td class="pr-5 text-sm font-semibold text-base-content/70">{row.section}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-
-		<!-- Footer -->
-		<div
-			class="flex flex-col gap-3 border-t border-base-300 bg-base-200/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-		>
-			<p class="text-xs font-medium text-base-content/60">
-				Showing <span class="font-bold text-base-content/80">1–{students.length}</span>
-				of <span class="font-bold text-base-content/80">{students.length}</span> students
-			</p>
-
-			<div class="join">
-				<button class="btn join-item btn-sm" disabled>«</button>
-				<button class="btn join-item bg-primary text-primary-content btn-sm hover:bg-primary/80"
-					>1</button
-				>
-				<button class="btn join-item btn-sm">2</button>
-				<button class="btn join-item btn-sm">3</button>
-				<button class="btn join-item btn-sm">»</button>
-			</div>
-		</div>
-	</div>
+				<!-- Section -->
+				<td class="pr-5 text-sm font-semibold text-base-content/70">{row.section}</td>
+			</tr>
+		{/each}
+	</Table>
 </section>

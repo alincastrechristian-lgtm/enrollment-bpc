@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
 	import { showError } from '#lib/components/Popup/Popup.svelte.js';
+	import { Eye, EyeOff } from '@lucide/svelte';
+
+	let showPassword = $state(false);
 
 	async function handleLogin(event: Event) {
 		event.preventDefault();
@@ -138,13 +141,30 @@
 								class="text-sm font-bold tracking-wide text-base-content/60 uppercase"
 								for="password">Password</label
 							>
-							<input
-								id="password"
-								type="password"
-								placeholder="••••••••"
-								class="input-bordered input h-14 w-full rounded-lg border-base-300 bg-base-100 text-lg text-base-content/80 placeholder:text-base-content/50 focus:border-primary focus:outline-none"
-								required
-							/>
+							<div class="relative">
+								<input
+									id="password"
+									type={showPassword ? 'text' : 'password'}
+									autocomplete="current-password"
+									placeholder="••••••••"
+									class="input-bordered input h-14 w-full rounded-lg border-base-300 bg-base-100 pr-14 text-lg text-base-content/80 placeholder:text-base-content/50 focus:border-primary focus:outline-none"
+									required
+								/>
+								<button
+									type="button"
+									class="btn absolute top-1/2 right-3 btn-square -translate-y-1/2 btn-ghost btn-sm"
+									aria-label={showPassword ? 'Hide password' : 'Show password'}
+									aria-pressed={showPassword}
+									aria-controls="password"
+									onclick={() => (showPassword = !showPassword)}
+								>
+									{#if showPassword}
+										<EyeOff class="size-4" aria-hidden="true" />
+									{:else}
+										<Eye class="size-4" aria-hidden="true" />
+									{/if}
+								</button>
+							</div>
 						</div>
 
 						<button
@@ -156,7 +176,7 @@
 
 						<div>
 							<a
-								href="/"
+								href="/forgot-password"
 								class="text-sm font-semibold text-primary hover:text-primary/80 hover:underline"
 								>Forgot Password?</a
 							>

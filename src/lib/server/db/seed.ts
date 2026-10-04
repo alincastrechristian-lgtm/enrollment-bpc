@@ -1,6 +1,6 @@
 import 'dotenv/config';
 
-import { ROLES } from '#lib/Roles.js';
+import { Role } from '#lib/Roles.js';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin } from 'better-auth/plugins/admin';
@@ -21,25 +21,30 @@ async function main() {
 		emailAndPassword: { enabled: true, disableSignUp: process.env.NODE_ENV === 'production' },
 		plugins: [
 			admin({
-				defaultRole: ROLES.STUDENT
+				defaultRole: Role.STUDENT
 			})
 		]
 	});
 
-	// @ts-expect-error Weird type error with drizzle-seed, but it works fine at runtime
-	await seed(db, {
-		applicant: schema.applicant
-	}).refine((funcs) => ({
-		applicant: {
-			count: 20,
-			columns: {
-				yearLevel: funcs.int({
-					minValue: 1,
-					maxValue: 4
-				})
+	try {
+		// @ts-expect-error Weird type error with drizzle-seed, but it works fine at runtime
+
+		await seed(db, {
+			applicant: schema.applicant
+		}).refine((funcs) => ({
+			applicant: {
+				count: 20,
+				columns: {
+					yearLevel: funcs.int({
+						minValue: 1,
+						maxValue: 4
+					})
+				}
 			}
-		}
-	}));
+		}));
+	} catch (error) {
+		console.error(`Failed to seed applicants: ${(error as Error).message}`);
+	}
 
 	try {
 		const adminResult = await auth.api.signUpEmail({
@@ -59,7 +64,7 @@ async function main() {
 
 	await db
 		.update(schema.user)
-		.set({ role: 'admin' })
+		.set({ role: Role.ADMIN, setupComplete: true })
 		.where(eq(schema.user.email, 'admin@admin.com'))
 		.execute();
 

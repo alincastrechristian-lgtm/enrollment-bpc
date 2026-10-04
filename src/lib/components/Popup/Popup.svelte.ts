@@ -1,7 +1,7 @@
-import type { ErrorProps } from './ErrorPage.svelte';
-import type { LoadingProps } from './LoadingPage.svelte';
-import type { SuccessProps } from './SuccessPage.svelte';
-import type { YesNoProps } from './YesNoPage.svelte';
+import type { ErrorProps } from './ErrorPopup.svelte';
+import type { LoadingProps } from './LoadingPopup.svelte';
+import type { SuccessProps } from './SuccessPopup.svelte';
+import type { YesNoProps } from './YesNoPopup.svelte';
 
 export enum PopupType {
 	NONE,

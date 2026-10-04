@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
-	import ErrorPage from '#lib/components/Popup/ErrorPage.svelte';
-	import LoadingPage from '#lib/components/Popup/LoadingPage.svelte';
+	import ErrorPage from '#lib/components/Popup/ErrorPopup.svelte';
+	import LoadingPage from '#lib/components/Popup/LoadingPopup.svelte';
 	import Sidebar from '#lib/components/Sidebar/Sidebar.svelte';
 	import UserTopbar from '#lib/components/Topbar/Topbar.svelte';
 

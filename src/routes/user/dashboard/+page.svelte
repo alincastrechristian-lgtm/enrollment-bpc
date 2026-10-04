@@ -1,20 +1,20 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
-	import ErrorPage from '#lib/components/Popup/ErrorPage.svelte';
+	import ErrorPage from '#lib/components/Popup/ErrorPopup.svelte';
 	import AdminDashboard from '#lib/pages/Dashboard/Admin/Dashboard.svelte';
 	import RegistrarDashboard from '#lib/pages/Dashboard/Registrar/Dashboard.svelte';
 	import StudentDashboard from '#lib/pages/Dashboard/Student/Dashboard.svelte';
-	import { ROLES } from '#lib/Roles.js';
+	import { Role } from '#lib/Roles.js';
 
 	const session = authClient.useSession();
 </script>
 
 {#if $session && $session.data}
-	{#if $session.data.user.role === ROLES.ADMIN}
+	{#if $session.data.user.role === Role.ADMIN}
 		<AdminDashboard />
-	{:else if $session.data.user.role === ROLES.REGISTRAR}
+	{:else if $session.data.user.role === Role.REGISTRAR}
 		<RegistrarDashboard />
-	{:else if $session.data.user.role === ROLES.STUDENT}
+	{:else if $session.data.user.role === Role.STUDENT}
 		<StudentDashboard />
 	{:else}
 		<ErrorPage

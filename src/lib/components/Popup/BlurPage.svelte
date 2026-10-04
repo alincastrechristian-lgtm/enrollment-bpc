@@ -1,17 +1,29 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+
 	type Props = {
 		children?: Snippet;
 		blur?: boolean;
+		onClose?: () => void;
 	};
 
-	let { children, blur = true }: Props = $props();
+	let { children, blur = true, onClose }: Props = $props();
+
+	function handleOutsideClick(event: MouseEvent) {
+		if (event.target === event.currentTarget) {
+			onClose?.();
+		}
+	}
 </script>
 
-<div class={`fixed inset-0 bg-base-100/70 ${blur ? 'backdrop-blur-sm' : ''} z-40 h-full`}>
-	<div class="relative flex h-full items-center justify-center overflow-hidden">
-		{#if children}
-			{@render children()}
-		{/if}
-	</div>
+<div
+	role="presentation"
+	onclick={handleOutsideClick}
+	class={`fixed inset-0 z-40 flex items-center justify-center bg-base-100/70 ${
+		blur ? 'backdrop-blur-sm' : ''
+	}`}
+>
+	{#if children}
+		{@render children()}
+	{/if}
 </div>

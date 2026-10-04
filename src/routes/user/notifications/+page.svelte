@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Archive, Bell, Mail, Plus, Search, Send, Trash2 } from '@lucide/svelte';
+	import { Archive, Bell, Mail, Plus, Search, Send, Settings, Trash2 } from '@lucide/svelte';
 
 	let showCompose = $state(false);
 
@@ -122,26 +122,23 @@
 					</button>
 
 					<!-- Actions -->
-					<div
-						class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
-					>
+					<div class="dropdown dropdown-end shrink-0">
 						<button
 							type="button"
-							class="btn btn-circle btn-ghost text-base-content/50 btn-xs hover:bg-base-300 hover:text-base-content/80"
-							aria-label="Archive"
-							title="Archive"
+							tabindex="0"
+							class="btn btn-circle btn-ghost btn-xs"
+							aria-label={`Actions for ${notification.recipient}`}
+							title="Actions"
 						>
-							<Archive size={14} />
+							<Settings size={14} />
 						</button>
-
-						<button
-							type="button"
-							class="btn btn-circle btn-ghost text-base-content/50 btn-xs hover:bg-error/10 hover:text-error"
-							aria-label="Delete"
-							title="Delete"
+						<ul
+							tabindex="-1"
+							class="menu dropdown-content z-10 mt-2 w-36 rounded-box border border-base-300 bg-base-100 p-2 shadow"
 						>
-							<Trash2 size={14} />
-						</button>
+							<li><button type="button"><Archive size={14} />Archive</button></li>
+							<li class="text-error"><button type="button"><Trash2 size={14} />Delete</button></li>
+						</ul>
 					</div>
 				</div>
 			{/each}

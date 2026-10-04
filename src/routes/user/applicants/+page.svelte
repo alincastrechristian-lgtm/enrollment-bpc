@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { Eye, Pencil, Plus, Search, SlidersHorizontal, Trash2 } from '@lucide/svelte';
+	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
+	import Table from '#lib/components/Table/Table.svelte';
+	import { Eye, Pencil, Plus, Search, Settings, SlidersHorizontal, Trash2 } from '@lucide/svelte';
 
 	const applicants = [
 		{ id: '2026-000428', name: 'Ana Cruz', program: 'BSIS', status: 'Pending', date: '2026-09-28' },
@@ -78,134 +80,85 @@
 		</div>
 	</div>
 
-	<!-- Table Card -->
-	<div class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<!-- Table header -->
-		<div class="flex items-center justify-between border-b border-base-300 px-5 py-4">
-			<div>
-				<h2 class="font-bold text-base-content">Applicants</h2>
-				<p class="mt-0.5 text-xs text-base-content/50">Manage and review applicant records</p>
-			</div>
+	<Table
+		title="Applicants"
+		description="Manage and review applicant records"
+		count={applicants.length}
+		itemLabel="applicants"
+	>
+		{#snippet header()}
+			<tr
+				class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
+			>
+				<th class="py-4 pl-5">Applicant</th>
+				<th>Program</th>
+				<th>Status</th>
+				<th>Date Applied</th>
+				<th class="pr-5 text-right">Actions</th>
+			</tr>
+		{/snippet}
 
-			<span class="badge badge-ghost font-semibold text-base-content/60">
-				{applicants.length} records
-			</span>
-		</div>
-
-		<!-- Responsive table -->
-		<div class="overflow-x-auto">
-			<table class="table w-full">
-				<thead>
-					<tr
-						class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
-					>
-						<th class="py-4 pl-5">Applicant</th>
-						<th>Program</th>
-						<th>Status</th>
-						<th>Date Applied</th>
-						<th class="pr-5 text-right">Actions</th>
-					</tr>
-				</thead>
-
-				<tbody>
-					{#each applicants as row (row.id)}
-						<tr
-							class="border-b border-base-200 transition-colors last:border-0 hover:bg-base-200/80"
+		{#each applicants as row (row.id)}
+			<tr class="border-b border-base-200 transition-colors last:border-0 hover:bg-base-200/80">
+				<!-- Applicant -->
+				<td class="py-4 pl-5">
+					<div class="flex items-center gap-3">
+						<div
+							class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
 						>
-							<!-- Applicant -->
-							<td class="py-4 pl-5">
-								<div class="flex items-center gap-3">
-									<div
-										class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
-									>
-										{row.name.charAt(0)}
-									</div>
+							{row.name.charAt(0)}
+						</div>
 
-									<div class="min-w-0">
-										<p class="truncate font-bold text-base-content">
-											{row.name}
-										</p>
+						<div class="min-w-0">
+							<p class="truncate font-bold text-base-content">
+								{row.name}
+							</p>
 
-										<p class="mt-0.5 font-mono text-[11px] text-base-content/50">
-											{row.id}
-										</p>
-									</div>
-								</div>
-							</td>
+							<p class="mt-0.5 font-mono text-[11px] text-base-content/50">
+								{row.id}
+							</p>
+						</div>
+					</div>
+				</td>
 
-							<!-- Program -->
-							<td>
-								<span class="font-semibold text-base-content/70">
-									{row.program}
-								</span>
-							</td>
+				<!-- Program -->
+				<td>
+					<span class="font-semibold text-base-content/70">
+						{row.program}
+					</span>
+				</td>
 
-							<!-- Status -->
-							<td>
-								<span class={`badge gap-1.5 border-none px-3 font-bold ${statusBadge(row.status)}`}>
-									<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-									{row.status}
-								</span>
-							</td>
+				<!-- Status -->
+				<td>
+					<span class={`badge gap-1.5 border-none px-3 font-bold ${statusBadge(row.status)}`}>
+						<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+						{row.status}
+					</span>
+				</td>
 
-							<!-- Date -->
-							<td class="text-sm font-medium text-base-content/60">
-								{row.date}
-							</td>
+				<!-- Date -->
+				<td class="text-sm font-medium text-base-content/60">
+					{row.date}
+				</td>
 
-							<!-- Actions -->
-							<td class="pr-5">
-								<div class="flex justify-end gap-1">
-									<a
-										href="/user/applicants/view"
-										class="btn btn-square btn-ghost text-base-content/60 btn-sm hover:bg-primary/10 hover:text-primary"
-										aria-label="View applicant"
-										title="View"
-									>
-										<Eye class="h-4 w-4" />
-									</a>
-
-									<button
-										class="btn btn-square btn-ghost text-base-content/60 btn-sm hover:bg-info/10 hover:text-info"
-										aria-label="Edit applicant"
-										title="Edit"
-									>
-										<Pencil class="h-4 w-4" />
-									</button>
-
-									<button
-										class="btn btn-square btn-ghost text-base-content/50 btn-sm hover:bg-error/10 hover:text-error"
-										aria-label="Delete applicant"
-										title="Delete"
-									>
-										<Trash2 class="h-4 w-4" />
-									</button>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-
-		<!-- Footer -->
-		<div
-			class="flex flex-col gap-3 border-t border-base-300 bg-base-200/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-		>
-			<p class="text-xs font-medium text-base-content/60">
-				Showing <span class="font-bold text-base-content/80">1–{applicants.length}</span>
-				of <span class="font-bold text-base-content/80">{applicants.length}</span> applicants
-			</p>
-
-			<div class="join">
-				<button class="btn join-item btn-sm" disabled>«</button>
-				<button class="btn join-item bg-primary text-primary-content btn-sm hover:bg-primary/80">
-					1
-				</button>
-				<button class="btn join-item btn-sm">2</button>
-				<button class="btn join-item btn-sm">3</button>
-				<button class="btn join-item btn-sm">»</button>
-			</div>
-		</div>
-	</div>
+				<!-- Actions -->
+				<td class="pr-5">
+					<div class="flex justify-end pr-2">
+						<Dropdown id={`applicants-${row.id}`} label={`Actions for ${row.name}`}>
+							{#snippet trigger()}
+								<Settings class="h-4 w-4" />
+							{/snippet}
+							<ul class="menu w-full p-0">
+								<li><a href="/user/applicants/view"><Eye class="h-4 w-4" />View</a></li>
+								<li><button type="button"><Pencil class="h-4 w-4" />Edit</button></li>
+								<li class="text-error">
+									<button type="button"><Trash2 class="h-4 w-4" />Delete</button>
+								</li>
+							</ul>
+						</Dropdown>
+					</div>
+				</td>
+			</tr>
+		{/each}
+	</Table>
 </section>

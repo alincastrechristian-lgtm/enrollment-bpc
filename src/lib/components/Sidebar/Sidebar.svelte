@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
-	import { ROLES } from '#lib/Roles.js';
+	import { Role } from '#lib/Roles.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import {
@@ -15,7 +15,8 @@
 		SquareChartGantt,
 		SquareUserRound,
 		Sun,
-		Users
+		Users,
+		UserShield
 	} from '@lucide/svelte';
 	import { showYesNo } from '../Popup/Popup.svelte';
 
@@ -29,6 +30,7 @@
 
 	const adminItems: SidebarItem[] = [
 		{ label: 'Dashboard', href: '/user/dashboard', icon: Gauge },
+		{ label: 'Registrars', href: '/user/registrars', icon: UserShield },
 		{ label: 'Applicants', href: '/user/applicants', icon: SquareUserRound },
 		{ label: 'Students', href: '/user/students', icon: Users },
 		{ label: 'Enrollment', href: '/user/enrollment', icon: ClipboardCheck },
@@ -60,9 +62,9 @@
 	const sidebarItems = $derived.by(() => {
 		if (!$session || !$session.data) return [] as SidebarItem[];
 
-		return $session.data.user.role === ROLES.ADMIN
+		return $session.data.user.role === Role.ADMIN
 			? adminItems
-			: $session.data.user.role === ROLES.REGISTRAR
+			: $session.data.user.role === Role.REGISTRAR
 				? registrarItems
 				: studentItems;
 	});
