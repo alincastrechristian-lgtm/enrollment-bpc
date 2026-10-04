@@ -1,8 +1,9 @@
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -20,3 +21,7 @@ try {
 } finally {
 	client.close();
 }
+
+execFileSync(resolve('node_modules/.bin/tsx'), [resolve('src/lib/server/db/seed.ts')], {
+	stdio: 'inherit'
+});
