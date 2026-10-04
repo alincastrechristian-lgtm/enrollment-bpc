@@ -22,6 +22,6 @@ try {
 	client.close();
 }
 
-execFileSync(resolve('node_modules/.bin/tsx'), [resolve('src/lib/server/db/seed.ts')], {
+execFileSync(process.execPath, ['--import', 'tsx', resolve('src/lib/server/db/seed.ts')], {
 	stdio: 'inherit'
 });
