@@ -1,14 +1,9 @@
 <script lang="ts">
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
-	import {
-		hidePopup,
-		showError,
-		showLoading,
-		showSuccess
-	} from '#lib/components/Popup/Popup.svelte.js';
+	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
 	import Table from '#lib/components/Table/Table.svelte';
-	import { enhance, type SubmitFunction } from '$app/forms';
+	import { refreshAll } from '$app/navigation';
 	import {
 		Eye,
 		Mail,
@@ -23,7 +18,7 @@
 		UserPlus,
 		X
 	} from '@lucide/svelte';
-	import { resendMagicLink } from './actions.remote.js';
+	import { createRegistrar, resendMagicLink } from '../../../lib/actions/user.remote.js';
 
 	let { data } = $props();
 
@@ -36,36 +31,33 @@
 		registrarDialog.showModal();
 	}
 
-	const createRegistrar: SubmitFunction = () => {
+	async function handleCreateRegistrar(event: SubmitEvent) {
+		event.preventDefault();
+
+		const form = event.currentTarget as HTMLFormElement;
+		const formData = new FormData(form);
+
+		const name = formData.get('name')?.toString() ?? '';
+		const email = formData.get('email')?.toString() ?? '';
+
 		showLoading();
 
-		return async ({ result, update }) => {
-			hidePopup();
+		try {
+			await createRegistrar({
+				name,
+				email
+			});
 
-			if (result.type === 'success') {
-				registrarDialog.close();
-				registrarForm.reset();
+			registrarDialog.close();
+			registrarForm.reset();
 
-				await update();
-				showSuccess('Registrar invitation created successfully');
+			await refreshAll();
 
-				return;
-			}
-
-			if (result.type === 'failure') {
-				showError(result.data?.message ?? 'Failed to create registrar');
-
-				return;
-			}
-
-			if (result.type === 'error') {
-				showError(result.error?.message ?? 'An unexpected error occurred');
-				return;
-			}
-
-			await update();
-		};
-	};
+			showSuccess('Registrar invitation created successfully');
+		} catch (error) {
+			showError(error instanceof Error ? error.message : 'Failed to create registrar');
+		}
+	}
 
 	async function resend(email: string) {
 		showLoading();
@@ -217,13 +209,7 @@
 	aria-describedby="new-registrar-description"
 >
 	<PopupCard onClose={() => registrarDialog.close()}>
-		<form
-			bind:this={registrarForm}
-			class="card-body gap-6 p-6"
-			method="POST"
-			action="?/createRegistrar"
-			use:enhance={createRegistrar}
-		>
+		<form bind:this={registrarForm} class="card-body gap-6 p-6" onsubmit={handleCreateRegistrar}>
 			<div class="flex items-start gap-4">
 				<div
 					class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"

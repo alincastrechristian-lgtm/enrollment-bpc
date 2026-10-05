@@ -10,6 +10,8 @@ export const task = sqliteTable('task', {
 	priority: integer('priority').notNull().default(1)
 });
 
+const roleValues = Object.values(Role) as [Role, ...Role[]];
+
 export const user = sqliteTable('user', {
 	id: text('id').primaryKey(),
 	name: text('name').notNull(),
@@ -23,9 +25,7 @@ export const user = sqliteTable('user', {
 		.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
-	role: text('role', { enum: [Role.ADMIN, Role.REGISTRAR, Role.STUDENT] })
-		.default(Role.STUDENT)
-		.notNull(),
+	role: text('role', { enum: roleValues }).default(Role.STUDENT).notNull(),
 	setupComplete: integer('setup_complete', { mode: 'boolean' }).default(false).notNull(),
 	banned: integer('banned', { mode: 'boolean' }).default(false),
 	banReason: text('ban_reason'),

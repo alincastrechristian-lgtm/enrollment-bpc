@@ -2,13 +2,14 @@ import { Role } from '#lib/Roles.js';
 import { db } from '#lib/server/db/index.js';
 import { BETTER_AUTH_SECRET, ORIGIN } from '$app/env/private';
 import { getRequestEvent } from '$app/server';
-import { error, fail } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { betterAuth } from 'better-auth/minimal';
 import { admin } from 'better-auth/plugins/admin';
 import { magicLink } from 'better-auth/plugins/magic-link';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
+import { ac, adminRole, registrarRole, studentRole } from '../auth-permissions';
 
 const MAGIC_CODE_EXPIRY_SECONDS = 7 * 24 * 60 * 60 * 60; // 7 days in seconds
 
@@ -26,7 +27,14 @@ export const auth = betterAuth({
 	},
 	plugins: [
 		admin({
-			defaultRole: Role.STUDENT
+			defaultRole: Role.STUDENT,
+			ac,
+
+			roles: {
+				[Role.ADMIN]: adminRole,
+				[Role.REGISTRAR]: registrarRole,
+				[Role.STUDENT]: studentRole
+			}
 		}),
 		magicLink({
 			expiresIn: MAGIC_CODE_EXPIRY_SECONDS, // in seconds
@@ -73,18 +81,18 @@ export function validateUser(locals: App.Locals, roles: Role[] = []) {
 	return true;
 }
 
-export function validateAction(locals: App.Locals, roles: Role[] = []) {
-	if (!locals.session || !locals.user) {
-		return fail(401, {
-			message: 'You must be logged in.'
-		});
-	}
+// export function validateAction(locals: App.Locals, roles: Role[] = []) {
+// 	if (!locals.session || !locals.user) {
+// 		return fail(401, {
+// 			message: 'You must be logged in.'
+// 		});
+// 	}
 
-	if (roles.length > 0 && !roles.includes(locals.user.role as Role)) {
-		return fail(403, {
-			message: 'You do not have permission to perform this action.'
-		});
-	}
+// 	if (roles.length > 0 && !roles.includes(locals.user.role as Role)) {
+// 		return fail(403, {
+// 			message: 'You do not have permission to perform this action.'
+// 		});
+// 	}
 
-	return null;
-}
+// 	return null;
+// }
