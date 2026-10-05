@@ -43,6 +43,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'REPORTS',
 		pageDescription: 'Generate and view enrollment reports.'
 	},
+	'/user/settings/email': {
+		pageTitle: 'EMAIL SETTINGS',
+		pageDescription: 'Configure the system sender and SMTP connection.'
+	},
 	'/user/settings': {
 		pageTitle: 'SETTINGS',
 		pageDescription: 'Configure system and user settings.'

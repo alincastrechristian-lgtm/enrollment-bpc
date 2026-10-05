@@ -10,6 +10,7 @@ import { magicLink } from 'better-auth/plugins/magic-link';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { ac, adminRole, registrarRole, studentRole } from '../auth-permissions';
+import { sendEmail } from './email';
 
 const MAGIC_CODE_EXPIRY_SECONDS = 7 * 24 * 60 * 60 * 60; // 7 days in seconds
 
@@ -22,7 +23,20 @@ export const auth = betterAuth({
 		disableSignUp: process.env.NODE_ENV === 'production',
 		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {
-			console.log(`Reset password link for ${user.email}: ${url}`);
+			// console.log(`Reset password link for ${user.email}: ${url}`);
+
+			await sendEmail(
+				user.email,
+				'Reset Your Password for BPC Enrollment System',
+				[
+					'Use this link to reset your password for BPC Enrollment System:',
+					'',
+					url,
+					'',
+					`This link expires in ${String(MAGIC_CODE_EXPIRY_SECONDS)} seconds.`,
+					'Open the BPC Enrollment System login page and click "Forgot Password" to use this link.'
+				].join('\n')
+			);
 		}
 	},
 	plugins: [
@@ -39,20 +53,20 @@ export const auth = betterAuth({
 		magicLink({
 			expiresIn: MAGIC_CODE_EXPIRY_SECONDS, // in seconds
 			sendMagicLink: async ({ email, url }) => {
-				console.log(`Magic link for ${email}: ${url}`);
+				// console.log(`Magic link for ${email}: ${url}`);
 
-				// await sendEmail(
-				// 	email,
-				// 	'Your Magic Link for RTC Database',
-				// 	[
-				// 		'Use this magic link to sign in to RTC Database:',
-				// 		'',
-				// 		url,
-				// 		'',
-				// 		`This link expires in ${String(MAGIC_CODE_EXPIRY_SECONDS)} seconds.`,
-				// 		'Open the RTC Database login page on a device connected to the same local network, choose Magic Link, and click this link.'
-				// 	].join('\n')
-				// );
+				await sendEmail(
+					email,
+					'Your Magic Link for BPC Enrollment System',
+					[
+						'Use this magic link to sign in to BPC Enrollment System:',
+						'',
+						url,
+						'',
+						`This link expires in ${String(MAGIC_CODE_EXPIRY_SECONDS)} seconds.`,
+						'Open the BPC Enrollment System login page on a device connected to the same local network, choose Magic Link, and click this link.'
+					].join('\n')
+				);
 			},
 			disableSignUp: true
 		}),

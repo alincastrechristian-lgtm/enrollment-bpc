@@ -1,12 +1,12 @@
 import { Role } from '#lib/Roles.js';
 import { validateUser } from '#lib/server/auth.js';
+import { db } from '#lib/server/db/index.js';
 import { applicant } from '#lib/server/db/schema.js';
 import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm/sql/expressions/conditions';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import z from 'zod';
-import { db } from '#lib/server/db/index.js';
 
 const fieldValidation = {
 	applicationId: z.string().trim().min(1, 'Application ID is required'),

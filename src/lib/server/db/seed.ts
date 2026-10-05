@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { seed } from 'drizzle-seed';
 import * as schema from './schema.ts';
+import { systemSettings } from './schema.ts';
 
 async function main() {
 	const sqlite = new Database(process.env.DATABASE_URL!);
@@ -25,6 +26,12 @@ async function main() {
 			})
 		]
 	});
+
+	try {
+		await db.insert(systemSettings).values({ id: 1 }).onConflictDoNothing();
+	} catch (error) {
+		console.error(`Failed to insert system settings: ${(error as Error).message}`);
+	}
 
 	try {
 		// @ts-expect-error Weird type error with drizzle-seed, but it works fine at runtime

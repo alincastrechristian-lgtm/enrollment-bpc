@@ -4,35 +4,13 @@ import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-cor
 import { createSelectSchema } from 'drizzle-zod';
 import type z from 'zod';
 
-export const task = sqliteTable('task', {
-	id: text('id')
-		.primaryKey()
-		.$defaultFn(() => crypto.randomUUID()),
-	title: text('title').notNull(),
-	priority: integer('priority').notNull().default(1)
-});
-
-const roleValues = Object.values(Role) as [Role, ...Role[]];
-
-export const user = sqliteTable('user', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	email: text('email').notNull().unique(),
-	emailVerified: integer('email_verified', { mode: 'boolean' }).default(false).notNull(),
-	image: text('image'),
-	createdAt: integer('created_at', { mode: 'timestamp_ms' })
-		.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-		.notNull(),
-	updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
-		.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-		.$onUpdate(() => /* @__PURE__ */ new Date())
-		.notNull(),
-	role: text('role', { enum: roleValues }).default(Role.STUDENT).notNull(),
-	setupComplete: integer('setup_complete', { mode: 'boolean' }).default(false).notNull(),
-	banned: integer('banned', { mode: 'boolean' }).default(false),
-	banReason: text('ban_reason'),
-	banExpires: integer('ban_expires', { mode: 'timestamp_ms' }),
-	twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' }).default(false)
+export const systemSettings = sqliteTable('system_settings', {
+	id: integer('id').primaryKey().default(1),
+	smtpHost: text('smtp_host').default('smtp.gmail.com'),
+	smtpPort: integer('smtp_port').default(465),
+	senderEmail: text('sender_email'),
+	senderName: text('sender_name').default('BPC Enrollment System'),
+	senderPassword: text('sender_password')
 });
 
 export const applicant = sqliteTable(
@@ -76,6 +54,37 @@ export const applicant = sqliteTable(
 export const applicantSequence = sqliteTable('applicant_sequence', {
 	year: integer('year').primaryKey(),
 	lastNumber: integer('last_number').notNull().default(0)
+});
+
+export const task = sqliteTable('task', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	title: text('title').notNull(),
+	priority: integer('priority').notNull().default(1)
+});
+
+const roleValues = Object.values(Role) as [Role, ...Role[]];
+
+export const user = sqliteTable('user', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	email: text('email').notNull().unique(),
+	emailVerified: integer('email_verified', { mode: 'boolean' }).default(false).notNull(),
+	image: text('image'),
+	createdAt: integer('created_at', { mode: 'timestamp_ms' })
+		.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+		.notNull(),
+	updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+		.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+	role: text('role', { enum: roleValues }).default(Role.STUDENT).notNull(),
+	setupComplete: integer('setup_complete', { mode: 'boolean' }).default(false).notNull(),
+	banned: integer('banned', { mode: 'boolean' }).default(false),
+	banReason: text('ban_reason'),
+	banExpires: integer('ban_expires', { mode: 'timestamp_ms' }),
+	twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' }).default(false)
 });
 
 export const session = sqliteTable(
