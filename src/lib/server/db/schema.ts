@@ -39,6 +39,9 @@ export const applicant = sqliteTable(
 		id: text('id')
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
+		userId: text('user_id')
+			.unique()
+			.references(() => user.id, { onDelete: 'cascade' }),
 
 		applicationId: text('application_id').notNull().unique(),
 
@@ -165,10 +168,18 @@ export const twoFactor = sqliteTable(
 	]
 );
 
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ one, many }) => ({
 	sessions: many(session),
 	accounts: many(account),
-	twoFactors: many(twoFactor)
+	twoFactors: many(twoFactor),
+	applicant: one(applicant)
+}));
+
+export const applicantRelations = relations(applicant, ({ one }) => ({
+	user: one(user, {
+		fields: [applicant.userId],
+		references: [user.id]
+	})
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({

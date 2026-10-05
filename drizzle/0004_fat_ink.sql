@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `applicant_user_id_unique` ON `applicant` (`user_id`);

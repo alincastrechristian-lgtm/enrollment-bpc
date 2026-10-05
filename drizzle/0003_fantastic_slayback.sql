@@ -1,0 +1,1 @@
+ALTER TABLE `applicant` ADD `user_id` text REFERENCES user(id);

@@ -128,6 +128,9 @@
 				class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
 			>
 				<th class="py-4 pl-5">Student</th>
+				<th>Program</th>
+				<th>Year Level</th>
+				<th>Section</th>
 				<th>Verification</th>
 				<th class="pr-5 text-right">Actions</th>
 			</tr>
@@ -155,6 +158,21 @@
 						</div>
 					</div>
 				</td>
+
+				<!-- Program -->
+				<td>
+					<span class="font-semibold text-base-content/70"
+						>{student.applicant?.program || 'N/A'}</span
+					>
+				</td>
+
+				<!-- Year Level -->
+				<td class="text-sm font-medium text-base-content/60"
+					>{student.applicant?.yearLevel || 'N/A'}</td
+				>
+
+				<!-- Section -->
+				<td class="pr-5 text-sm font-semibold text-base-content/70">N/A</td>
 
 				<!-- Verification -->
 				<td>

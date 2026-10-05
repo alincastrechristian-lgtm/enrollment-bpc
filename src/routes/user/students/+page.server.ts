@@ -7,7 +7,12 @@ import { eq } from 'drizzle-orm';
 export async function load({ locals }) {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 
-	const users = await db.select().from(user).where(eq(user.role, Role.STUDENT));
+	const users = await db.query.user.findMany({
+		where: eq(user.role, Role.STUDENT),
+		with: {
+			applicant: true
+		}
+	});
 
 	return {
 		users

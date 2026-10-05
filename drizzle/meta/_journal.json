@@ -22,6 +22,20 @@
       "when": 1791098123378,
       "tag": "0002_minor_morlun",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791192683753,
+      "tag": "0003_fantastic_slayback",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791193040150,
+      "tag": "0004_fat_ink",
+      "breakpoints": true
     }
   ]
 }
