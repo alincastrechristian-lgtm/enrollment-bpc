@@ -18,7 +18,7 @@ async function main() {
 		baseURL: process.env.ORIGIN!,
 		secret: process.env.BETTER_AUTH_SECRET!,
 		database: drizzleAdapter(db, { provider: 'sqlite' }),
-		emailAndPassword: { enabled: true, disableSignUp: process.env.NODE_ENV === 'production' },
+		emailAndPassword: { enabled: true, disableSignUp: false },
 		plugins: [
 			admin({
 				defaultRole: Role.STUDENT
