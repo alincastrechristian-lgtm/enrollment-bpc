@@ -1,8 +1,11 @@
 import { Role } from '#lib/Roles.js';
 import { auth, validateUser } from '#lib/server/auth.js';
+import { applicant } from '#lib/server/db/schema.js';
 import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '../server/db';
 
 async function sendMagicLink(email: string, headers: Headers) {
 	try {
@@ -44,7 +47,8 @@ const createUserSchema = z.object({
 		.min(2, 'Name must be at least 2 characters')
 		.max(100, 'Name must be at most 100 characters'),
 
-	email: z.email('Please enter a valid email address').trim().toLowerCase()
+	email: z.email('Please enter a valid email address').trim().toLowerCase(),
+	applicantId: z.string().optional() // Optional applicant ID for students
 });
 type CreateUserSchema = z.infer<typeof createUserSchema>;
 
@@ -82,5 +86,14 @@ export const createStudent = command(createUserSchema, async (data) => {
 	const { locals, request } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 
-	return await createUser(data, Role.STUDENT, request.headers);
+	const result = await createUser(data, Role.STUDENT, request.headers);
+
+	if (result && data.applicantId) {
+		await db
+			.update(applicant)
+			.set({
+				userId: data.applicantId
+			})
+			.where(eq(applicant.applicationId, data.applicantId));
+	}
 });

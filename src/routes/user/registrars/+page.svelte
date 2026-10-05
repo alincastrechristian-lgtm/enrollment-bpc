@@ -77,14 +77,20 @@
 	<div class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm sm:p-5">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 			<!-- Search -->
-			<label class="input-bordered input flex w-full items-center gap-3 bg-base-200 lg:max-w-md">
-				<Search class="h-4 w-4 text-base-content/50" />
+			<label
+				class="input-bordered input flex w-full min-w-0 items-center gap-3 bg-base-200 lg:flex-1"
+			>
+				<Search class="h-4 w-4 shrink-0 text-base-content/50" />
 
-				<input type="text" placeholder="Search by name or registrar ID..." class="grow text-sm" />
+				<input
+					type="text"
+					placeholder="Search by name or registrar ID..."
+					class="min-w-0 grow text-sm"
+				/>
 			</label>
 
 			<!-- Actions -->
-			<div class="flex flex-wrap gap-2">
+			<div class="flex shrink-0 flex-row gap-2">
 				<button class="btn gap-2 border-base-300 bg-base-100 btn-outline btn-sm">
 					<SlidersHorizontal class="h-4 w-4" />
 					Filter
@@ -106,7 +112,7 @@
 	<Table
 		title="Registrars"
 		description="Manage and maintain registrar accounts and access"
-		count={registrars.length}
+		total={data.total}
 		itemLabel="registrars"
 	>
 		{#snippet header()}
