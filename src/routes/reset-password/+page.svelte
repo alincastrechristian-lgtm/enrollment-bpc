@@ -27,7 +27,7 @@
 		event.preventDefault();
 		if (!token) {
 			showError('Missing reset token. Please try requesting a new one.', () => {
-				window.location.href = '/';
+				window.location.href = '/forgot-password';
 			});
 			return;
 		}

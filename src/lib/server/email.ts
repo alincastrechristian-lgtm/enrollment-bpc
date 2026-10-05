@@ -1,18 +1,15 @@
 'use server';
 
 import nodemailer from 'nodemailer';
+import { escapeHtml } from './email-html';
 import { getSystemSettings } from './settings';
 
-function escapeHtml(input: string): string {
-	return input
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#39;');
-}
-
-export async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
+export async function sendEmail(
+	to: string,
+	subject: string,
+	text: string,
+	html?: string
+): Promise<boolean> {
 	try {
 		const settings = await getSystemSettings();
 
@@ -44,7 +41,7 @@ export async function sendEmail(to: string, subject: string, text: string): Prom
 			to: to,
 			subject: subject,
 			text: text,
-			html: `<p>${escapeHtml(text).replace(/\n/g, '<br />')}</p>`
+			html: html ?? `<p>${escapeHtml(text).replace(/\n/g, '<br />')}</p>`
 		});
 
 		if (info.accepted.length > 0) {
