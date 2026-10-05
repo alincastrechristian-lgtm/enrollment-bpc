@@ -19,6 +19,7 @@
 		UserShield
 	} from '@lucide/svelte';
 	import { showYesNo } from '../Popup/Popup.svelte';
+	import ThemeController from '../ThemeController/ThemeController.svelte';
 
 	const session = authClient.useSession();
 
@@ -178,21 +179,30 @@
 		</nav>
 
 		<!-- Theme -->
-		<div class="px-3 pb-3">
-			<label
-				class="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-base-content/10 bg-base-200 px-4 py-2.5 transition-colors hover:bg-base-content/10"
-			>
-				<div class="swap swap-rotate">
-					<input type="checkbox" class="theme-controller" value="dark" />
+		<ThemeController>
+			{#snippet children({ isDark, toggleTheme })}
+				<div class="px-3 pb-3">
+					<label
+						class="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-base-content/10 bg-base-200 px-4 py-2.5 transition-colors hover:bg-base-content/10"
+					>
+						<div class="swap swap-rotate">
+							<input
+								type="checkbox"
+								class="theme-controller"
+								value={isDark}
+								onclick={toggleTheme}
+							/>
 
-					<Sun class="h-5 w-5 swap-on text-base-content/70" />
+							<Sun class="h-5 w-5 swap-on text-base-content/70" />
 
-					<Moon class="h-5 w-5 swap-off text-base-content/70" />
+							<Moon class="h-5 w-5 swap-off text-base-content/70" />
+						</div>
+
+						<span class="text-sm font-semibold text-base-content"> Theme </span>
+					</label>
 				</div>
-
-				<span class="text-sm font-semibold text-base-content"> Theme </span>
-			</label>
-		</div>
+			{/snippet}
+		</ThemeController>
 
 		<!-- Logout -->
 		<div class="px-3 pb-3">
