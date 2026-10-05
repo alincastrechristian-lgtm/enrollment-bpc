@@ -47,6 +47,9 @@ function renderAuthEmail({
 	const safeUrl = escapeHtml(url);
 	const greeting = name?.trim() ? `Hello ${name.trim()},` : 'Hello,';
 	const expiry = `This link expires in ${expiryLabel(expiresInSeconds)} and can only be used once.`;
+	const recoveryUrl = new URL('/forgot-password', parsedUrl).href;
+	const recovery =
+		'If this link expires, you can request a new one from the Forgot password page using the same email address.';
 	const security =
 		'If you did not request this email, you can safely ignore it. Never share this link with anyone.';
 	const subject = `${title} | ${brand}`;
@@ -61,6 +64,9 @@ function renderAuthEmail({
 		url,
 		'',
 		expiry,
+		'',
+		recovery,
+		recoveryUrl,
 		'',
 		security
 	].join('\n');
@@ -88,6 +94,7 @@ function renderAuthEmail({
 <a href="${safeUrl}" style="display:inline-block;padding:14px 24px;border:1px solid ${colors.primary};border-radius:8px;background-color:${colors.primary};color:${colors.primaryContent};font-size:14px;font-weight:700;text-decoration:none;">${escapeHtml(action)}</a>
 </td></tr></table>
 <p style="margin:20px 0 24px;font-size:13px;line-height:1.6;">${escapeHtml(expiry)}</p>
+<p style="margin:0 0 24px;font-size:13px;line-height:1.7;">${escapeHtml(recovery)}<br><a href="${escapeHtml(recoveryUrl)}" style="color:${colors.primary};font-weight:700;">Request a new link</a></p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${colors.background}" style="border:1px solid ${colors.border};border-radius:12px;"><tr><td style="padding:16px;">
 <p style="margin:0 0 8px;font-size:12px;line-height:1.6;">If the button does not work, copy and paste this link into your browser:</p>
 <a href="${safeUrl}" style="color:${colors.primary};font-size:12px;line-height:1.7;word-break:break-all;overflow-wrap:anywhere;">${safeUrl}</a>
@@ -101,18 +108,6 @@ function renderAuthEmail({
 	return { subject, text, html };
 }
 
-export function createMagicLinkEmail(url: string, expiresInSeconds: number) {
-	return renderAuthEmail({
-		url,
-		expiresInSeconds,
-		title: 'Sign in to your account',
-		message:
-			'Your secure sign-in link is ready. Use the button below to access your BPC Enrollment System account.',
-		action: 'Sign in to your account',
-		category: 'ACCOUNT ACCESS'
-	});
-}
-
 export function createResetPasswordEmail(url: string, expiresInSeconds: number, name?: string) {
 	return renderAuthEmail({
 		url,
@@ -123,5 +118,18 @@ export function createResetPasswordEmail(url: string, expiresInSeconds: number, 
 			'We received a request to reset your BPC Enrollment System password. Use the button below to choose a new password.',
 		action: 'Reset password',
 		category: 'ACCOUNT SECURITY'
+	});
+}
+
+export function createFirstLoginEmail(url: string, expiresInSeconds: number, name?: string) {
+	return renderAuthEmail({
+		url,
+		expiresInSeconds,
+		name,
+		title: 'Set up your account',
+		message:
+			'Welcome to the BPC Enrollment System. Set your password to activate your account and sign in.',
+		action: 'Set password',
+		category: 'ACCOUNT SETUP'
 	});
 }

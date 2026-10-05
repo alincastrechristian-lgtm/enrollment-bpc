@@ -98,10 +98,13 @@ test('unsafe URL protocols and invalid expiration values are rejected', () => {
 
 test('auth callbacks send templates with the expiration configured in Better Auth', async () => {
 	const sent = [];
+	let password = null;
 	const plugin = (options) => options;
 	const { auth } = loadTypeScript('auth.ts', {
 		'#lib/Roles.js': { Role: { ADMIN: 'admin', REGISTRAR: 'registrar', STUDENT: 'student' } },
-		'#lib/server/db/index.js': { db: {} },
+		'#lib/server/db/index.js': {
+			db: { query: { account: { findFirst: async () => ({ password }) } } }
+		},
 		'$app/env/private': {
 			ORIGIN: 'https://enrollment.example.com',
 			BETTER_AUTH_SECRET: 'test-secret'
@@ -111,7 +114,6 @@ test('auth callbacks send templates with the expiration configured in Better Aut
 		'better-auth/adapters/drizzle': { drizzleAdapter: plugin },
 		'better-auth/minimal': { betterAuth: plugin },
 		'better-auth/plugins/admin': { admin: plugin },
-		'better-auth/plugins/magic-link': { magicLink: plugin },
 		'better-auth/plugins/two-factor': { twoFactor: () => ({}) },
 		'better-auth/svelte-kit': { sveltekitCookies: () => ({}) },
 		'../auth-permissions': {},
@@ -123,15 +125,19 @@ test('auth callbacks send templates with the expiration configured in Better Aut
 		},
 		'./email-templates': templates
 	});
-	const magic = auth.plugins[1];
-	await magic.sendMagicLink({ email: 'student@example.com', url });
+	await auth.emailAndPassword.sendResetPassword({
+		user: { id: 'student', email: 'student@example.com', name: 'Student' },
+		url
+	});
+	password = 'stored-password-hash';
 	await auth.emailAndPassword.sendResetPassword({
 		user: { email: 'student@example.com', name: 'Student' },
 		url
 	});
-	assert.equal(magic.expiresIn, 604800);
 	assert.equal(auth.emailAndPassword.resetPasswordTokenExpiresIn, 3600);
-	assert.match(sent[0][2], /expires in 7 days/);
+	assert.equal(sent.length, 2);
+	assert.match(sent[0][1], /Set up your account/);
+	assert.match(sent[0][2], /expires in 1 hour/);
 	assert.match(sent[1][2], /expires in 1 hour/);
 	for (const message of sent) {
 		assert.equal(message[0], 'student@example.com');

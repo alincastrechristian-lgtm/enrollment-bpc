@@ -8,16 +8,17 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../server/db';
 
-async function sendMagicLink(email: string, headers: Headers) {
+async function sendPasswordResetLink(email: string, headers: Headers) {
 	try {
-		await auth.api.signInMagicLink({
+		await auth.api.requestPasswordReset({
 			body: {
-				email
+				email,
+				redirectTo: '/first-login'
 			},
 			headers: headers
 		});
 	} catch (err) {
-		error(400, err instanceof Error ? err.message : 'Failed to send magic link email.');
+		error(400, err instanceof Error ? err.message : 'Failed to send account setup email.');
 	}
 }
 
@@ -33,7 +34,7 @@ export const resendMagicLink = command(
 			error(400, 'Email is required.');
 		}
 
-		await sendMagicLink(email, request.headers);
+		await sendPasswordResetLink(email, request.headers);
 
 		return {
 			success: true
@@ -101,7 +102,7 @@ async function createUser(
 	}
 
 	try {
-		await sendMagicLink(email, headers);
+		await sendPasswordResetLink(email, headers);
 	} catch (err) {
 		if (!sourceApplicant) throw err;
 		return { success: true, invitationSent: false };

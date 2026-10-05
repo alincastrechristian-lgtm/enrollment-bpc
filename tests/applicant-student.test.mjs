@@ -81,7 +81,8 @@ function fixture(t, role = Role.REGISTRAR) {
 				await state.onCreate?.(user);
 				return { user };
 			},
-			async signInMagicLink({ body }) {
+			async requestPasswordReset({ body }) {
+				assert.equal(body.redirectTo, '/first-login');
 				state.invitations.push(body.email);
 				if (state.invitationFails) throw new Error('Mail unavailable');
 			}

@@ -6,15 +6,13 @@ import { error } from '@sveltejs/kit';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { betterAuth } from 'better-auth/minimal';
 import { admin } from 'better-auth/plugins/admin';
-import { magicLink } from 'better-auth/plugins/magic-link';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { ac, adminRole, registrarRole, studentRole } from '../auth-permissions';
 import { sendEmail } from './email';
-import { createMagicLinkEmail, createResetPasswordEmail } from './email-templates';
+import { createFirstLoginEmail, createResetPasswordEmail } from './email-templates';
 
-const MAGIC_CODE_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
-const RESET_PASSWORD_EXPIRY_SECONDS = 60 * 60;
+const RESET_PASSWORD_EXPIRY_SECONDS = 24 * 60 * 60;
 
 export const auth = betterAuth({
 	baseURL: ORIGIN,
@@ -26,7 +24,14 @@ export const auth = betterAuth({
 		revokeSessionsOnPasswordReset: true,
 		resetPasswordTokenExpiresIn: RESET_PASSWORD_EXPIRY_SECONDS,
 		sendResetPassword: async ({ user, url }) => {
-			const message = createResetPasswordEmail(url, RESET_PASSWORD_EXPIRY_SECONDS, user.name);
+			const account = await db.query.account.findFirst({
+				where: (account, { eq, and }) =>
+					and(eq(account.userId, user.id), eq(account.providerId, 'credential'))
+			});
+
+			const message = account?.password
+				? createResetPasswordEmail(url, RESET_PASSWORD_EXPIRY_SECONDS, user.name)
+				: createFirstLoginEmail(url, RESET_PASSWORD_EXPIRY_SECONDS, user.name);
 			await sendEmail(user.email, message.subject, message.text, message.html);
 		}
 	},
@@ -40,14 +45,6 @@ export const auth = betterAuth({
 				[Role.REGISTRAR]: registrarRole,
 				[Role.STUDENT]: studentRole
 			}
-		}),
-		magicLink({
-			expiresIn: MAGIC_CODE_EXPIRY_SECONDS, // in seconds
-			sendMagicLink: async ({ email, url }) => {
-				const message = createMagicLinkEmail(url, MAGIC_CODE_EXPIRY_SECONDS);
-				await sendEmail(email, message.subject, message.text, message.html);
-			},
-			disableSignUp: true
 		}),
 		twoFactor(),
 		sveltekitCookies(getRequestEvent) // make sure this is the last plugin in the array
