@@ -1,4 +1,4 @@
-import { auth, validateAction } from '#lib/server/auth.js';
+import { auth, validateUser } from '#lib/server/auth.js';
 import { command, getRequestEvent } from '$app/server';
 import { fail } from '@sveltejs/kit';
 import z from 'zod';
@@ -9,11 +9,7 @@ export const completeFirstLogin = command(
 	}),
 	async ({ password }) => {
 		const { locals, request } = getRequestEvent();
-		const authFailure = validateAction(locals);
-
-		if (authFailure) {
-			return authFailure;
-		}
+		validateUser(locals);
 
 		try {
 			await auth.api.changePassword({

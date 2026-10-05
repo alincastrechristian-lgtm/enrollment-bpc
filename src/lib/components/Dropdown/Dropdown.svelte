@@ -4,11 +4,13 @@
 	let {
 		id,
 		label = 'Open menu',
+		disabled = false,
 		trigger,
 		children
 	}: {
 		id: string;
 		label?: string;
+		disabled?: boolean;
 		trigger: Snippet;
 		children: Snippet;
 	} = $props();
@@ -21,6 +23,7 @@
 	type="button"
 	class="btn btn-square btn-ghost text-base-content/60 btn-sm"
 	aria-label={label}
+	{disabled}
 	title={label}
 	popovertarget={popoverId}
 	style={`anchor-name: ${anchorName}`}

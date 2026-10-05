@@ -11,7 +11,7 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'REGISTRARS',
 		pageDescription: 'Manage and maintain registrar accounts and access.'
 	},
-	'/user/applicants/view': {
+	'/user/applicants/*': {
 		pageTitle: 'APPLICANT DETAILS',
 		pageDescription: 'View and manage applicant details.'
 	},
@@ -51,7 +51,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 
 export const load = ({ url }: { url: URL }) => {
 	const path = url.pathname.replace(/\/$/, '') || '/user/dashboard';
-	const meta = routeMeta[path] ?? {};
+	const meta =
+		routeMeta[path] ??
+		(path.startsWith('/user/applicants/') ? routeMeta['/user/applicants/*'] : undefined) ??
+		{};
 	return {
 		pageTitle: meta.pageTitle,
 		pageDescription: meta.pageDescription

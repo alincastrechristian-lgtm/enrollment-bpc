@@ -1,6 +1,8 @@
 import { Role } from '#lib/Roles.js';
 import { relations, sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { createSelectSchema } from 'drizzle-zod';
+import type z from 'zod';
 
 export const task = sqliteTable('task', {
 	id: text('id')
@@ -48,9 +50,6 @@ export const applicant = sqliteTable(
 		name: text('name').notNull(),
 		program: text('program').notNull(),
 		yearLevel: integer('year_level').notNull(),
-		status: text('status', { enum: ['Pending', 'Approved', 'Rejected'] })
-			.notNull()
-			.$default(() => 'Pending'),
 		dateApplied: integer('date_applied', { mode: 'timestamp_ms' }).notNull(),
 		email: text('email').notNull(),
 		contactNumber: text('contact_number').notNull(),
@@ -202,3 +201,6 @@ export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
 		references: [user.id]
 	})
 }));
+
+export const applicantSchema = createSelectSchema(applicant);
+export type Applicant = z.infer<typeof applicantSchema>;
