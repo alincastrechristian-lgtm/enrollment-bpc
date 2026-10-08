@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
+import { systemSettings } from '../schema';
 import { db } from './db';
-import { systemSettings } from './db/schema';
 
 export async function getSystemSettings() {
 	let settings = await db.query.systemSettings.findFirst({

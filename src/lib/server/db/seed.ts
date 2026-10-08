@@ -8,8 +8,8 @@ import Database from 'better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { seed } from 'drizzle-seed';
-import * as schema from './schema.ts';
-import { systemSettings } from './schema.ts';
+import * as schema from '../../schema.ts';
+import { systemSettings } from '../../schema.ts';
 
 async function main() {
 	const sqlite = new Database(process.env.DATABASE_URL!);

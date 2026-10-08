@@ -2,7 +2,8 @@
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
-	import Table from '#lib/components/Table/Table.svelte';
+	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
+	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import { refreshAll } from '$app/navigation';
 	import {
 		Eye,
@@ -10,9 +11,7 @@
 		MailCheck,
 		Pencil,
 		Plus,
-		Search,
 		Settings,
-		SlidersHorizontal,
 		Trash2,
 		User,
 		UserPlus,
@@ -86,163 +85,143 @@
 	}
 </script>
 
-<section class="space-y-6">
-	<!-- Toolbar -->
-	<div class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm sm:p-5">
-		<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-			<!-- Search -->
-			<label
-				class="input-bordered input flex w-full min-w-0 items-center gap-3 bg-base-200 lg:flex-1"
+<CatalogPage
+	title="Students"
+	description="Manage and maintain student accounts and access"
+	total={data.total}
+	itemLabel="students"
+>
+	{#snippet toolbar()}
+		<CatalogToolbar
+			search={data.search}
+			status={data.status}
+			placeholder="Search by name, account ID or email..."
+			searchLabel="Search students"
+			filterLabel="Verification filter"
+			statusOptions={[
+				{ value: 'all', label: 'All verification statuses' },
+				{ value: 'verified', label: 'Verified' },
+				{ value: 'pending', label: 'Setup required' }
+			]}
+		>
+			<button
+				type="button"
+				class="btn gap-2 bg-primary text-primary-content btn-sm hover:bg-primary/80"
+				onclick={openStudentPopup}
 			>
-				<Search class="h-4 w-4 shrink-0 text-base-content/50" />
+				<Plus class="h-4 w-4" />
+				New Student
+			</button>
+		</CatalogToolbar>
+	{/snippet}
+	{#snippet header()}
+		<tr
+			class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
+		>
+			<th class="py-4 pl-5">Student</th>
+			<th>Program</th>
+			<th>Year Level</th>
+			<th>Section</th>
+			<th>Verification</th>
+			<th class="pr-5 text-right">Actions</th>
+		</tr>
+	{/snippet}
 
-				<input
-					type="text"
-					placeholder="Search by name or student ID..."
-					class="min-w-0 grow text-sm"
-				/>
-			</label>
+	{#each students as student (student.id)}
+		<tr class="border-b border-base-200 transition-colors last:border-0 hover:bg-base-200/80">
+			<!-- Student -->
+			<td class="py-4 pl-5">
+				<div class="flex items-center gap-3">
+					<div
+						class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
+					>
+						{student.name.charAt(0)}
+					</div>
+
+					<div class="min-w-0">
+						<p class="truncate font-bold text-base-content">
+							{student.name}
+						</p>
+
+						<p class="mt-0.5 text-xs text-base-content/50">
+							{student.email}
+						</p>
+					</div>
+				</div>
+			</td>
+
+			<!-- Program -->
+			<td>
+				<span class="font-semibold text-base-content/70">{student.applicant?.program || 'N/A'}</span
+				>
+			</td>
+
+			<!-- Year Level -->
+			<td class="text-sm font-medium text-base-content/60"
+				>{student.applicant?.yearLevel || 'N/A'}</td
+			>
+
+			<!-- Section -->
+			<td class="pr-5 text-sm font-semibold text-base-content/70">N/A</td>
+
+			<!-- Verification -->
+			<td>
+				<span
+					class={`badge gap-1.5 border-none px-3 font-bold ${
+						student.setupComplete ? 'badge-success' : 'badge-warning'
+					}`}
+				>
+					<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+
+					{student.setupComplete ? 'Verified' : 'Setup required'}
+				</span>
+			</td>
 
 			<!-- Actions -->
-			<div class="flex shrink-0 flex-row gap-2">
-				<button class="btn gap-2 border-base-300 bg-base-100 btn-outline btn-sm">
-					<SlidersHorizontal class="h-4 w-4" />
-					Filter
-				</button>
+			<td class="pr-5">
+				<div class="flex justify-end pr-2">
+					<Dropdown id={`student-${student.id}`} label={`Actions for ${student.name}`}>
+						{#snippet trigger()}
+							<Settings class="h-4 w-4" />
+						{/snippet}
 
-				<button
-					type="button"
-					class="btn gap-2 bg-primary text-primary-content btn-sm hover:bg-primary/80"
-					onclick={openStudentPopup}
-				>
-					<Plus class="h-4 w-4" />
-					New Student
-				</button>
-			</div>
-		</div>
-	</div>
+						<ul class="menu w-full p-0">
+							<li>
+								<button type="button" onclick={() => viewStudent(student)}>
+									<Eye class="h-4 w-4" />
+									View
+								</button>
+							</li>
 
-	<!-- Table Card -->
-	<Table
-		title="Students"
-		description="Manage and maintain student accounts and access"
-		total={data.total}
-		itemLabel="students"
-	>
-		{#snippet header()}
-			<tr
-				class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
-			>
-				<th class="py-4 pl-5">Student</th>
-				<th>Program</th>
-				<th>Year Level</th>
-				<th>Section</th>
-				<th>Verification</th>
-				<th class="pr-5 text-right">Actions</th>
-			</tr>
-		{/snippet}
+							<li>
+								<button type="button" disabled title="Editing is not available yet">
+									<Pencil class="h-4 w-4" />
+									Edit
+								</button>
+							</li>
 
-		{#each students as student (student.id)}
-			<tr class="border-b border-base-200 transition-colors last:border-0 hover:bg-base-200/80">
-				<!-- Student -->
-				<td class="py-4 pl-5">
-					<div class="flex items-center gap-3">
-						<div
-							class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
-						>
-							{student.name.charAt(0)}
-						</div>
-
-						<div class="min-w-0">
-							<p class="truncate font-bold text-base-content">
-								{student.name}
-							</p>
-
-							<p class="mt-0.5 text-xs text-base-content/50">
-								{student.email}
-							</p>
-						</div>
-					</div>
-				</td>
-
-				<!-- Program -->
-				<td>
-					<span class="font-semibold text-base-content/70"
-						>{student.applicant?.program || 'N/A'}</span
-					>
-				</td>
-
-				<!-- Year Level -->
-				<td class="text-sm font-medium text-base-content/60"
-					>{student.applicant?.yearLevel || 'N/A'}</td
-				>
-
-				<!-- Section -->
-				<td class="pr-5 text-sm font-semibold text-base-content/70">N/A</td>
-
-				<!-- Verification -->
-				<td>
-					<span
-						class={`badge gap-1.5 border-none px-3 font-bold ${
-							student.setupComplete ? 'badge-success' : 'badge-warning'
-						}`}
-					>
-						<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-
-						{student.setupComplete ? 'Verified' : 'Setup required'}
-					</span>
-				</td>
-
-				<!-- Actions -->
-				<td class="pr-5">
-					<div class="flex justify-end pr-2">
-						<Dropdown id={`student-${student.id}`} label={`Actions for ${student.name}`}>
-							{#snippet trigger()}
-								<Settings class="h-4 w-4" />
-							{/snippet}
-
-							<ul class="menu w-full p-0">
+							{#if !student.setupComplete}
 								<li>
-									<button type="button" onclick={() => viewStudent(student)}>
-										<Eye class="h-4 w-4" />
-										View
+									<button type="button" disabled={resending} onclick={() => resend(student.email)}>
+										<MailCheck class="h-4 w-4" />
+										Resend verification
 									</button>
 								</li>
+							{/if}
 
-								<li>
-									<button type="button" disabled title="Editing is not available yet">
-										<Pencil class="h-4 w-4" />
-										Edit
-									</button>
-								</li>
-
-								{#if !student.setupComplete}
-									<li>
-										<button
-											type="button"
-											disabled={resending}
-											onclick={() => resend(student.email)}
-										>
-											<MailCheck class="h-4 w-4" />
-											Resend verification
-										</button>
-									</li>
-								{/if}
-
-								<li class="text-error">
-									<button type="button" disabled title="Deletion is not available yet">
-										<Trash2 class="h-4 w-4" />
-										Delete
-									</button>
-								</li>
-							</ul>
-						</Dropdown>
-					</div>
-				</td>
-			</tr>
-		{/each}
-	</Table>
-</section>
+							<li class="text-error">
+								<button type="button" disabled title="Deletion is not available yet">
+									<Trash2 class="h-4 w-4" />
+									Delete
+								</button>
+							</li>
+						</ul>
+					</Dropdown>
+				</div>
+			</td>
+		</tr>
+	{/each}
+</CatalogPage>
 
 <dialog
 	bind:this={studentDialog}

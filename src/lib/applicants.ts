@@ -1,4 +1,4 @@
-import type { Applicant } from '#lib/server/db/schema.js';
+import type { Applicant } from '#lib/schema.js';
 
 export function hasAllApplicantDocuments(applicant: Applicant): boolean {
 	return (

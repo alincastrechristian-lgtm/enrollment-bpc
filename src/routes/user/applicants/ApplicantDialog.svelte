@@ -2,7 +2,7 @@
 	import { createApplicant, updateApplicant } from '#lib/actions/applicant.remote.js';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
-	import type { Applicant } from '#lib/server/db/schema.js';
+	import type { Applicant } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
 	import {
 		FileCheck,

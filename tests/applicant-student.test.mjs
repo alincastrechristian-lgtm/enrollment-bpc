@@ -1,9 +1,9 @@
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
 import ts from 'typescript';
 
 const require = createRequire(import.meta.url);
@@ -91,7 +91,7 @@ function fixture(t, role = Role.REGISTRAR) {
 	const commands = loadTypeScript('src/lib/actions/user.remote.ts', {
 		'#lib/Roles.js': { Role },
 		'#lib/applicants.js': documents,
-		'#lib/server/db/schema.js': schema,
+		'#lib/schema.js': schema,
 		'../server/db': { db },
 		'#lib/server/auth.js': { auth, validateUser },
 		'$app/server': {

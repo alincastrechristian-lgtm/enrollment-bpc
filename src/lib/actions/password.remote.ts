@@ -1,6 +1,6 @@
+import { user } from '#lib/schema.js';
 import { auth, validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
-import { user } from '#lib/server/db/schema.js';
 import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { isAPIError } from 'better-auth/api';

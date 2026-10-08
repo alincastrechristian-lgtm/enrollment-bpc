@@ -1,6 +1,6 @@
 import { Role } from '#lib/Roles.js';
+import { systemSettings } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
-import { systemSettings } from '#lib/server/db/schema.js';
 import { command, getRequestEvent } from '$app/server';
 import { createUpdateSchema } from 'drizzle-zod';
 import { db } from '../server/db';

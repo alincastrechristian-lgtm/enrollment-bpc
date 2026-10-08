@@ -1,5 +1,5 @@
 import { hasAllApplicantDocuments } from '#lib/applicants.js';
-import type { Applicant } from '#lib/server/db/schema.js';
+import type { Applicant } from '#lib/schema.js';
 
 export enum ApplicantStatus {
 	Incomplete = 'Incomplete',

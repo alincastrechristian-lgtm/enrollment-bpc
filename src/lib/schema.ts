@@ -9,7 +9,7 @@ import {
 	text,
 	uniqueIndex
 } from 'drizzle-orm/sqlite-core';
-import { createSelectSchema } from 'drizzle-zod';
+import { createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import type z from 'zod';
 
 const uuid = () =>
@@ -410,11 +410,30 @@ export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
 export const applicantSchema = createSelectSchema(applicant);
 export type Applicant = z.infer<typeof applicantSchema>;
 
+export const filterApplicantSchema = createUpdateSchema(applicant).omit({
+	id: true,
+	userId: true,
+	applicationId: true,
+	updatedAt: true,
+	createdAt: true
+});
+export type FilterApplicant = z.infer<typeof filterApplicantSchema>;
+
 export const subjectSchema = createSelectSchema(subject);
 export type Subject = z.infer<typeof subjectSchema>;
 
+export const filterSubjectSchema = createUpdateSchema(subject).omit({
+	id: true
+});
+export type FilterSubject = z.infer<typeof filterSubjectSchema>;
+
 export const programSchema = createSelectSchema(program);
 export type Program = z.infer<typeof programSchema>;
+
+export const filterProgramSchema = createUpdateSchema(program).omit({
+	id: true
+});
+export type FilterProgram = z.infer<typeof filterProgramSchema>;
 
 export const curriculumSchema = createSelectSchema(curriculum);
 export type Curriculum = z.infer<typeof curriculumSchema>;

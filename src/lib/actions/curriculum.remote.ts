@@ -1,6 +1,6 @@
 import { Role } from '#lib/Roles.js';
+import { curriculum, curriculumSubject, enrollment, subject } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
-import { curriculum, curriculumSubject, enrollment, subject } from '#lib/server/db/schema.js';
 import { command, getRequestEvent } from '$app/server';
 import { error, isHttpError } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm/sql/expressions';

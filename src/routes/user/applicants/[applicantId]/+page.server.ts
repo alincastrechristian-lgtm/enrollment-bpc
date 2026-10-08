@@ -1,7 +1,7 @@
 import { Role } from '#lib/Roles.js';
+import { applicant } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
-import { applicant } from '#lib/server/db/schema.js';
 import { error } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm/sql/expressions/conditions';
 

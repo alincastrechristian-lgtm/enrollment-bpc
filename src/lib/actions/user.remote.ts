@@ -1,7 +1,7 @@
 import { Role } from '#lib/Roles.js';
 import { hasAllApplicantDocuments } from '#lib/applicants.js';
+import { applicant, user, type Applicant } from '#lib/schema.js';
 import { auth, validateUser } from '#lib/server/auth.js';
-import { applicant, user, type Applicant } from '#lib/server/db/schema.js';
 import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { and, eq, isNull } from 'drizzle-orm';

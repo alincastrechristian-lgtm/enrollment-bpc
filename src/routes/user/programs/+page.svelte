@@ -1,7 +1,7 @@
 <script lang="ts">
-	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
+	import RecordCatalog from '#lib/components/Catalog/RecordCatalog.svelte';
 	import type { PageProps } from './$types';
 	let { data }: PageProps = $props();
 </script>
 
-<CatalogPage kind="program" {...data} />
+<RecordCatalog kind="program" {...data} />

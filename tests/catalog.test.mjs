@@ -1,9 +1,9 @@
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
 function loadModule(filename, dependencies = {}, sourceOverride) {
@@ -16,7 +16,7 @@ function loadModule(filename, dependencies = {}, sourceOverride) {
 	return exports;
 }
 const { Role } = loadModule('src/lib/Roles.ts');
-const schema = loadModule('src/lib/server/db/schema.ts', { '#lib/Roles.js': { Role } });
+const schema = loadModule('src/lib/schema.ts', { '#lib/Roles.js': { Role } });
 const authSource = readFileSync(new URL('../src/lib/server/auth.ts', import.meta.url), 'utf8');
 const guard = ts
 	.createSourceFile('auth.ts', authSource, ts.ScriptTarget.Latest, true)
@@ -44,7 +44,7 @@ function fixture(t, role = 'admin') {
 	const dependencies = {
 		'#lib/Roles.js': { Role },
 		'#lib/server/auth.js': { validateUser },
-		'#lib/server/db/schema.js': schema,
+		'#lib/schema.js': schema,
 		'../server/db': { db },
 		'#lib/server/db/index.js': { db },
 		'#lib/components/Table/TableValues.js': { MAX_ITEMS_PER_PAGE: 10 },
