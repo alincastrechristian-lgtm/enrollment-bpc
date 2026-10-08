@@ -26,7 +26,7 @@ export const createSubject = command(subjectInsertSchema, async (data) => {
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN]);
 
-	await db.insert(subject).values(data);
+	return db.insert(subject).values(data).returning().get();
 });
 
 export const updateSubject = command(subjectUpdateSchema, async (data) => {

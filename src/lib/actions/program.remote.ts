@@ -26,7 +26,7 @@ export const createProgram = command(programInsertSchema, async (data) => {
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN]);
 
-	await db.insert(program).values(data);
+	return db.insert(program).values(data).returning().get();
 });
 
 export const updateProgram = command(programUpdateSchema, async (data) => {

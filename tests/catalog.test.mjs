@@ -80,7 +80,7 @@ for (const kind of ['program', 'subject']) {
 		const f = fixture(t);
 		const api = f[kind];
 		const table = schema[kind];
-		await api[`create${label}`]({
+		const created = await api[`create${label}`]({
 			code: ' TEST ',
 			name: ' Test Record ',
 			description: 'Details',
@@ -89,6 +89,7 @@ for (const kind of ['program', 'subject']) {
 		const row = f.db.select().from(table).get();
 		assert.equal(row.code, 'TEST');
 		assert.equal(row.name, 'Test Record');
+		assert.deepEqual(created, row);
 		await api[`update${label}`]({
 			id: row.id,
 			name: 'Updated Record',

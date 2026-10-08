@@ -443,3 +443,9 @@ export const filterUserSchema = createUpdateSchema(user).pick({
 
 export const curriculumSchema = createSelectSchema(curriculum);
 export type Curriculum = z.infer<typeof curriculumSchema>;
+
+export const filterCurriculumSchema = createUpdateSchema(curriculum).pick({
+	name: true,
+	isActive: true,
+	publishedAt: true
+});

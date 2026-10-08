@@ -31,6 +31,18 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'PROGRAMS',
 		pageDescription: 'Manage degree and program offerings.'
 	},
+	'/user/curriculum': {
+		pageTitle: 'CURRICULUM',
+		pageDescription: 'Organize program curricula and subject requirements.'
+	},
+	'/user/curriculum/new': {
+		pageTitle: 'NEW CURRICULUM',
+		pageDescription: 'Build a curriculum and arrange its subjects.'
+	},
+	'/user/curriculum/*': {
+		pageTitle: 'CURRICULUM DETAILS',
+		pageDescription: 'Review curriculum subjects, semesters, and units.'
+	},
 	'/user/requirements': {
 		pageTitle: 'REQUIREMENTS',
 		pageDescription: 'Review applicant and enrollment requirements.'
@@ -58,6 +70,7 @@ export const load = ({ url }: { url: URL }) => {
 	const meta =
 		routeMeta[path] ??
 		(path.startsWith('/user/applicants/') ? routeMeta['/user/applicants/*'] : undefined) ??
+		(path.startsWith('/user/curriculum/') ? routeMeta['/user/curriculum/*'] : undefined) ??
 		{};
 	return {
 		pageTitle: meta.pageTitle,

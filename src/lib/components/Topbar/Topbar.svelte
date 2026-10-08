@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { ArrowLeft } from '@lucide/svelte';
 
@@ -14,11 +15,20 @@
 		page.url.pathname.split('/').filter((segment) => segment !== '').length <= 2
 	);
 
-	const pagePath = page.url.pathname
-		.split('/')
-		.filter((segment) => segment !== '')
-		.map((segment) => segment.toUpperCase())
-		.join(' / ');
+	const pagePath = $derived(
+		page.url.pathname
+			.split('/')
+			.filter((segment) => segment !== '')
+			.map((segment) => segment.toUpperCase())
+	);
+
+	const previousPath = $derived(
+		page.url.pathname
+			.split('/')
+			.filter((segment) => segment !== '')
+			.slice(0, -1)
+			.join('/')
+	);
 
 	let {
 		drawerToggleId = 'user-sidebar-drawer',
@@ -90,7 +100,18 @@
 			{/if}
 
 			<p class="mt-1 text-xs font-medium tracking-wide text-base-content/50">
-				{pagePath}
+				{#each pagePath as segment, index (index)}
+					{#if index === 0 || index === pagePath.length - 1}
+						{segment.toUpperCase()}
+					{:else}
+						<a
+							class="link link-hover"
+							href={index === 0 ? '/' : `/${pagePath.slice(0, index + 1).join('/')}`}
+							>{segment.toUpperCase()}</a
+						>
+					{/if}
+					{#if index < pagePath.length - 1}<span class="mx-1.5">/</span>{/if}
+				{/each}
 			</p>
 		</div>
 
@@ -98,7 +119,7 @@
 			<button
 				type="button"
 				class="btn gap-2 btn-ghost text-base-content/60 btn-sm hover:bg-base-300/60 hover:text-base-content"
-				onclick={() => history.back()}
+				onclick={() => previousPath && goto('/' + previousPath)}
 			>
 				<ArrowLeft size={17} strokeWidth={2} />
 				Back

@@ -34,6 +34,7 @@ for (const [role, expected] of [
 			'Enrollment',
 			'Subjects',
 			'Programs',
+			'Curriculum',
 			'Notifications',
 			'Reports',
 			'Settings'
@@ -48,6 +49,7 @@ for (const [role, expected] of [
 			'Enrollment',
 			'Subjects',
 			'Programs',
+			'Curriculum',
 			'Notifications',
 			'Reports',
 			'Settings'
