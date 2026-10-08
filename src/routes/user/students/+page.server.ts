@@ -1,6 +1,7 @@
 import { MAX_ITEMS_PER_PAGE } from '#lib/components/Table/TableValues.js';
 import { Role } from '#lib/Roles.js';
-import { user } from '#lib/schema.js';
+import { user, filterUserSchema } from '#lib/schema.js';
+import { schemaFilters } from '#lib/server/filters.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { redirect } from '@sveltejs/kit';
@@ -13,6 +14,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const search = url.searchParams.get('q')?.trim() ?? '';
 	const value = url.searchParams.get('status');
 	const status = value === 'verified' || value === 'pending' ? value : 'all';
+	const parameters = new URLSearchParams(url.searchParams);
+	if (!parameters.has('filter.setupComplete') && status !== 'all')
+		parameters.set('filter.setupComplete', String(status === 'verified'));
+	const { filters, where: filterWhere } = schemaFilters(filterUserSchema, user, parameters);
 	const where = and(
 		eq(user.role, Role.STUDENT),
 		search
@@ -22,7 +27,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 					like(user.id, `%${search}%`)
 				)
 			: undefined,
-		status === 'all' ? undefined : eq(user.setupComplete, status === 'verified')
+		filterWhere
 	);
 	const total = db.select({ count: count() }).from(user).where(where).get()!.count;
 	const requested = Number(url.searchParams.get('page'));
@@ -49,6 +54,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		users,
 		total,
 		search,
-		status
+		status,
+		filters
 	};
 };

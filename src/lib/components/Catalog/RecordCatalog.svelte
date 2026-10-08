@@ -11,6 +11,8 @@
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
 	import CatalogPage from './CatalogPage.svelte';
 	import CatalogToolbar from './CatalogToolbar.svelte';
+	import { filterProgramSchema, filterSubjectSchema } from '#lib/schema.js';
+	import type { FilterValues } from '../Filter/fields.js';
 	import { refreshAll } from '$app/navigation';
 	import { BookOpen, GraduationCap, Hash, Pencil, Plus, Settings, Trash2, X } from '@lucide/svelte';
 
@@ -27,14 +29,14 @@
 		records,
 		total,
 		search,
-		status,
+		filters,
 		canManage
 	}: {
 		kind: 'program' | 'subject';
 		records: Record[];
 		total: number;
 		search: string;
-		status: 'all' | 'active' | 'inactive';
+		filters: FilterValues;
 		canManage: boolean;
 	} = $props();
 
@@ -120,14 +122,10 @@
 	{#snippet toolbar()}
 		<CatalogToolbar
 			{search}
-			{status}
+			{filters}
 			placeholder={`Search by ${kind} name or code...`}
 			searchLabel={`Search ${kind}s`}
-			statusOptions={[
-				{ value: 'all', label: 'All statuses' },
-				{ value: 'active', label: 'Active' },
-				{ value: 'inactive', label: 'Inactive' }
-			]}
+			filterSchema={kind === 'program' ? filterProgramSchema : filterSubjectSchema}
 		>
 			{#if canManage}
 				<button
@@ -204,8 +202,8 @@
 			><td colspan={canManage ? 5 : 4} class="py-12 text-center"
 				><p class="font-semibold">No {kind}s found</p>
 				<p class="mt-1 text-sm text-base-content/50">
-					{search || status !== 'all'
-						? 'Try another search or status filter.'
+					{search || Object.keys(filters).length > 0
+						? 'Try another search or filter.'
 						: canManage
 							? `Add your first ${kind} to get started.`
 							: 'No records have been added yet.'}

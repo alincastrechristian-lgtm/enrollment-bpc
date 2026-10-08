@@ -30,6 +30,11 @@ const { validateUser } = loadModule(
 	{ '@sveltejs/kit': { error } },
 	"import {error} from '@sveltejs/kit';\n" + guard
 );
+const fields = loadModule('src/lib/components/Filter/fields.ts');
+const filterHelpers = loadModule('src/lib/server/filters.ts', {
+	'#lib/components/Filter/fields.js': fields,
+	'@sveltejs/kit': { error }
+});
 function fixture(t, role = 'admin') {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
@@ -45,6 +50,7 @@ function fixture(t, role = 'admin') {
 		'#lib/Roles.js': { Role },
 		'#lib/server/auth.js': { validateUser },
 		'#lib/schema.js': schema,
+		'#lib/server/filters.js': filterHelpers,
 		'../server/db': { db },
 		'#lib/server/db/index.js': { db },
 		'#lib/components/Table/TableValues.js': { MAX_ITEMS_PER_PAGE: 10 },
@@ -148,6 +154,12 @@ for (const kind of ['program', 'subject']) {
 		assert.equal(load('?status=active').total, 11);
 		assert.equal(load('?q=CODE-11').records[0].id, '11');
 		assert.equal(load('?q=Record%2005').total, 1);
+		assert.equal(load('?filter.code=CODE-1&filter.isActive=true').total, 3);
+		assert.equal(load('?filter.name=Record%2005&filter.isActive=false').total, 0);
+		assert.equal(load('?filter.code=CODE-11&filter.name=Record').records[0].id, '11');
+		assert.equal(load('?filter.id=0').total, 12);
+		assert.deepEqual(load('?status=inactive').filters, { isActive: 'false' });
+		assert.throws(() => load('?filter.isActive=invalid'), { status: 400 });
 		assert.equal(load('?page=invalid&status=invalid').records.length, 10);
 		assert.throws(
 			() => load('?page=999&q=CODE-11'),

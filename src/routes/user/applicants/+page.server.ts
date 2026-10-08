@@ -1,6 +1,7 @@
 import { MAX_ITEMS_PER_PAGE } from '#lib/components/Table/TableValues.js';
 import { Role } from '#lib/Roles.js';
-import { applicant } from '#lib/schema.js';
+import { applicant, filterApplicantSchema } from '#lib/schema.js';
+import { schemaFilters } from '#lib/server/filters.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { redirect } from '@sveltejs/kit';
@@ -19,7 +20,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		eq(applicant.hasGoodMoral, true),
 		eq(applicant.hasPicture, true)
 	)!;
+	const { filters, where: filterWhere } = schemaFilters(
+		filterApplicantSchema,
+		applicant,
+		url.searchParams
+	);
 	const where = and(
+		filterWhere,
 		search
 			? or(
 					like(applicant.name, `%${search}%`),
@@ -60,6 +67,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		applicants,
 		total,
 		search,
-		status
+		status,
+		filters
 	};
 };

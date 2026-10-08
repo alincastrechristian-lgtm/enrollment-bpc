@@ -3,31 +3,47 @@
 	import { page } from '$app/state';
 	import { Search } from '@lucide/svelte';
 	import { onDestroy, untrack, type Snippet } from 'svelte';
+	import Filter from '../Filter/Filter.svelte';
+	import {
+		filterFields,
+		filterKeys,
+		parseFieldFilter,
+		type FilterSchema,
+		type FilterValues
+	} from '../Filter/fields.js';
 
 	let {
 		search,
-		status,
+		status = 'all',
 		placeholder,
 		searchLabel,
 		filterLabel = 'Status filter',
 		statusOptions,
+		filterSchema,
+		filters = {},
 		children
 	}: {
 		search: string;
-		status: string;
+		status?: string;
 		placeholder: string;
 		searchLabel: string;
 		filterLabel?: string;
-		statusOptions: { value: string; label: string }[];
+		statusOptions?: { value: string; label: string }[];
+		filterSchema?: FilterSchema;
+		filters?: FilterValues;
 		children: Snippet;
 	} = $props();
 
 	let query = $state(untrack(() => search));
 	let selectedStatus = $state(untrack(() => status));
+	let selectedFilters = $state<FilterValues>(untrack(() => ({ ...filters })));
+	const fields = $derived(filterSchema ? filterFields(filterSchema) : []);
+	const keys = $derived(fields.flatMap(filterKeys));
 	let error = $state('');
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let inFlight: string | undefined;
 	let composing = false;
+	const id = $props.id();
 
 	function cancelPending() {
 		clearTimeout(timer);
@@ -36,11 +52,12 @@
 
 	// Sync browser navigation without overwriting edits made during a slow search.
 	$effect(() => {
-		const current = { search, status, href: page.url.href };
+		const current = { search, status, filters, href: page.url.href };
 		untrack(() => {
 			if (!timer && !inFlight) {
 				query = current.search;
 				selectedStatus = current.status;
+				selectedFilters = { ...current.filters };
 			}
 		});
 	});
@@ -60,12 +77,35 @@
 		cancelPending();
 		if (composing) return;
 		const trimmed = query.trim();
-		if (!inFlight && trimmed === search && selectedStatus === status) return;
+		for (const field of fields) {
+			const result = filterSchema
+				? parseFieldFilter(filterSchema, field, selectedFilters)
+				: undefined;
+			if (result && !result.success) {
+				error = result.error;
+				return;
+			}
+		}
+		if (
+			!inFlight &&
+			trimmed === search &&
+			(!statusOptions || selectedStatus === status) &&
+			keys.every((key) => (selectedFilters[key]?.trim() ?? '') === (filters[key] ?? ''))
+		)
+			return;
 		const url = new URL(page.url.href);
 		if (trimmed) url.searchParams.set('q', trimmed);
 		else url.searchParams.delete('q');
-		if (selectedStatus !== 'all') url.searchParams.set('status', selectedStatus);
+		if (statusOptions && selectedStatus !== 'all') url.searchParams.set('status', selectedStatus);
 		else url.searchParams.delete('status');
+		for (const { key, type } of fields) {
+			if (type === 'number' || type === 'date') url.searchParams.delete(`filter.${key}`);
+		}
+		for (const key of keys) {
+			const value = selectedFilters[key]?.trim();
+			if (value) url.searchParams.set(`filter.${key}`, value);
+			else url.searchParams.delete(`filter.${key}`);
+		}
 		url.searchParams.delete('page');
 		if (inFlight === url.href) return;
 		inFlight = url.href;
@@ -104,6 +144,12 @@
 			aria-label={searchLabel}
 			class="min-w-0 grow text-sm"
 			oninput={schedule}
+			onkeydown={(event) => {
+				if (event.key === 'Enter' && !event.isComposing) {
+					event.preventDefault();
+					void apply();
+				}
+			}}
 			oncompositionstart={() => {
 				composing = true;
 				cancelPending();
@@ -115,17 +161,35 @@
 		/>
 	</label>
 	<div class="flex flex-wrap items-center gap-2 lg:shrink-0">
-		<select
-			name="status"
-			bind:value={selectedStatus}
-			aria-label={filterLabel}
-			class="select-bordered select w-auto bg-base-200 select-sm"
+		<Filter
+			schema={filterSchema}
+			bind:values={selectedFilters}
 			onchange={schedule}
+			extraCount={statusOptions && selectedStatus !== 'all' ? 1 : 0}
+			onclear={() => {
+				selectedFilters = {};
+				selectedStatus = 'all';
+				schedule();
+			}}
 		>
-			{#each statusOptions as option (option.value)}
-				<option value={option.value}>{option.label}</option>
-			{/each}
-		</select>
+			{#if statusOptions}
+				<div class="space-y-1.5">
+					<label for={`status-${id}`} class="block text-xs font-semibold">{filterLabel}</label>
+					<select
+						id={`status-${id}`}
+						name="status"
+						bind:value={selectedStatus}
+						aria-label={filterLabel}
+						class="select-bordered select w-full bg-base-200 select-sm"
+						onchange={schedule}
+					>
+						{#each statusOptions as option (option.value)}<option value={option.value}
+								>{option.label}</option
+							>{/each}
+					</select>
+				</div>
+			{/if}
+		</Filter>
 		{@render children()}
 	</div>
 </form>

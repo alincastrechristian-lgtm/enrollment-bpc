@@ -29,12 +29,15 @@ test('catalog toolbar debounces searches, combines filters and preserves newer e
 		'Harness.svelte': `<script>
 			import Toolbar from '${path.resolve('src/lib/components/Catalog/CatalogToolbar.svelte').replaceAll('\\', '/')}';
 			import {page} from './state.svelte.js';
+			import z from 'zod';
+			import {readFilterValues} from '${path.resolve('src/lib/components/Filter/fields.ts').replaceAll('\\', '/')}';
+			const schema=z.object({name:z.string().optional(), description:z.string().nullable().optional(), isActive:z.boolean().optional(), yearLevel:z.number().int().min(1).max(4).optional(), dateApplied:z.date().optional(), category:z.enum(['Core','Elective']).optional()});
 			let visible = $state(true);
 			</script>
 			<button onclick={() => visible = !visible}>Toggle toolbar</button>
 			{#if visible}<Toolbar search={page.url.searchParams.get('q') ?? ''}
 			status={page.url.searchParams.get('status') ?? 'all'} placeholder="Search records" searchLabel="Search records"
-			statusOptions={[{value:'all',label:'All statuses'}, {value:'active',label:'Active'}, {value:'inactive',label:'Inactive'}]}>
+			filterSchema={schema} filters={readFilterValues(schema, page.url.searchParams)} statusOptions={[{value:'all',label:'All statuses'}, {value:'active',label:'Active'}, {value:'inactive',label:'Inactive'}]}>
 			<button type="button">New record</button></Toolbar>{/if}`
 	};
 	let server;
@@ -67,11 +70,16 @@ test('catalog toolbar debounces searches, combines filters and preserves newer e
 		await page.clock.install({ time: now });
 		await page.clock.pauseAt(now);
 		const calls = () => page.evaluate(() => window.calls);
+		const status = page.getByRole('combobox', { name: 'Status filter' });
+		async function selectStatus(value) {
+			if (!(await status.isVisible())) await page.getByRole('button', { name: /^Filters/ }).click();
+			await status.selectOption(value);
+		}
 
 		await input.fill('B');
 		await page.clock.fastForward(200);
 		await input.fill('BS');
-		await page.getByRole('combobox').selectOption('active');
+		await selectStatus('active');
 		await input.focus();
 		await page.clock.fastForward(399);
 		assert.equal((await calls()).length, 0);
@@ -86,7 +94,7 @@ test('catalog toolbar debounces searches, combines filters and preserves newer e
 		assert.equal((await calls()).length, 1);
 
 		await input.fill('');
-		await page.getByRole('combobox').selectOption('all');
+		await selectStatus('all');
 		await page.clock.fastForward(400);
 		await expect.poll(async () => (await calls()).length).toBe(2);
 		assert.equal(new URL((await calls())[1].href).search, '?keep=yes');
@@ -115,7 +123,7 @@ test('catalog toolbar debounces searches, combines filters and preserves newer e
 		await input.fill('Cancelled');
 		await page.evaluate(() => window.navigate('?q=Restored&status=inactive&page=2'));
 		await expect(input).toHaveValue('Restored');
-		await expect(page.getByRole('combobox')).toHaveValue('inactive');
+		await expect(status).toHaveValue('inactive');
 		await page.clock.fastForward(500);
 		assert.equal((await calls()).length, count);
 
@@ -127,6 +135,54 @@ test('catalog toolbar debounces searches, combines filters and preserves newer e
 		await input.dispatchEvent('compositionend');
 		await page.clock.fastForward(400);
 		assert.equal((await calls()).length, ++count);
+
+		// Different schema types render different controls and combine in one request.
+		const name = page.getByLabel('Name', { exact: true });
+		if (!(await name.isVisible())) await page.getByRole('button', { name: /^Filters/ }).click();
+		await expect(page.getByLabel('Description')).toHaveAttribute('type', 'text');
+		await expect(page.getByLabel('Year level minimum')).toHaveAttribute('type', 'number');
+		await expect(page.getByLabel('Year level minimum')).toHaveAttribute('min', '1');
+		await expect(page.getByLabel('Date applied start date')).toHaveAttribute('type', 'date');
+		await name.fill('Biology');
+		await page.getByLabel('Is active').selectOption('false');
+		await page.getByLabel('Year level minimum').fill('2');
+		await page.getByLabel('Year level maximum').fill('3');
+		await page.getByLabel('Date applied start date').fill('2026-10-08');
+		await page.getByLabel('Date applied end date').fill('2026-10-09');
+		await page.getByLabel('Category').selectOption('Elective');
+		await page.clock.fastForward(399);
+		assert.equal((await calls()).length, count);
+		await page.clock.fastForward(1);
+		assert.equal((await calls()).length, ++count);
+		const parameters = new URL((await calls()).at(-1).href).searchParams;
+		assert.equal(parameters.get('filter.name'), 'Biology');
+		assert.equal(parameters.get('filter.isActive'), 'false');
+		assert.equal(parameters.get('filter.yearLevel.min'), '2');
+		assert.equal(parameters.get('filter.yearLevel.max'), '3');
+		assert.equal(parameters.get('filter.dateApplied.min'), '2026-10-08');
+		assert.equal(parameters.get('filter.dateApplied.max'), '2026-10-09');
+		assert.equal(parameters.get('filter.category'), 'Elective');
+		await expect(page.getByRole('button', { name: /^Filters/ })).toContainText('6');
+		await name.fill('Biology');
+		await page.clock.fastForward(500);
+		assert.equal((await calls()).length, count);
+		await page.getByLabel('Year level minimum').fill('7');
+		await page.clock.fastForward(400);
+		assert.equal((await calls()).length, count);
+		await expect(page.getByRole('alert')).toContainText('Year Level');
+		await page.getByRole('button', { name: 'Clear filters' }).click();
+		await page.clock.fastForward(400);
+		assert.equal((await calls()).length, ++count);
+		assert.equal(
+			[...new URL((await calls()).at(-1).href).searchParams.keys()].some((key) =>
+				key.startsWith('filter.')
+			),
+			false
+		);
+		assert.equal(new URL((await calls()).at(-1).href).searchParams.has('status'), false);
+		await expect(name).toHaveValue('');
+		await expect(page.getByLabel('Is active')).toHaveValue('');
+		await page.getByRole('button', { name: 'Close filters' }).click();
 
 		await page.evaluate(() => (window.fail = true));
 		await input.fill('Retry');

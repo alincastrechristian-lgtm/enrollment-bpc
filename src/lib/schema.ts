@@ -435,5 +435,11 @@ export const filterProgramSchema = createUpdateSchema(program).omit({
 });
 export type FilterProgram = z.infer<typeof filterProgramSchema>;
 
+export const filterUserSchema = createUpdateSchema(user).pick({
+	name: true,
+	email: true,
+	setupComplete: true
+});
+
 export const curriculumSchema = createSelectSchema(curriculum);
 export type Curriculum = z.infer<typeof curriculumSchema>;

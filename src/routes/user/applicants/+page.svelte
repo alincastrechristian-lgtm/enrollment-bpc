@@ -9,7 +9,7 @@
 	} from '#lib/components/Popup/Popup.svelte.js';
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
-	import type { Applicant } from '#lib/schema.js';
+	import { filterApplicantSchema, type Applicant } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
 	import { Eye, Pencil, Plus, Settings, Trash2 } from '@lucide/svelte';
 	import ApplicantDialog from './ApplicantDialog.svelte';
@@ -56,6 +56,8 @@
 	{#snippet toolbar()}
 		<CatalogToolbar
 			search={data.search}
+			filterSchema={filterApplicantSchema}
+			filters={data.filters}
 			status={data.status}
 			placeholder="Search by name, applicant ID or email..."
 			searchLabel="Search applicants"

@@ -4,6 +4,7 @@
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
+	import { filterUserSchema } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
 	import {
 		Eye,
@@ -94,15 +95,10 @@
 	{#snippet toolbar()}
 		<CatalogToolbar
 			search={data.search}
-			status={data.status}
 			placeholder="Search by name, account ID or email..."
 			searchLabel="Search students"
-			filterLabel="Verification filter"
-			statusOptions={[
-				{ value: 'all', label: 'All verification statuses' },
-				{ value: 'verified', label: 'Verified' },
-				{ value: 'pending', label: 'Setup required' }
-			]}
+			filterSchema={filterUserSchema}
+			filters={data.filters}
 		>
 			<button
 				type="button"
