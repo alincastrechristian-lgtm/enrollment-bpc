@@ -41,9 +41,19 @@ for (const [role, expected] of [
 	],
 	[
 		'registrar',
-		['Dashboard', 'Applicants', 'Students', 'Enrollment', 'Notifications', 'Reports', 'Settings']
+		[
+			'Dashboard',
+			'Applicants',
+			'Students',
+			'Enrollment',
+			'Subjects',
+			'Programs',
+			'Notifications',
+			'Reports',
+			'Settings'
+		]
 	],
-	['student', ['Dashboard', 'Enrollment', 'Subjects', 'Notifications', 'Settings']]
+	['student', ['Dashboard', 'Enrollment', 'Notifications', 'Settings']]
 ]) {
 	test(`${role} keeps existing navigation and receives the correct settings links`, () => {
 		const items = getSidebarItems(role);
@@ -54,7 +64,7 @@ for (const [role, expected] of [
 		const settings = items.find((item) => item.id === 'settings');
 		assert.deepEqual(
 			settings.children.map((item) => item.label),
-			role === 'admin' ? ['Profile', 'Email'] : ['Profile']
+			role === 'admin' ? ['Email', 'Profile'] : ['Profile']
 		);
 		assert.equal(isActiveItem(settings, '/user/settings/profile/'), true);
 		assert.equal(isActiveItem(settings, '/user/settings/email'), role === 'admin');
@@ -83,6 +93,9 @@ test('active links match route boundaries and trailing slashes', () => {
 test('resolved links and group highlighting support a deployment base path', () => {
 	const navigation = loadNavigation('/portal');
 	const settings = navigation.getSidebarItems('admin').find((item) => item.id === 'settings');
-	assert.equal(settings.children[0].href, '/portal/user/settings/profile');
+	assert.equal(
+		settings.children.find((child) => child.label === 'Profile').href,
+		'/portal/user/settings/profile'
+	);
 	assert.equal(navigation.isActiveItem(settings, '/portal/user/settings/email'), true);
 });

@@ -9,7 +9,7 @@
 </script>
 
 {#if $session && $session.data}
-	{#if $session.data.user.role === Role.ADMIN}
+	{#if $session.data.user.role === Role.ADMIN || $session.data.user.role === Role.REGISTRAR}
 		{@render children()}
 	{:else}
 		<ErrorPage

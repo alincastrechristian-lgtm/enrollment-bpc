@@ -37,9 +37,9 @@ const items: SidebarItem[] = [
 		label: 'Subjects',
 		href: resolve('/user/subjects'),
 		icon: BookOpen,
-		roles: [Role.ADMIN, Role.STUDENT]
+		roles: staff
 	},
-	{ label: 'Programs', href: resolve('/user/programs'), icon: GraduationCap, roles: [Role.ADMIN] },
+	{ label: 'Programs', href: resolve('/user/programs'), icon: GraduationCap, roles: staff },
 	{ label: 'Notifications', href: resolve('/user/notifications'), icon: Bell },
 	{ label: 'Reports', href: resolve('/user/reports'), icon: SquareChartGantt, roles: staff },
 	{

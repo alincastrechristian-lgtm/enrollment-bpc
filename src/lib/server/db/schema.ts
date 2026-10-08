@@ -1,8 +1,21 @@
 import { Role } from '#lib/Roles.js';
 import { relations, sql } from 'drizzle-orm';
-import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import {
+	check,
+	index,
+	integer,
+	real,
+	sqliteTable,
+	text,
+	uniqueIndex
+} from 'drizzle-orm/sqlite-core';
 import { createSelectSchema } from 'drizzle-zod';
 import type z from 'zod';
+
+const uuid = () =>
+	text('id')
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID());
 
 export const systemSettings = sqliteTable('system_settings', {
 	id: integer('id').primaryKey().default(1),
@@ -13,6 +26,189 @@ export const systemSettings = sqliteTable('system_settings', {
 	senderPassword: text('sender_password')
 });
 
+export const program = sqliteTable('program', {
+	id: uuid(),
+	code: text('code').notNull().unique(),
+	name: text('name').notNull(),
+	description: text('description'),
+	isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull()
+});
+
+export const subject = sqliteTable('subject', {
+	id: uuid(),
+	code: text('code').notNull().unique(),
+	name: text('name').notNull(),
+	description: text('description'),
+	isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull()
+});
+
+export const curriculum = sqliteTable(
+	'curriculum',
+	{
+		id: uuid(),
+		programId: text('program_id')
+			.notNull()
+			.references(() => program.id, { onDelete: 'restrict' }),
+
+		// Examples: "2026 Curriculum", "2028 Curriculum"
+		name: text('name').notNull(),
+
+		// if publishedAt is null, the curriculum is still in draft mode.
+		publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+		isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull()
+	},
+	(table) => [uniqueIndex('curriculum_program_name_unique').on(table.programId, table.name)]
+);
+
+export const curriculumSubject = sqliteTable(
+	'curriculum_subject',
+	{
+		id: uuid(),
+		curriculumId: text('curriculum_id')
+			.notNull()
+			.references(() => curriculum.id, { onDelete: 'cascade' }),
+		subjectId: text('subject_id')
+			.notNull()
+			.references(() => subject.id, { onDelete: 'restrict' }),
+
+		yearLevel: integer('year_level').notNull(),
+
+		// 1 = first semester, 2 = second, 3 = summer
+		semester: integer('semester').notNull(),
+		units: real('units').notNull(),
+
+		// Snapshot when the curriculum is published.
+		subjectCode: text('subject_code').notNull(),
+		subjectName: text('subject_name').notNull()
+	},
+	(table) => [
+		uniqueIndex('curriculum_subject_unique').on(table.curriculumId, table.subjectId),
+		check('curriculum_subject_year_positive', sql`${table.yearLevel} > 0`),
+		check('curriculum_subject_semester_positive', sql`${table.semester} > 0`),
+		check('curriculum_subject_units_positive', sql`${table.units} > 0`)
+	]
+);
+
+export const studentData = sqliteTable('student', {
+	id: uuid(),
+	userId: text('user_id')
+		.notNull()
+		.unique()
+		.references(() => user.id, { onDelete: 'restrict' }),
+	studentNumber: text('student_number').notNull().unique()
+});
+
+export const academicTerm = sqliteTable(
+	'academic_term',
+	{
+		id: uuid(),
+
+		// Example: 2026 represents school year 2026–2027.
+		startYear: integer('start_year').notNull(),
+		semester: integer('semester').notNull(),
+
+		enrollmentOpensAt: integer('enrollment_opens_at', {
+			mode: 'timestamp_ms'
+		}).notNull(),
+		enrollmentClosesAt: integer('enrollment_closes_at', {
+			mode: 'timestamp_ms'
+		}).notNull()
+	},
+	(table) => [
+		uniqueIndex('academic_term_year_semester_unique').on(table.startYear, table.semester),
+		check('academic_term_semester_range', sql`${table.semester} BETWEEN 1 AND 3`),
+		check(
+			'academic_term_enrollment_dates',
+			sql`${table.enrollmentClosesAt} > ${table.enrollmentOpensAt}`
+		)
+	]
+);
+
+export const enrollment = sqliteTable(
+	'enrollment',
+	{
+		id: uuid(),
+		studentId: text('student_id')
+			.notNull()
+			.references(() => studentData.id, { onDelete: 'restrict' }),
+		termId: text('term_id')
+			.notNull()
+			.references(() => academicTerm.id, { onDelete: 'restrict' }),
+		curriculumId: text('curriculum_id')
+			.notNull()
+			.references(() => curriculum.id, { onDelete: 'restrict' }),
+
+		// Year level for THIS enrollment, not a global student value.
+		yearLevel: integer('year_level').notNull(),
+
+		status: text('status', {
+			enum: ['pending', 'enrolled', 'cancelled', 'withdrawn']
+		})
+			.default('pending')
+			.notNull(),
+
+		enrolledAt: integer('enrolled_at', { mode: 'timestamp_ms' })
+	},
+	(table) => [
+		uniqueIndex('enrollment_student_term_unique').on(table.studentId, table.termId),
+		index('enrollment_term_idx').on(table.termId),
+		check('enrollment_year_range', sql`${table.yearLevel} BETWEEN 1 AND 4`),
+		check(
+			'enrollment_status_valid',
+			sql`${table.status} IN ('pending', 'enrolled', 'cancelled', 'withdrawn')`
+		)
+	]
+);
+
+export const enrollmentSubject = sqliteTable(
+	'enrollment_subject',
+	{
+		id: uuid(),
+		enrollmentId: text('enrollment_id')
+			.notNull()
+			.references(() => enrollment.id, { onDelete: 'restrict' }),
+		subjectId: text('subject_id')
+			.notNull()
+			.references(() => subject.id, { onDelete: 'restrict' }),
+
+		// Optional: identifies the curriculum entry used to select it.
+		// Extra subjects can leave this null.
+		curriculumSubjectId: text('curriculum_subject_id').references(() => curriculumSubject.id, {
+			onDelete: 'restrict'
+		}),
+
+		source: text('source', {
+			enum: ['curriculum', 'extra']
+		})
+			.default('curriculum')
+			.notNull(),
+
+		remarks: text('remarks'),
+
+		// Historical values for this specific subject attempt.
+		subjectCode: text('subject_code').notNull(),
+		subjectName: text('subject_name').notNull(),
+		units: real('units').notNull(),
+
+		addedBy: text('added_by')
+			.notNull()
+			.references(() => user.id, { onDelete: 'restrict' }),
+		addedAt: integer('added_at', { mode: 'timestamp_ms' })
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+			.notNull()
+	},
+	(table) => [
+		uniqueIndex('enrollment_subject_unique').on(table.enrollmentId, table.subjectId),
+		index('enrollment_subject_subject_idx').on(table.subjectId),
+		check('enrollment_subject_units_positive', sql`${table.units} > 0`),
+		check('enrollment_subject_source_valid', sql`${table.source} IN ('curriculum', 'extra')`),
+		check(
+			'enrollment_subject_curriculum_source',
+			sql`${table.source} != 'curriculum' OR ${table.curriculumSubjectId} IS NOT NULL`
+		)
+	]
+);
+
 export const applicant = sqliteTable(
 	'applicant',
 	{
@@ -21,7 +217,7 @@ export const applicant = sqliteTable(
 			.$defaultFn(() => crypto.randomUUID()),
 		userId: text('user_id')
 			.unique()
-			.references(() => user.id, { onDelete: 'cascade' }),
+			.references(() => user.id, { onDelete: 'set null' }),
 
 		applicationId: text('application_id').notNull().unique(),
 
@@ -213,3 +409,12 @@ export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
 
 export const applicantSchema = createSelectSchema(applicant);
 export type Applicant = z.infer<typeof applicantSchema>;
+
+export const subjectSchema = createSelectSchema(subject);
+export type Subject = z.infer<typeof subjectSchema>;
+
+export const programSchema = createSelectSchema(program);
+export type Program = z.infer<typeof programSchema>;
+
+export const curriculumSchema = createSelectSchema(curriculum);
+export type Curriculum = z.infer<typeof curriculumSchema>;

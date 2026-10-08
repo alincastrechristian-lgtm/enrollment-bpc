@@ -31,7 +31,7 @@
 	});
 	let totalPages = $derived(total / MAX_ITEMS_PER_PAGE);
 
-	const pageCount = $derived(Math.max(1, Math.floor(totalPages)));
+	const pageCount = $derived(Math.max(1, Math.ceil(totalPages)));
 	const activePage = $derived(Math.min(pageCount, Math.max(1, Math.floor(currentPage))));
 	const validTargetPage = $derived(
 		targetPage !== undefined &&
@@ -121,7 +121,12 @@
 	>
 		<p class="text-xs font-medium text-base-content/60">
 			Showing
-			<span class="font-bold text-base-content/80">1–{total ?? 0}</span>
+			<span class="font-bold text-base-content/80"
+				>{total === 0 ? 0 : (activePage - 1) * MAX_ITEMS_PER_PAGE + 1}–{Math.min(
+					activePage * MAX_ITEMS_PER_PAGE,
+					total ?? 0
+				)}</span
+			>
 			of
 			<span class="font-bold text-base-content/80">{total ?? 0}</span>
 			{itemLabel}
