@@ -1,5 +1,6 @@
 import { chromium, expect } from '@playwright/test';
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import tailwindcss from '@tailwindcss/vite';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -10,7 +11,8 @@ test('catalog toolbar debounces searches, combines filters and preserves newer e
 	const root = mkdtempSync(path.resolve('.tmp-catalog-toolbar-'));
 	const files = {
 		'index.html': '<div id="app"></div><script type="module" src="/main.js"></script>',
-		'main.js': `import {mount} from 'svelte'; import Harness from './Harness.svelte';
+		'style.css': "@import '../src/routes/layout.css'; @source '../src';",
+		'main.js': `import './style.css'; import {mount} from 'svelte'; import Harness from './Harness.svelte';
 			mount(Harness, {target: document.getElementById('app')});`,
 		'state.svelte.js': `export const page = $state({url: new URL(window.location.href)});`,
 		'navigation.js': `import {onDestroy} from 'svelte'; import {page} from './state.svelte.js';
@@ -48,7 +50,7 @@ test('catalog toolbar debounces searches, combines filters and preserves newer e
 		server = await createServer({
 			root,
 			configFile: false,
-			plugins: [svelte({ configFile: false, preprocess: vitePreprocess() })],
+			plugins: [tailwindcss(), svelte({ configFile: false, preprocess: vitePreprocess() })],
 			resolve: {
 				alias: [
 					{ find: '$app/state', replacement: path.join(root, 'state.svelte.js') },

@@ -173,14 +173,16 @@
 			}}
 		>
 			{#if statusOptions}
-				<div class="space-y-1.5">
+				<div
+					class={`min-w-0 space-y-2 rounded-xl border p-3.5 transition-colors ${selectedStatus !== 'all' ? 'border-primary/25 bg-primary/5' : 'border-base-300/80 bg-base-200/30'}`}
+				>
 					<label for={`status-${id}`} class="block text-xs font-semibold">{filterLabel}</label>
 					<select
 						id={`status-${id}`}
 						name="status"
 						bind:value={selectedStatus}
 						aria-label={filterLabel}
-						class="select-bordered select w-full bg-base-200 select-sm"
+						class="select h-10 w-full rounded-lg border-base-300 bg-base-100 text-sm shadow-none focus:border-primary/50 focus:outline-primary/15"
 						onchange={schedule}
 					>
 						{#each statusOptions as option (option.value)}<option value={option.value}
