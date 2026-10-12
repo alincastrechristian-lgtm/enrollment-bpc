@@ -1,0 +1,1 @@
+ALTER TABLE `curriculum` RENAME COLUMN "regular_semesters" TO "semesters";

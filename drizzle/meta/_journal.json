@@ -64,6 +64,13 @@
       "when": 1791788274386,
       "tag": "0008_curriculum_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1791793309167,
+      "tag": "0009_rename_curriculum_semesters",
+      "breakpoints": true
     }
   ]
 }

@@ -47,6 +47,12 @@ function fixture(t, role = 'admin') {
 	sqlite.exec(
 		readFileSync(new URL('../drizzle/0008_curriculum_limits.sql', import.meta.url), 'utf8')
 	);
+	sqlite.exec(
+		readFileSync(
+			new URL('../drizzle/0009_rename_curriculum_semesters.sql', import.meta.url),
+			'utf8'
+		)
+	);
 	const db = drizzle(sqlite, { schema });
 	const locals = { user: role ? { role } : null, session: role ? {} : null };
 	const dependencies = {

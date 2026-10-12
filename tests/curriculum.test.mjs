@@ -55,6 +55,12 @@ function fixture(t) {
 	sqlite.exec(
 		readFileSync(new URL('../drizzle/0008_curriculum_limits.sql', import.meta.url), 'utf8')
 	);
+	sqlite.exec(
+		readFileSync(
+			new URL('../drizzle/0009_rename_curriculum_semesters.sql', import.meta.url),
+			'utf8'
+		)
+	);
 	sqlite.pragma('foreign_keys = ON');
 	const db = drizzle(sqlite, { schema });
 	db.insert(schema.program).values({ id: 'p', code: 'BSIS', name: 'Information Systems' }).run();
@@ -127,7 +133,7 @@ test('curriculum create/update preserve entries and server-owned subject snapsho
 	assert.equal(data.curriculum.publishedAt, null);
 	assert.equal(data.curriculum.isActive, true);
 	assert.equal(data.curriculum.yearLevels, 4);
-	assert.equal(data.curriculum.regularSemesters, 2);
+	assert.equal(data.curriculum.semesters, 2);
 	assert.equal(data.entries[0].subjectCode, 'IS101');
 	const previousId = data.entries[0].id;
 	await f.updateCurriculum({
@@ -179,9 +185,64 @@ test('curriculum migration preserves existing records and adds default limits', 
 	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
 });
 
+test('semester rename preserves values, subjects, defaults and supports rollback', (t) => {
+	const sqlite = new Database(':memory:');
+	t.after(() => sqlite.close());
+	sqlite.exec(
+		readFileSync(new URL('../drizzle/0007_right_wallflower.sql', import.meta.url), 'utf8').split(
+			'PRAGMA foreign_keys=OFF'
+		)[0]
+	);
+	sqlite.exec(
+		readFileSync(new URL('../drizzle/0008_curriculum_limits.sql', import.meta.url), 'utf8')
+	);
+	sqlite.pragma('foreign_keys = ON');
+	sqlite.exec(`
+		INSERT INTO program (id, code, name) VALUES ('p', 'P', 'Program');
+		INSERT INTO subject (id, code, name) VALUES ('s', 'S', 'Subject');
+		INSERT INTO curriculum (id, program_id, name, year_levels, regular_semesters, published_at)
+		VALUES ('c', 'p', 'Published', 5, 3, 1234);
+		INSERT INTO curriculum_subject (id, curriculum_id, subject_id, year_level, semester, units, subject_code, subject_name)
+		VALUES ('entry', 'c', 's', 5, 3, 3, 'Original S', 'Original Subject');
+	`);
+	const original = sqlite.prepare('SELECT * FROM curriculum').get();
+	const subjects = sqlite.prepare('SELECT * FROM curriculum_subject').all();
+	const migration = readFileSync(
+		new URL('../drizzle/0009_rename_curriculum_semesters.sql', import.meta.url),
+		'utf8'
+	);
+	sqlite.transaction(() => sqlite.exec(migration))();
+	const { regular_semesters, ...remaining } = original;
+	assert.deepEqual(sqlite.prepare('SELECT * FROM curriculum').get(), {
+		...remaining,
+		semesters: regular_semesters
+	});
+	assert.deepEqual(sqlite.prepare('SELECT * FROM curriculum_subject').all(), subjects);
+	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
+	assert.ok(
+		!sqlite.pragma('table_info(curriculum)').some((column) => column.name === 'regular_semesters')
+	);
+	sqlite.exec("INSERT INTO curriculum (id, program_id, name) VALUES ('default', 'p', 'Default')");
+	assert.equal(
+		sqlite.prepare("SELECT semesters FROM curriculum WHERE id = 'default'").get().semesters,
+		2
+	);
+	sqlite.transaction(() =>
+		sqlite.exec('ALTER TABLE curriculum RENAME COLUMN semesters TO regular_semesters')
+	)();
+	assert.deepEqual(sqlite.prepare("SELECT * FROM curriculum WHERE id = 'c'").get(), original);
+	sqlite.transaction(() => sqlite.exec(migration))();
+	assert.equal(
+		sqlite.prepare("SELECT semesters FROM curriculum WHERE id = 'c'").get().semesters,
+		3
+	);
+	assert.deepEqual(sqlite.prepare('SELECT * FROM curriculum_subject').all(), subjects);
+	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
+});
+
 test('curriculum limits reject malformed counts and out-of-range subject placements', async (t) => {
 	const f = fixture(t);
-	for (const field of ['yearLevels', 'regularSemesters']) {
+	for (const field of ['yearLevels', 'semesters']) {
 		for (const value of [0, -1, 1.5, null, '2', NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
 			await assert.rejects(
 				f.createCurriculum({ name: 'Invalid limits', programId: 'p', subjects: [], [field]: value })
@@ -210,7 +271,7 @@ test('curriculum limits reject malformed counts and out-of-range subject placeme
 			name: 'Extra Semester',
 			programId: 'p',
 			yearLevels: 3,
-			regularSemesters: 3,
+			semesters: 3,
 			subjects: [entry('s2', { yearLevel: 3, semester: 4 })]
 		}),
 		{ status: 400 }
@@ -219,17 +280,17 @@ test('curriculum limits reject malformed counts and out-of-range subject placeme
 		name: 'Custom Semesters',
 		programId: 'p',
 		yearLevels: 3,
-		regularSemesters: 3,
+		semesters: 3,
 		subjects: [entry('s2', { yearLevel: 3, semester: 3 })]
 	});
 	const original = f.helpers.getCurriculum(custom.id);
 	const row = original.entries[0];
 	const subjects = [entry('s2', { id: row.id, yearLevel: 3, semester: 3 })];
 	await f.updateCurriculum({ id: custom.id, name: 'Renamed', subjects });
-	assert.equal(f.helpers.getCurriculum(custom.id).curriculum.regularSemesters, 3);
+	assert.equal(f.helpers.getCurriculum(custom.id).curriculum.semesters, 3);
 	for (const change of [
 		{ yearLevels: 2 },
-		{ regularSemesters: 2 },
+		{ semesters: 2 },
 		{ subjects: [entry('s2', { id: row.id, yearLevel: 4, semester: 3 })] },
 		{ subjects: [entry('s2', { id: row.id, yearLevel: 3, semester: 4 })] }
 	]) {
@@ -240,19 +301,19 @@ test('curriculum limits reject malformed counts and out-of-range subject placeme
 		const current = f.helpers.getCurriculum(custom.id);
 		assert.equal(current.curriculum.name, 'Renamed');
 		assert.equal(current.curriculum.yearLevels, 3);
-		assert.equal(current.curriculum.regularSemesters, 3);
+		assert.equal(current.curriculum.semesters, 3);
 		assert.deepEqual(current.entries, original.entries);
 	}
-	await assert.rejects(f.updateCurriculum({ id: custom.id, regularSemesters: 0, subjects }));
+	await assert.rejects(f.updateCurriculum({ id: custom.id, semesters: 0, subjects }));
 	await f.updateCurriculum({
 		id: custom.id,
 		yearLevels: 2,
-		regularSemesters: 1,
+		semesters: 1,
 		subjects: [entry('s2', { id: row.id, yearLevel: 2, semester: 1 })]
 	});
 	const revised = f.helpers.getCurriculum(custom.id);
 	assert.equal(revised.curriculum.yearLevels, 2);
-	assert.equal(revised.curriculum.regularSemesters, 1);
+	assert.equal(revised.curriculum.semesters, 1);
 	assert.equal(revised.entries[0].semester, 1);
 });
 

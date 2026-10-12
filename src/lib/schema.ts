@@ -53,7 +53,7 @@ export const curriculum = sqliteTable(
 		// Examples: "2026 Curriculum", "2028 Curriculum"
 		name: text('name').notNull(),
 		yearLevels: integer('year_levels').notNull().default(4),
-		regularSemesters: integer('regular_semesters').notNull().default(2),
+		semesters: integer('semesters').notNull().default(2),
 
 		// if publishedAt is null, the curriculum is still in draft mode.
 		publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
@@ -75,7 +75,7 @@ export const curriculumSubject = sqliteTable(
 
 		yearLevel: integer('year_level').notNull(),
 
-		// Curriculum subjects belong to regular semesters 1..curriculum.regularSemesters.
+		// Curriculum subjects belong to semesters 1..curriculum.semesters.
 		semester: integer('semester').notNull(),
 		units: real('units').notNull(),
 

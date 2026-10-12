@@ -19,7 +19,7 @@
 	import type { Snippet } from 'svelte';
 	let {
 		yearLevels,
-		regularSemesters,
+		semesters,
 		layout = $bindable('all'),
 		year = $bindable(1),
 		semester = $bindable(1),
@@ -29,7 +29,7 @@
 		children
 	}: {
 		yearLevels: number | undefined;
-		regularSemesters: number | undefined;
+		semesters: number | undefined;
 		layout?: 'all' | 'tabbed';
 		year?: number;
 		semester?: number;
@@ -40,7 +40,7 @@
 	} = $props();
 	const uid = $props.id();
 	const years = $derived(levelOptions(yearLevels));
-	const terms = $derived(levelOptions(regularSemesters));
+	const terms = $derived(levelOptions(semesters));
 
 	$effect(() => {
 		if (years.length && !years.includes(year)) year = 1;

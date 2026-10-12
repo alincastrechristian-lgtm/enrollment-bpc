@@ -39,11 +39,9 @@
 	let name = $state(untrack(() => curriculum?.name ?? ''));
 	let programId = $state(untrack(() => curriculum?.programId ?? ''));
 	let yearLevels = $state<number | undefined>(untrack(() => curriculum?.yearLevels ?? 4));
-	let regularSemesters = $state<number | undefined>(
-		untrack(() => curriculum?.regularSemesters ?? 2)
-	);
+	let semesters = $state<number | undefined>(untrack(() => curriculum?.semesters ?? 2));
 	const yearOptions = $derived(levelOptions(yearLevels));
-	const semesterOptions = $derived(levelOptions(regularSemesters));
+	const semesterOptions = $derived(levelOptions(semesters));
 	let subjectLayout = $state<'all' | 'tabbed'>('all');
 	let selectedYear = $state(1);
 	let selectedSemester = $state(1);
@@ -68,11 +66,9 @@
 					(entry.yearLevel === selectedYear && entry.semester === selectedSemester)
 			)
 	);
-	const initial = untrack(() =>
-		JSON.stringify({ name, programId, yearLevels, regularSemesters, rows })
-	);
+	const initial = untrack(() => JSON.stringify({ name, programId, yearLevels, semesters, rows }));
 	const dirty = $derived(
-		JSON.stringify({ name, programId, yearLevels, regularSemesters, rows }) !== initial
+		JSON.stringify({ name, programId, yearLevels, semesters, rows }) !== initial
 	);
 	const totalUnits = $derived(rows.reduce((total, entry) => total + (Number(entry.units) || 0), 0));
 	const termCount = $derived(
@@ -108,7 +104,7 @@
 			if (entry.yearLevel !== undefined && entry.yearLevel > next) entry.yearLevel = undefined;
 		}
 	}
-	function changeRegularSemesters(event: Event) {
+	function changeSemesters(event: Event) {
 		const next = (event.currentTarget as HTMLInputElement).valueAsNumber;
 		if (!Number.isSafeInteger(next) || next < 1) return;
 		for (const entry of rows) {
@@ -173,7 +169,7 @@
 				(entry.yearLevel ?? 0) > (yearLevels ?? 0) ||
 				!Number.isSafeInteger(entry.semester) ||
 				(entry.semester ?? 0) < 1 ||
-				(entry.semester ?? 0) > (regularSemesters ?? 0) ||
+				(entry.semester ?? 0) > (semesters ?? 0) ||
 				!Number.isSafeInteger(entry.units) ||
 				(entry.units ?? 0) < 1
 		);
@@ -212,7 +208,7 @@
 				name,
 				programId,
 				yearLevels: Number(yearLevels),
-				regularSemesters: Number(regularSemesters),
+				semesters: Number(semesters),
 				subjects: payloadSubjects
 			};
 			const result = curriculum
@@ -328,19 +324,17 @@
 						/>
 					</div>
 					<div class="space-y-2">
-						<label for="curriculum-regular-semesters" class="block text-sm font-semibold"
-							>Regular semesters</label
-						>
+						<label for="curriculum-semesters" class="block text-sm font-semibold">Semesters</label>
 						<input
-							id="curriculum-regular-semesters"
+							id="curriculum-semesters"
 							type="number"
 							min="1"
 							step="1"
 							max={Number.MAX_SAFE_INTEGER}
 							required
 							class="input w-full bg-base-200 text-sm"
-							bind:value={regularSemesters}
-							onchange={changeRegularSemesters}
+							bind:value={semesters}
+							onchange={changeSemesters}
 						/>
 					</div>
 				</fieldset>
@@ -354,7 +348,7 @@
 			<section class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
 				<SubjectLayout
 					{yearLevels}
-					{regularSemesters}
+					{semesters}
 					bind:layout={subjectLayout}
 					bind:year={selectedYear}
 					bind:semester={selectedSemester}

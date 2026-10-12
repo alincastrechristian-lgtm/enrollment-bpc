@@ -91,9 +91,7 @@
 					</p>
 					<div class="mt-3 flex flex-wrap gap-2">
 						<span class="badge badge-ghost text-xs">{data.curriculum.yearLevels} years</span>
-						<span class="badge badge-ghost text-xs"
-							>{data.curriculum.regularSemesters} regular semesters</span
-						>
+						<span class="badge badge-ghost text-xs">{data.curriculum.semesters} semesters</span>
 						<span
 							class={`badge border-none text-xs font-semibold ${data.curriculum.publishedAt ? 'badge-success' : 'badge-warning'}`}
 							>{data.curriculum.publishedAt ? 'Published' : 'Draft'}</span
@@ -147,7 +145,7 @@
 	>
 		<SubjectLayout
 			yearLevels={data.curriculum.yearLevels}
-			regularSemesters={data.curriculum.regularSemesters}
+			semesters={data.curriculum.semesters}
 			bind:layout={subjectLayout}
 			bind:year={selectedYear}
 			bind:semester={selectedSemester}

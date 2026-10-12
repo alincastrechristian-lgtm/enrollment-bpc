@@ -50,7 +50,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			let programs=$state([{id:'p',name:'Information Systems',code:'BSIS',isActive:true}]);
 			let subjects=$state([{id:'s1',name:'Introduction',code:'IS101',isActive:true},{id:'s2',name:'Programming',code:'IS102',isActive:true}]);
 			window.updateCatalogs=()=>{programs=[programs[0],...window.newPrograms];subjects=[...subjects.slice(0,2),...window.newSubjects];};
-			const curriculum={id:'c',name:'2026 Curriculum',programId:'p',programName:'Information Systems',programCode:'BSIS',yearLevels:4,regularSemesters:2,publishedAt:null,isActive:true};
+			const curriculum={id:'c',name:'2026 Curriculum',programId:'p',programName:'Information Systems',programCode:'BSIS',yearLevels:4,semesters:2,publishedAt:null,isActive:true};
 			const entries=[{id:'entry-1',curriculumId:'c',subjectId:'s1',subjectName:'Original Introduction',subjectCode:'IS101',yearLevel:1,semester:1,units:3}];
 			const multiEntries=[...entries,{...entries[0],id:'entry-2',subjectId:'s2',subjectName:'Programming',subjectCode:'IS102',yearLevel:2,semester:2,units:4}];
 		</script>
@@ -61,7 +61,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			{:else if mode==='multi-edit'}<Editor {programs} {subjects} {curriculum} entries={multiEntries} />
 			{:else if mode==='empty'}<Editor programs={[]} subjects={[]} />
 			{:else if mode.startsWith('list')}<List data={{records:[{...curriculum,subjectCount:1,totalUnits:3}],total:1,search:'',status:'all',filters:{},canManage:mode==='list-admin'}} />
-			{:else}<View data={{curriculum:{...curriculum,publishedAt:mode==='published'?new Date():null,regularSemesters:mode==='third-semester-view'?3:2},entries:mode==='multi-view'?multiEntries:mode==='third-semester-view'?entries.map(entry=>({...entry,semester:3})):entries,canManage:mode!=='registrar' && mode!=='multi-view'}} />{/if}
+			{:else}<View data={{curriculum:{...curriculum,publishedAt:mode==='published'?new Date():null,semesters:mode==='third-semester-view'?3:2},entries:mode==='multi-view'?multiEntries:mode==='third-semester-view'?entries.map(entry=>({...entry,semester:3})):entries,canManage:mode!=='registrar' && mode!=='multi-view'}} />{/if}
 		{/key}`
 	};
 	let server, browser;
@@ -221,7 +221,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			name: '2027 Curriculum',
 			programId: 'p',
 			yearLevels: 4,
-			regularSemesters: 2,
+			semesters: 2,
 			subjects: [{ subjectId: 's1', yearLevel: 2, semester: 2, units: 4 }]
 		});
 		assert.equal(
@@ -353,11 +353,11 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		const fresh = await page.evaluate(() => window.creations.at(-1));
 		assert.equal(fresh.programId, 'program-3');
 		assert.equal(fresh.subjects[0].subjectId, 'subject-3');
-		// Only configured regular semesters appear; shrinking limits clears removed selections.
+		// Only configured semesters appear; shrinking limits clears removed selections.
 		await page.setViewportSize({ width: 1360, height: 960 });
 		await page.evaluate(() => window.show('edit'));
 		await expect(page.getByLabel('Year levels', { exact: true })).toHaveValue('4');
-		await expect(page.getByLabel('Regular semesters', { exact: true })).toHaveValue('2');
+		await expect(page.getByLabel('Semesters', { exact: true })).toHaveValue('2');
 		await expect(page.getByLabel('Semester for subject 1').locator('option')).toHaveText([
 			'Select semester',
 			'1st Semester',
@@ -365,8 +365,8 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		]);
 		await expect(page.getByText(/Summer/)).toHaveCount(0);
 		await page.getByLabel('Semester for subject 1').selectOption('2');
-		await page.getByLabel('Regular semesters', { exact: true }).fill('3');
-		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await page.getByLabel('Semesters', { exact: true }).fill('3');
+		await page.getByLabel('Semesters', { exact: true }).press('Tab');
 		await expect(page.getByLabel('Semester for subject 1')).toHaveValue('2');
 		await expect(page.getByLabel('Semester for subject 1').locator('option')).toHaveText([
 			'Select semester',
@@ -374,8 +374,8 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			'2nd Semester',
 			'3rd Semester'
 		]);
-		await page.getByLabel('Regular semesters', { exact: true }).fill('23');
-		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await page.getByLabel('Semesters', { exact: true }).fill('23');
+		await page.getByLabel('Semesters', { exact: true }).press('Tab');
 		for (const ordinal of ['4th', '11th', '12th', '13th', '21st', '22nd', '23rd']) {
 			await expect(
 				page
@@ -401,8 +401,8 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await page.getByRole('button', { name: 'Add subject', exact: true }).click();
 		await selectCatalog('Subject 2', 'IS102');
 		await page.getByLabel('Semester for subject 2').selectOption('3');
-		await page.getByLabel('Regular semesters', { exact: true }).fill('1');
-		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await page.getByLabel('Semesters', { exact: true }).fill('1');
+		await page.getByLabel('Semesters', { exact: true }).press('Tab');
 		await expect(page.getByLabel('Semester for subject 1')).toHaveValue('');
 		await expect(page.getByLabel('Semester for subject 2')).toHaveValue('');
 		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
@@ -416,12 +416,12 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await expect.poll(() => page.evaluate(() => window.updates.length)).toBe(3);
 		const bounded = await page.evaluate(() => window.updates.at(-1));
 		assert.equal(bounded.yearLevels, 2);
-		assert.equal(bounded.regularSemesters, 1);
+		assert.equal(bounded.semesters, 1);
 		assert.equal(bounded.subjects[0].semester, 1);
 		assert.equal(bounded.subjects[1].semester, 1);
 		await page.evaluate(() => window.show('third-semester-view'));
 		await expect(page.getByRole('heading', { name: /Year 1.*3rd Semester/ })).toBeVisible();
-		await expect(page.getByText('3 regular semesters')).toBeVisible();
+		await expect(page.getByText('3 semesters')).toBeVisible();
 		await expect(page.getByText(/Summer/)).toHaveCount(0);
 		await page.evaluate(() => window.show('edit'));
 		await page.getByLabel('Year levels', { exact: true }).fill('3');
@@ -507,15 +507,15 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await page.getByRole('button', { name: 'Tabbed', exact: true }).click();
 		await page.getByRole('tab', { name: 'Year 2', exact: true }).click();
 		await page.getByRole('tab', { name: '2nd Semester', exact: true }).click();
-		await page.getByLabel('Regular semesters', { exact: true }).fill('3');
-		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await page.getByLabel('Semesters', { exact: true }).fill('3');
+		await page.getByLabel('Semesters', { exact: true }).press('Tab');
 		await expect(page.getByRole('tab', { name: '2nd Semester', exact: true })).toHaveAttribute(
 			'aria-selected',
 			'true'
 		);
 		await expect(page.getByLabel('Semester for subject 2')).toHaveValue('2');
-		await page.getByLabel('Regular semesters', { exact: true }).fill('1');
-		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await page.getByLabel('Semesters', { exact: true }).fill('1');
+		await page.getByLabel('Semesters', { exact: true }).press('Tab');
 		await expect(page.getByRole('tab', { name: '1st Semester', exact: true })).toHaveAttribute(
 			'aria-selected',
 			'true'
@@ -531,7 +531,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			'true'
 		);
 
-		// Read-only views expose the same regular-semester layout and keyboard navigation.
+		// Read-only views expose the same semester layout and keyboard navigation.
 		await page.evaluate(() => window.show('multi-view'));
 		await expect(page.getByRole('table')).toHaveCount(2);
 		await expect(page.getByRole('link', { name: 'Edit curriculum' })).toHaveCount(0);
