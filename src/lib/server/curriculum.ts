@@ -8,6 +8,8 @@ export function getCurriculum(id: string) {
 		.select({
 			id: curriculum.id,
 			name: curriculum.name,
+			yearLevels: curriculum.yearLevels,
+			regularSemesters: curriculum.regularSemesters,
 			programId: curriculum.programId,
 			publishedAt: curriculum.publishedAt,
 			isActive: curriculum.isActive,

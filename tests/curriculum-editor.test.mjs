@@ -36,11 +36,11 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			export async function updateSubject(data){window.catalogUpdates.push({kind:'subject',data});}
 			export async function deleteProgram(){}
 			export async function deleteSubject(){}`,
-		'popup.js': `window.messages=[];window.confirmDelete=true;
+		'popup.js': `window.messages=[];window.confirmDelete=true;window.confirmSave=true;window.saveQuestions=[];
 			export function showError(message){window.messages.push(message);}
 			export function showLoading(){}
 			export function showSuccess(message){window.messages.push(message);}
-			export async function showYesNo(){return window.confirmDelete;}`,
+			export async function showYesNo(props){if(props?.title==='Save curriculum?'){window.saveQuestions.push(props);if(window.deferSave)return new Promise(resolve=>window.resolveSave=resolve);return window.confirmSave;}return window.confirmDelete;}`,
 		'Harness.svelte': `<script>
 			import Editor from '${path.resolve('src/routes/user/curriculum/CurriculumEditor.svelte').replaceAll('\\', '/')}';
 			import RecordCatalog from '${path.resolve('src/lib/components/Catalog/RecordCatalog.svelte').replaceAll('\\', '/')}';
@@ -50,16 +50,18 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			let programs=$state([{id:'p',name:'Information Systems',code:'BSIS',isActive:true}]);
 			let subjects=$state([{id:'s1',name:'Introduction',code:'IS101',isActive:true},{id:'s2',name:'Programming',code:'IS102',isActive:true}]);
 			window.updateCatalogs=()=>{programs=[programs[0],...window.newPrograms];subjects=[...subjects.slice(0,2),...window.newSubjects];};
-			const curriculum={id:'c',name:'2026 Curriculum',programId:'p',programName:'Information Systems',programCode:'BSIS',publishedAt:null,isActive:true};
+			const curriculum={id:'c',name:'2026 Curriculum',programId:'p',programName:'Information Systems',programCode:'BSIS',yearLevels:4,regularSemesters:2,publishedAt:null,isActive:true};
 			const entries=[{id:'entry-1',curriculumId:'c',subjectId:'s1',subjectName:'Original Introduction',subjectCode:'IS101',yearLevel:1,semester:1,units:3}];
+			const multiEntries=[...entries,{...entries[0],id:'entry-2',subjectId:'s2',subjectName:'Programming',subjectCode:'IS102',yearLevel:2,semester:2,units:4}];
 		</script>
 		{#key mode}
 			{#if mode==='new'}<Editor {programs} {subjects} />
 			{:else if mode.startsWith('catalog-')}<RecordCatalog kind={mode.includes('subject')?'subject':'program'} records={(mode.includes('subject')?subjects:programs).map(record=>({...record,description:'Existing description'}))} total={1} search="" filters={{}} canManage={!mode.endsWith('registrar')} />
 			{:else if mode==='edit'}<Editor {programs} {subjects} {curriculum} {entries} />
+			{:else if mode==='multi-edit'}<Editor {programs} {subjects} {curriculum} entries={multiEntries} />
 			{:else if mode==='empty'}<Editor programs={[]} subjects={[]} />
 			{:else if mode.startsWith('list')}<List data={{records:[{...curriculum,subjectCount:1,totalUnits:3}],total:1,search:'',status:'all',filters:{},canManage:mode==='list-admin'}} />
-			{:else}<View data={{curriculum:{...curriculum,publishedAt:mode==='published'?new Date():null},entries,canManage:mode!=='registrar'}} />{/if}
+			{:else}<View data={{curriculum:{...curriculum,publishedAt:mode==='published'?new Date():null,regularSemesters:mode==='third-semester-view'?3:2},entries:mode==='multi-view'?multiEntries:mode==='third-semester-view'?entries.map(entry=>({...entry,semester:3})):entries,canManage:mode!=='registrar' && mode!=='multi-view'}} />{/if}
 		{/key}`
 	};
 	let server, browser;
@@ -197,14 +199,15 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await expect.poll(() => page.evaluate(() => window.messages.at(-1))).toContain('Subject saved');
 		await page.evaluate(() => (window.failRefresh = false));
 		await selectCatalog('Subject 1', 'IS101');
-		await page.getByLabel('Year for subject 1').fill('2');
+		await page.getByLabel('Year for subject 1').selectOption('2');
 		await page.getByLabel('Semester for subject 1').selectOption('2');
 		await page.getByLabel('Units for subject 1').fill('4');
-		page.once('dialog', (dialog) => dialog.dismiss());
+		await page.evaluate(() => (window.confirmDelete = false));
 		assert.equal(
 			await page.evaluate(() => window.attemptNavigation('/portal/user/curriculum')),
 			false
 		);
+		await page.evaluate(() => (window.confirmDelete = true));
 		await page.evaluate(() => (window.failSave = true));
 		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
 		await expect(page.getByRole('alert')).toHaveText('Save failed');
@@ -217,6 +220,8 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		assert.deepEqual(await page.evaluate(() => window.creations[0]), {
 			name: '2027 Curriculum',
 			programId: 'p',
+			yearLevels: 4,
+			regularSemesters: 2,
 			subjects: [{ subjectId: 's1', yearLevel: 2, semester: 2, units: 4 }]
 		});
 		assert.equal(
@@ -348,6 +353,204 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		const fresh = await page.evaluate(() => window.creations.at(-1));
 		assert.equal(fresh.programId, 'program-3');
 		assert.equal(fresh.subjects[0].subjectId, 'subject-3');
+		// Only configured regular semesters appear; shrinking limits clears removed selections.
+		await page.setViewportSize({ width: 1360, height: 960 });
+		await page.evaluate(() => window.show('edit'));
+		await expect(page.getByLabel('Year levels', { exact: true })).toHaveValue('4');
+		await expect(page.getByLabel('Regular semesters', { exact: true })).toHaveValue('2');
+		await expect(page.getByLabel('Semester for subject 1').locator('option')).toHaveText([
+			'Select semester',
+			'1st Semester',
+			'2nd Semester'
+		]);
+		await expect(page.getByText(/Summer/)).toHaveCount(0);
+		await page.getByLabel('Semester for subject 1').selectOption('2');
+		await page.getByLabel('Regular semesters', { exact: true }).fill('3');
+		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await expect(page.getByLabel('Semester for subject 1')).toHaveValue('2');
+		await expect(page.getByLabel('Semester for subject 1').locator('option')).toHaveText([
+			'Select semester',
+			'1st Semester',
+			'2nd Semester',
+			'3rd Semester'
+		]);
+		await page.getByLabel('Regular semesters', { exact: true }).fill('23');
+		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		for (const ordinal of ['4th', '11th', '12th', '13th', '21st', '22nd', '23rd']) {
+			await expect(
+				page
+					.getByLabel('Semester for subject 1')
+					.getByRole('option', { name: `${ordinal} Semester`, exact: true })
+			).toHaveCount(1);
+		}
+		await expect(page.getByLabel('Semester for subject 1').locator('option').last()).toHaveText(
+			'23rd Semester'
+		);
+		await page.getByLabel('Year for subject 1').selectOption('3');
+		await page.getByLabel('Year levels', { exact: true }).fill('2');
+		await page.getByLabel('Year levels', { exact: true }).press('Tab');
+		await expect(page.getByLabel('Year for subject 1')).toHaveValue('');
+		await expect(page.getByLabel('Year for subject 1').locator('option')).toHaveText([
+			'Select year',
+			'Year 1',
+			'Year 2'
+		]);
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		assert.equal(await page.evaluate(() => window.updates.length), 2);
+		await page.getByLabel('Year for subject 1').selectOption('2');
+		await page.getByRole('button', { name: 'Add subject', exact: true }).click();
+		await selectCatalog('Subject 2', 'IS102');
+		await page.getByLabel('Semester for subject 2').selectOption('3');
+		await page.getByLabel('Regular semesters', { exact: true }).fill('1');
+		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await expect(page.getByLabel('Semester for subject 1')).toHaveValue('');
+		await expect(page.getByLabel('Semester for subject 2')).toHaveValue('');
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		assert.equal(await page.evaluate(() => window.updates.length), 2);
+		await expect(
+			page.getByLabel('Semester for subject 2').locator('option[value="3"]')
+		).toHaveCount(0);
+		await page.getByLabel('Semester for subject 1').selectOption('1');
+		await page.getByLabel('Semester for subject 2').selectOption('1');
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.updates.length)).toBe(3);
+		const bounded = await page.evaluate(() => window.updates.at(-1));
+		assert.equal(bounded.yearLevels, 2);
+		assert.equal(bounded.regularSemesters, 1);
+		assert.equal(bounded.subjects[0].semester, 1);
+		assert.equal(bounded.subjects[1].semester, 1);
+		await page.evaluate(() => window.show('third-semester-view'));
+		await expect(page.getByRole('heading', { name: /Year 1.*3rd Semester/ })).toBeVisible();
+		await expect(page.getByText('3 regular semesters')).toBeVisible();
+		await expect(page.getByText(/Summer/)).toHaveCount(0);
+		await page.evaluate(() => window.show('edit'));
+		await page.getByLabel('Year levels', { exact: true }).fill('3');
+		const navigationCount = await page.evaluate(() => window.navigation.length);
+		assert.equal(
+			await page.evaluate(() => window.attemptNavigation('/portal/user/curriculum')),
+			false
+		);
+		await expect
+			.poll(() => page.evaluate(() => window.navigation.length))
+			.toBe(navigationCount + 1);
+		// A declined create confirmation leaves the draft intact and sends no request.
+		await page.evaluate(() => {
+			window.show('new');
+			window.confirmSave = false;
+		});
+		await page.getByLabel('Curriculum name').fill('Confirm creation');
+		await selectCatalog('Program', 'BSIS');
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Save curriculum', exact: true })).toBeEnabled();
+		assert.equal(await page.evaluate(() => window.creations.length), 2);
+		await expect(page.getByLabel('Curriculum name')).toHaveValue('Confirm creation');
+
+		// Tabs share the full draft; changes and IDs survive switching terms.
+		await page.evaluate(() => window.show('multi-edit'));
+		await expect(page.getByLabel('Units for subject 2')).toHaveValue('4');
+		await page.getByRole('button', { name: 'Tabbed', exact: true }).click();
+		await expect(page.getByLabel('Units for subject 2')).toHaveCount(0);
+		await page.getByLabel('Units for subject 1').fill('6');
+		await page.getByRole('tab', { name: 'Year 2', exact: true }).click();
+		await expect(page.getByText('No subjects in this term')).toBeVisible();
+		await page.getByRole('tab', { name: '2nd Semester', exact: true }).click();
+		await expect(page.getByLabel('Units for subject 2')).toHaveValue('4');
+		await page.getByLabel('Units for subject 2').fill('7');
+		await page.getByRole('tab', { name: 'Year 1', exact: true }).click();
+		await page.getByRole('tab', { name: '1st Semester', exact: true }).click();
+		await expect(page.getByLabel('Units for subject 1')).toHaveValue('6');
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Save curriculum', exact: true })).toBeEnabled();
+		assert.equal(await page.evaluate(() => window.updates.length), 3);
+		await expect(page.getByLabel('Units for subject 1')).toHaveValue('6');
+		const questionCount = await page.evaluate(() => window.saveQuestions.length);
+		await page.evaluate(() => {
+			window.confirmSave = true;
+			window.deferSave = true;
+		});
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Saving...', exact: true })).toBeDisabled();
+		await page.evaluate(() => document.querySelector('form').requestSubmit());
+		assert.equal(await page.evaluate(() => window.saveQuestions.length), questionCount + 1);
+		assert.equal(await page.evaluate(() => window.updates.length), 3);
+		await page.evaluate(() => {
+			window.deferSave = false;
+			window.resolveSave(true);
+		});
+		await expect.poll(() => page.evaluate(() => window.updates.length)).toBe(4);
+		assert.deepEqual(await page.evaluate(() => window.updates.at(-1).subjects), [
+			{ id: 'entry-1', subjectId: 's1', yearLevel: 1, semester: 1, units: 6 },
+			{ id: 'entry-2', subjectId: 's2', yearLevel: 2, semester: 2, units: 7 }
+		]);
+
+		await page.evaluate(() => window.show('edit'));
+		await page.getByRole('button', { name: 'Tabbed', exact: true }).click();
+		await page.getByRole('tab', { name: 'Year 2', exact: true }).click();
+		await page.getByRole('tab', { name: '2nd Semester', exact: true }).click();
+		await page.getByRole('button', { name: 'Add subject', exact: true }).click();
+		await expect(page.getByLabel('Year for subject 2')).toHaveValue('2');
+		await expect(page.getByLabel('Semester for subject 2')).toHaveValue('2');
+		await selectCatalog('Subject 2', 'IS102');
+		await page.getByLabel('Units for subject 2').fill('');
+		await page.getByRole('tab', { name: 'Year 1', exact: true }).click();
+		await page.getByRole('tab', { name: '1st Semester', exact: true }).click();
+		const beforeInvalid = await page.evaluate(() => window.saveQuestions.length);
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'All subjects', exact: true })).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+		await expect(page.getByRole('alert')).toContainText('subject 2');
+		assert.equal(await page.evaluate(() => window.saveQuestions.length), beforeInvalid);
+		assert.equal(await page.evaluate(() => window.updates.length), 4);
+		await page.getByLabel('Units for subject 2').fill('3');
+		await page.getByRole('button', { name: 'Tabbed', exact: true }).click();
+		await page.getByRole('tab', { name: 'Year 2', exact: true }).click();
+		await page.getByRole('tab', { name: '2nd Semester', exact: true }).click();
+		await page.getByLabel('Regular semesters', { exact: true }).fill('3');
+		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await expect(page.getByRole('tab', { name: '2nd Semester', exact: true })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		await expect(page.getByLabel('Semester for subject 2')).toHaveValue('2');
+		await page.getByLabel('Regular semesters', { exact: true }).fill('1');
+		await page.getByLabel('Regular semesters', { exact: true }).press('Tab');
+		await expect(page.getByRole('tab', { name: '1st Semester', exact: true })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		await expect(
+			page.getByRole('tablist', { name: 'Subject semester' }).getByRole('tab')
+		).toHaveCount(1);
+		await expect(page.getByRole('tab', { name: 'Summer', exact: true })).toHaveCount(0);
+		await page.getByLabel('Year levels', { exact: true }).fill('1');
+		await page.getByLabel('Year levels', { exact: true }).press('Tab');
+		await expect(page.getByRole('tab', { name: 'Year 1', exact: true })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+
+		// Read-only views expose the same regular-semester layout and keyboard navigation.
+		await page.evaluate(() => window.show('multi-view'));
+		await expect(page.getByRole('table')).toHaveCount(2);
+		await expect(page.getByRole('link', { name: 'Edit curriculum' })).toHaveCount(0);
+		await page.getByRole('button', { name: 'Tabbed', exact: true }).click();
+		await expect(page.getByRole('table')).toHaveCount(1);
+		await expect(page.getByRole('table')).toContainText('Original Introduction');
+		await page.getByRole('tab', { name: 'Year 1', exact: true }).press('ArrowRight');
+		await expect(page.getByRole('tab', { name: 'Year 2', exact: true })).toBeFocused();
+		await expect(page.getByText('No subjects in this term')).toBeVisible();
+		await page.getByRole('tab', { name: '1st Semester', exact: true }).press('End');
+		await expect(page.getByRole('tab', { name: '2nd Semester', exact: true })).toBeFocused();
+		await expect(
+			page.getByRole('tablist', { name: 'Subject semester' }).getByRole('tab')
+		).toHaveCount(2);
+		await expect(page.getByRole('tab', { name: 'Summer', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('table')).toContainText('Programming');
+		await expect(page.getByRole('tabpanel')).toHaveAccessibleName('Year 2 2nd Semester');
+		await page.getByRole('button', { name: 'All subjects', exact: true }).click();
+		await expect(page.getByRole('table')).toHaveCount(2);
 		assert.deepEqual(errors, []);
 	} finally {
 		await browser?.close();

@@ -10,8 +10,12 @@
 	import { resolve } from '$app/paths';
 	import { BookOpen, CalendarDays, Layers, LockKeyhole, Pencil, Trash2 } from '@lucide/svelte';
 	import type { PageProps } from './$types';
+	import SubjectLayout, { semesterLabel } from '../SubjectLayout.svelte';
 	let { data }: PageProps = $props();
 	let busy = $state(false);
+	let subjectLayout = $state<'all' | 'tabbed'>('all');
+	let selectedYear = $state(1);
+	let selectedSemester = $state(1);
 	const groups = $derived.by(() => {
 		const result: {
 			yearLevel: number;
@@ -32,6 +36,13 @@
 		}
 		return result;
 	});
+	const visibleGroups = $derived(
+		groups.filter(
+			(group) =>
+				subjectLayout === 'all' ||
+				(group.yearLevel === selectedYear && group.semester === selectedSemester)
+		)
+	);
 	const totalUnits = $derived(data.entries.reduce((total, entry) => total + entry.units, 0));
 	const dateFormatter = new Intl.DateTimeFormat('en-PH', {
 		timeZone: 'Asia/Manila',
@@ -79,6 +90,10 @@
 						{data.curriculum.programCode} — {data.curriculum.programName}
 					</p>
 					<div class="mt-3 flex flex-wrap gap-2">
+						<span class="badge badge-ghost text-xs">{data.curriculum.yearLevels} years</span>
+						<span class="badge badge-ghost text-xs"
+							>{data.curriculum.regularSemesters} regular semesters</span
+						>
 						<span
 							class={`badge border-none text-xs font-semibold ${data.curriculum.publishedAt ? 'badge-success' : 'badge-warning'}`}
 							>{data.curriculum.publishedAt ? 'Published' : 'Draft'}</span
@@ -126,47 +141,66 @@
 				read-only.
 			</p>
 		</div>{/if}
-	{#each groups as group (`${group.yearLevel}-${group.semester}`)}
-		<article class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-			<div class="flex items-center justify-between gap-3 border-b border-base-300 p-5">
-				<div class="flex items-center gap-3">
-					<CalendarDays class="size-5 text-primary" aria-hidden="true" />
-					<div>
-						<h2 class="font-bold">
-							Year {group.yearLevel} · {group.semester === 3
-								? 'Summer'
-								: `Semester ${group.semester}`}
+	<section
+		class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+		aria-label="Curriculum subjects"
+	>
+		<SubjectLayout
+			yearLevels={data.curriculum.yearLevels}
+			regularSemesters={data.curriculum.regularSemesters}
+			bind:layout={subjectLayout}
+			bind:year={selectedYear}
+			bind:semester={selectedSemester}
+		>
+			<div class="space-y-5 p-5">
+				{#each visibleGroups as group (`${group.yearLevel}-${group.semester}`)}
+					<article class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+						<div class="flex items-center justify-between gap-3 border-b border-base-300 p-5">
+							<div class="flex items-center gap-3">
+								<CalendarDays class="size-5 text-primary" aria-hidden="true" />
+								<div>
+									<h2 class="font-bold">
+										Year {group.yearLevel} · {semesterLabel(group.semester)}
+									</h2>
+									<p class="mt-0.5 text-xs text-base-content/50">{group.entries.length} subjects</p>
+								</div>
+							</div>
+							<span class="badge badge-ghost text-xs font-semibold">{group.units} units</span>
+						</div>
+						<div class="overflow-x-auto">
+							<table class="table w-full">
+								<thead
+									><tr class="bg-base-200 text-xs text-base-content/55"
+										><th class="py-3 pl-5">Code</th><th>Subject</th><th class="pr-5 text-right"
+											>Units</th
+										></tr
+									></thead
+								><tbody
+									>{#each group.entries as entry (entry.id)}<tr
+											class="border-b border-base-200 last:border-0"
+											><td class="py-4 pl-5 font-mono text-xs font-semibold">{entry.subjectCode}</td
+											><td class="text-sm font-semibold">{entry.subjectName}</td><td
+												class="pr-5 text-right font-semibold">{entry.units}</td
+											></tr
+										>{/each}</tbody
+								>
+							</table>
+						</div>
+					</article>
+				{:else}<div class="rounded-2xl border border-base-300 bg-base-100 py-12 text-center">
+						<BookOpen class="mx-auto mb-3 size-8 text-base-content/25" aria-hidden="true" />
+						<h2 class="font-semibold">
+							{subjectLayout === 'tabbed'
+								? 'No subjects in this term'
+								: 'No subjects in this curriculum'}
 						</h2>
-						<p class="mt-0.5 text-xs text-base-content/50">{group.entries.length} subjects</p>
-					</div>
-				</div>
-				<span class="badge badge-ghost text-xs font-semibold">{group.units} units</span>
+						<p class="mt-1 text-sm text-base-content/50">
+							{data.canManage && !data.curriculum.publishedAt
+								? 'Edit this draft to add subjects.'
+								: 'No subjects have been added yet.'}
+						</p>
+					</div>{/each}
 			</div>
-			<div class="overflow-x-auto">
-				<table class="table w-full">
-					<thead
-						><tr class="bg-base-200 text-xs text-base-content/55"
-							><th class="py-3 pl-5">Code</th><th>Subject</th><th class="pr-5 text-right">Units</th
-							></tr
-						></thead
-					><tbody
-						>{#each group.entries as entry (entry.id)}<tr
-								class="border-b border-base-200 last:border-0"
-								><td class="py-4 pl-5 font-mono text-xs font-semibold">{entry.subjectCode}</td><td
-									class="text-sm font-semibold">{entry.subjectName}</td
-								><td class="pr-5 text-right font-semibold">{entry.units}</td></tr
-							>{/each}</tbody
-					>
-				</table>
-			</div>
-		</article>
-	{:else}<div class="rounded-2xl border border-base-300 bg-base-100 py-12 text-center">
-			<BookOpen class="mx-auto mb-3 size-8 text-base-content/25" aria-hidden="true" />
-			<h2 class="font-semibold">No subjects in this curriculum</h2>
-			<p class="mt-1 text-sm text-base-content/50">
-				{data.canManage && !data.curriculum.publishedAt
-					? 'Edit this draft to add subjects.'
-					: 'No subjects have been added yet.'}
-			</p>
-		</div>{/each}
+		</SubjectLayout>
+	</section>
 </section>

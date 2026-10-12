@@ -8,12 +8,13 @@
 		type CatalogRecord
 	} from '#lib/components/Catalog/CatalogRecordDialog.svelte';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
-	import { showError, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
+	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
 	import type { Curriculum, curriculumSubject } from '#lib/schema.js';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { BookOpen, GraduationCap, Layers, Plus, Save, Trash2 } from '@lucide/svelte';
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
+	import SubjectLayout, { levelOptions, semesterLabel } from './SubjectLayout.svelte';
 
 	type CatalogOption = Omit<CatalogRecord, 'description'>;
 	type DraftEntry = {
@@ -21,7 +22,7 @@
 		id?: string;
 		subjectId: string;
 		yearLevel: number | undefined;
-		semester: number;
+		semester: number | undefined;
 		units: number | undefined;
 	};
 	let {
@@ -37,6 +38,15 @@
 	} = $props();
 	let name = $state(untrack(() => curriculum?.name ?? ''));
 	let programId = $state(untrack(() => curriculum?.programId ?? ''));
+	let yearLevels = $state<number | undefined>(untrack(() => curriculum?.yearLevels ?? 4));
+	let regularSemesters = $state<number | undefined>(
+		untrack(() => curriculum?.regularSemesters ?? 2)
+	);
+	const yearOptions = $derived(levelOptions(yearLevels));
+	const semesterOptions = $derived(levelOptions(regularSemesters));
+	let subjectLayout = $state<'all' | 'tabbed'>('all');
+	let selectedYear = $state(1);
+	let selectedSemester = $state(1);
 	let rows = $state<DraftEntry[]>(
 		untrack(() =>
 			entries.map((entry) => ({
@@ -49,8 +59,21 @@
 			}))
 		)
 	);
-	const initial = untrack(() => JSON.stringify({ name, programId, rows }));
-	const dirty = $derived(JSON.stringify({ name, programId, rows }) !== initial);
+	const visibleRows = $derived(
+		rows
+			.map((entry, index) => ({ entry, index }))
+			.filter(
+				({ entry }) =>
+					subjectLayout === 'all' ||
+					(entry.yearLevel === selectedYear && entry.semester === selectedSemester)
+			)
+	);
+	const initial = untrack(() =>
+		JSON.stringify({ name, programId, yearLevels, regularSemesters, rows })
+	);
+	const dirty = $derived(
+		JSON.stringify({ name, programId, yearLevels, regularSemesters, rows }) !== initial
+	);
 	const totalUnits = $derived(rows.reduce((total, entry) => total + (Number(entry.units) || 0), 0));
 	const termCount = $derived(
 		new Set(
@@ -78,6 +101,20 @@
 	function optionLabel(record: CatalogOption) {
 		return `${record.code} — ${record.name}${record.isActive ? '' : ' (Inactive)'}`;
 	}
+	function changeYearLevels(event: Event) {
+		const next = (event.currentTarget as HTMLInputElement).valueAsNumber;
+		if (!Number.isSafeInteger(next) || next < 1) return;
+		for (const entry of rows) {
+			if (entry.yearLevel !== undefined && entry.yearLevel > next) entry.yearLevel = undefined;
+		}
+	}
+	function changeRegularSemesters(event: Event) {
+		const next = (event.currentTarget as HTMLInputElement).valueAsNumber;
+		if (!Number.isSafeInteger(next) || next < 1) return;
+		for (const entry of rows) {
+			if (entry.semester !== undefined && entry.semester > next) entry.semester = undefined;
+		}
+	}
 	function programCreated(record: CatalogRecord) {
 		addedPrograms.push(record);
 		programId = record.id;
@@ -89,18 +126,35 @@
 		subjectTarget = null;
 	}
 
-	beforeNavigate(({ cancel, willUnload }) => {
-		if (!dirty || saved) return;
-		if (busy || catalogBusy) {
-			cancel();
-			return;
+	let confirmingDiscard = false;
+	let discardAllowed = false;
+	beforeNavigate(async ({ cancel, willUnload, to }) => {
+		if (!dirty || saved || discardAllowed) return;
+		// Navigation must be cancelled before waiting for the popup.
+		cancel();
+		if (busy || catalogBusy || willUnload || confirmingDiscard || !to) return;
+		confirmingDiscard = true;
+		try {
+			if (!(await showYesNo('Discard unsaved curriculum changes?'))) return;
+			discardAllowed = true;
+			await goto(to.url);
+		} catch (cause) {
+			showError(cause instanceof Error ? cause.message : 'Failed to navigate');
+		} finally {
+			discardAllowed = false;
+			confirmingDiscard = false;
 		}
-		if (willUnload || !window.confirm('Discard unsaved curriculum changes?')) cancel();
 	});
 
 	function addSubject() {
 		if (busy || catalogBusy || saved) return;
-		rows.push({ key: crypto.randomUUID(), subjectId: '', yearLevel: 1, semester: 1, units: 3 });
+		rows.push({
+			key: crypto.randomUUID(),
+			subjectId: '',
+			yearLevel: subjectLayout === 'tabbed' ? selectedYear : 1,
+			semester: subjectLayout === 'tabbed' ? selectedSemester : 1,
+			units: 3
+		});
 	}
 	function removeSubject(key: string) {
 		if (!busy && !catalogBusy && !saved) rows = rows.filter((entry) => entry.key !== key);
@@ -110,6 +164,26 @@
 		if (busy || catalogBusy || saved) return;
 		if (curriculum?.publishedAt) return;
 		error = '';
+		const form = event.currentTarget as HTMLFormElement;
+		const invalidIndex = rows.findIndex(
+			(entry) =>
+				!entry.subjectId ||
+				!Number.isSafeInteger(entry.yearLevel) ||
+				(entry.yearLevel ?? 0) < 1 ||
+				(entry.yearLevel ?? 0) > (yearLevels ?? 0) ||
+				!Number.isSafeInteger(entry.semester) ||
+				(entry.semester ?? 0) < 1 ||
+				(entry.semester ?? 0) > (regularSemesters ?? 0) ||
+				!Number.isSafeInteger(entry.units) ||
+				(entry.units ?? 0) < 1
+		);
+		if (invalidIndex !== -1) {
+			subjectLayout = 'all';
+			error = `Complete the subject, year, semester, and positive whole-number units for subject ${invalidIndex + 1}.`;
+			await tick();
+			form.reportValidity();
+			return;
+		}
 		const payloadSubjects: CurriculumUpdateSchema['subjects'] = rows.map(
 			({ id, subjectId, yearLevel, semester, units }) => ({
 				...(id ? { id } : {}),
@@ -125,7 +199,22 @@
 		}
 		busy = true;
 		try {
-			const details = { name, programId, subjects: payloadSubjects };
+			if (
+				!(await showYesNo({
+					title: 'Save curriculum?',
+					message: 'Save this curriculum and all its subject changes?',
+					yesText: 'Save',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			const details = {
+				name,
+				programId,
+				yearLevels: Number(yearLevels),
+				regularSemesters: Number(regularSemesters),
+				subjects: payloadSubjects
+			};
 			const result = curriculum
 				? await updateCurriculum({ ...details, id: curriculum.id })
 				: await createCurriculum(details);
@@ -222,6 +311,38 @@
 							required
 						/>
 					</div>
+					<div class="space-y-2">
+						<label for="curriculum-year-levels" class="block text-sm font-semibold"
+							>Year levels</label
+						>
+						<input
+							id="curriculum-year-levels"
+							type="number"
+							min="1"
+							step="1"
+							max={Number.MAX_SAFE_INTEGER}
+							required
+							class="input w-full bg-base-200 text-sm"
+							bind:value={yearLevels}
+							onchange={changeYearLevels}
+						/>
+					</div>
+					<div class="space-y-2">
+						<label for="curriculum-regular-semesters" class="block text-sm font-semibold"
+							>Regular semesters</label
+						>
+						<input
+							id="curriculum-regular-semesters"
+							type="number"
+							min="1"
+							step="1"
+							max={Number.MAX_SAFE_INTEGER}
+							required
+							class="input w-full bg-base-200 text-sm"
+							bind:value={regularSemesters}
+							onchange={changeRegularSemesters}
+						/>
+					</div>
 				</fieldset>
 				{#if !programOptions.length}<p class="mt-4 text-sm text-base-content/60">
 						Add a program before creating a curriculum. <a
@@ -231,130 +352,149 @@
 					</p>{/if}
 			</section>
 			<section class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-				<div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-5">
-					<div class="flex items-center gap-3">
-						<span
-							class="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
-							><BookOpen class="size-5" aria-hidden="true" /></span
-						>
-						<div>
-							<h2 class="font-bold">Subjects</h2>
-							<p class="mt-0.5 text-xs text-base-content/50">
-								Set the year, semester, and units for each subject.
-							</p>
+				<SubjectLayout
+					{yearLevels}
+					{regularSemesters}
+					bind:layout={subjectLayout}
+					bind:year={selectedYear}
+					bind:semester={selectedSemester}
+					disabled={busy || catalogBusy || saved}
+				>
+					{#snippet heading()}
+						<div class="flex items-center gap-3">
+							<span
+								class="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
+								><BookOpen class="size-5" aria-hidden="true" /></span
+							>
+							<div>
+								<h2 class="font-bold">Subjects</h2>
+								<p class="mt-0.5 text-xs text-base-content/50">
+									Set the year, semester, and units for each subject.
+								</p>
+							</div>
 						</div>
-					</div>
-					<button
-						type="button"
-						class="btn gap-2 border-base-300 btn-outline btn-sm"
-						disabled={busy || catalogBusy || saved}
-						onclick={addSubject}><Plus class="size-4" aria-hidden="true" />Add subject</button
-					>
-				</div>
-				{#if rows.length}
-					<fieldset disabled={busy || catalogBusy || saved} class="min-w-0 overflow-x-auto">
-						<table class="table w-full">
-							<thead
-								><tr class="bg-base-200 text-xs text-base-content/55"
-									><th class="pl-5">Subject</th><th>Year</th><th>Semester</th><th>Units</th><th
-										><span class="sr-only">Remove</span></th
-									></tr
-								></thead
-							><tbody>
-								{#each rows as entry, index (entry.key)}
-									{@const selected = subjectOptions.find((record) => record.id === entry.subjectId)}
-									<tr class="border-b border-base-200 last:border-0">
-										<td class="min-w-64 py-4 pl-5">
-											{#if entry.id}<p class="text-sm font-semibold">
-													{selected?.code} — {selected?.name}
-												</p>
-												<p class="mt-1 text-[11px] text-base-content/50">
-													Remove and re-add to replace this subject.
-												</p>
-											{:else}<SearchableSelect
-													id={`curriculum-subject-${entry.key}`}
-													label={`Subject ${index + 1}`}
-													bind:value={entry.subjectId}
-													options={subjectOptions.map((record) => ({
-														value: record.id,
-														label: optionLabel(record),
-														disabled: rows.some(
-															(other) => other.key !== entry.key && other.subjectId === record.id
-														)
-													}))}
-													placeholder="Select a subject"
-													searchLabel="Search subjects"
-													createLabel="New Subject"
-													oncreate={() => {
-														subjectTarget = entry.key;
-														subjectDialog.open();
-													}}
-													disabled={busy || catalogBusy || saved}
-													small
+					{/snippet}
+					{#snippet actions()}
+						<button
+							type="button"
+							class="btn gap-2 border-base-300 btn-outline btn-sm"
+							disabled={busy || catalogBusy || saved}
+							onclick={addSubject}><Plus class="size-4" aria-hidden="true" />Add subject</button
+						>
+					{/snippet}
+					{#if visibleRows.length}
+						<fieldset disabled={busy || catalogBusy || saved} class="min-w-0 overflow-x-auto">
+							<table class="table w-full">
+								<thead
+									><tr class="bg-base-200 text-xs text-base-content/55"
+										><th class="pl-5">Subject</th><th>Year</th><th>Semester</th><th>Units</th><th
+											><span class="sr-only">Remove</span></th
+										></tr
+									></thead
+								><tbody>
+									{#each visibleRows as { entry, index } (entry.key)}
+										{@const selected = subjectOptions.find(
+											(record) => record.id === entry.subjectId
+										)}
+										<tr class="border-b border-base-200 last:border-0">
+											<td class="min-w-64 py-4 pl-5">
+												{#if entry.id}<p class="text-sm font-semibold">
+														{selected?.code} — {selected?.name}
+													</p>
+													<p class="mt-1 text-[11px] text-base-content/50">
+														Remove and re-add to replace this subject.
+													</p>
+												{:else}<SearchableSelect
+														id={`curriculum-subject-${entry.key}`}
+														label={`Subject ${index + 1}`}
+														bind:value={entry.subjectId}
+														options={subjectOptions.map((record) => ({
+															value: record.id,
+															label: optionLabel(record),
+															disabled: rows.some(
+																(other) => other.key !== entry.key && other.subjectId === record.id
+															)
+														}))}
+														placeholder="Select a subject"
+														searchLabel="Search subjects"
+														createLabel="New Subject"
+														oncreate={() => {
+															subjectTarget = entry.key;
+															subjectDialog.open();
+														}}
+														disabled={busy || catalogBusy || saved}
+														small
+														required
+													/>{/if}
+											</td>
+											<td
+												><select
+													aria-label={`Year for subject ${index + 1}`}
+													class="select w-28 bg-base-200 select-sm"
+													bind:value={entry.yearLevel}
 													required
-												/>{/if}
-										</td>
-										<td
-											><input
-												aria-label={`Year for subject ${index + 1}`}
-												class="input w-20 bg-base-200 input-sm"
-												type="number"
-												min="1"
-												step="1"
-												bind:value={entry.yearLevel}
-												required
-											/></td
-										>
-										<td
-											><select
-												aria-label={`Semester for subject ${index + 1}`}
-												class="select w-36 bg-base-200 select-sm"
-												bind:value={entry.semester}
-												><option value={1}>1st semester</option><option value={2}
-													>2nd semester</option
-												><option value={3}>Summer</option>{#if entry.semester > 3}<option
-														value={entry.semester}>Semester {entry.semester}</option
-													>{/if}</select
-											></td
-										>
-										<td
-											><input
-												aria-label={`Units for subject ${index + 1}`}
-												class="input w-20 bg-base-200 input-sm"
-												type="number"
-												min="1"
-												step="1"
-												bind:value={entry.units}
-												required
-											/></td
-										>
-										<td class="pr-5"
-											><button
-												type="button"
-												aria-label={`Remove subject ${index + 1}`}
-												class="btn btn-square btn-ghost text-error btn-sm"
-												onclick={() => removeSubject(entry.key)}
-												><Trash2 class="size-4" aria-hidden="true" /></button
-											></td
-										>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</fieldset>
-				{:else}<div class="px-5 py-12 text-center">
-						<BookOpen class="mx-auto mb-3 size-8 text-base-content/25" aria-hidden="true" />
-						<p class="text-sm font-semibold">No subjects added</p>
-						<p class="mt-1 text-xs text-base-content/50">
-							{subjectOptions.length
-								? 'Add subjects to start building the curriculum.'
-								: 'Add subjects to the subject catalog first.'}
-						</p>
-						{#if !subjectOptions.length}<a
-								class="btn mt-4 btn-outline btn-sm"
-								href={resolve('/user/subjects')}>Open subjects</a
-							>{/if}
-					</div>{/if}
+												>
+													<option value={undefined} disabled>Select year</option>
+													{#each yearOptions as year (year)}<option value={year}>Year {year}</option
+														>{/each}
+												</select></td
+											>
+											<td
+												><select
+													aria-label={`Semester for subject ${index + 1}`}
+													class="select w-40 bg-base-200 select-sm"
+													required
+													bind:value={entry.semester}
+												>
+													<option value={undefined} disabled>Select semester</option>
+													{#each semesterOptions as semester (semester)}<option value={semester}
+															>{semesterLabel(semester)}</option
+														>{/each}
+												</select>
+											</td>
+											<td
+												><input
+													aria-label={`Units for subject ${index + 1}`}
+													class="input w-20 bg-base-200 input-sm"
+													type="number"
+													min="1"
+													step="1"
+													bind:value={entry.units}
+													required
+												/></td
+											>
+											<td class="pr-5"
+												><button
+													type="button"
+													aria-label={`Remove subject ${index + 1}`}
+													class="btn btn-square btn-ghost text-error btn-sm"
+													onclick={() => removeSubject(entry.key)}
+													><Trash2 class="size-4" aria-hidden="true" /></button
+												></td
+											>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</fieldset>
+					{:else}<div class="px-5 py-12 text-center">
+							<BookOpen class="mx-auto mb-3 size-8 text-base-content/25" aria-hidden="true" />
+							<p class="text-sm font-semibold">
+								{subjectLayout === 'tabbed' ? 'No subjects in this term' : 'No subjects added'}
+							</p>
+							<p class="mt-1 text-xs text-base-content/50">
+								{subjectLayout === 'tabbed'
+									? 'Add a subject to the selected year and semester.'
+									: subjectOptions.length
+										? 'Add subjects to start building the curriculum.'
+										: 'Add subjects to the subject catalog first.'}
+							</p>
+							{#if !subjectOptions.length}<a
+									class="btn mt-4 btn-outline btn-sm"
+									href={resolve('/user/subjects')}>Open subjects</a
+								>{/if}
+						</div>{/if}
+				</SubjectLayout>
 			</section>
 		</div>
 		<aside

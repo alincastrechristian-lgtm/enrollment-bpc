@@ -44,6 +44,9 @@ function fixture(t, role = 'admin') {
 		)[0]
 	);
 	sqlite.pragma('foreign_keys = ON');
+	sqlite.exec(
+		readFileSync(new URL('../drizzle/0008_curriculum_limits.sql', import.meta.url), 'utf8')
+	);
 	const db = drizzle(sqlite, { schema });
 	const locals = { user: role ? { role } : null, session: role ? {} : null };
 	const dependencies = {

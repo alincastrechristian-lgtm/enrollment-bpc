@@ -10,7 +10,9 @@ import { db, type Transaction } from '../server/db';
 
 const curriculumFieldValidation = {
 	name: z.string().trim().min(2, 'Name must be at least 2 characters'),
-	programId: z.string().trim().min(1, 'Program is required')
+	programId: z.string().trim().min(1, 'Program is required'),
+	yearLevels: z.number().int().positive('Year levels must be a positive integer'),
+	regularSemesters: z.number().int().positive('Regular semesters must be a positive integer')
 };
 
 const curriculumSubjectFieldValidation = {
@@ -34,10 +36,14 @@ const curriculumSubjectInsertSchema = createInsertSchema(
 // Publishing and retiring should have their own commands.
 const curriculumFieldsSchema = createInsertSchema(curriculum, curriculumFieldValidation).pick({
 	name: true,
-	programId: true
+	programId: true,
+	yearLevels: true,
+	regularSemesters: true
 });
 
 const curriculumInsertSchema = curriculumFieldsSchema.extend({
+	yearLevels: curriculumFieldValidation.yearLevels.default(4),
+	regularSemesters: curriculumFieldValidation.regularSemesters.default(2),
 	subjects: z.array(curriculumSubjectInsertSchema)
 });
 
@@ -55,6 +61,21 @@ const curriculumUpdateSchema = curriculumFieldsSchema.partial().extend({
 export type CurriculumInsertSchema = z.infer<typeof curriculumInsertSchema>;
 
 export type CurriculumUpdateSchema = z.infer<typeof curriculumUpdateSchema>;
+
+function validateSubjectLimits(
+	subjects: CurriculumInsertSchema['subjects'],
+	yearLevels: number,
+	regularSemesters: number
+) {
+	for (const entry of subjects) {
+		if (entry.yearLevel > yearLevels) {
+			error(400, `Subject year level must be between 1 and ${yearLevels}.`);
+		}
+		if (entry.semester > regularSemesters) {
+			error(400, `Subject semester must be between 1 and ${regularSemesters}.`);
+		}
+	}
+}
 
 function insertSubjects(
 	tx: Transaction,
@@ -93,6 +114,7 @@ export const createCurriculum = command(curriculumInsertSchema, (data) => {
 	validateUser(locals, [Role.ADMIN]);
 
 	const { subjects, ...curriculumData } = data;
+	validateSubjectLimits(subjects, curriculumData.yearLevels, curriculumData.regularSemesters);
 
 	const subjectIds = subjects.map((entry) => entry.subjectId);
 
@@ -143,6 +165,12 @@ export const updateCurriculum = command(curriculumUpdateSchema, (data) => {
 			if (existing.publishedAt !== null) {
 				error(409, 'Published curricula cannot be edited. Create a revision.');
 			}
+
+			validateSubjectLimits(
+				subjects,
+				curriculumData.yearLevels ?? existing.yearLevels,
+				curriculumData.regularSemesters ?? existing.regularSemesters
+			);
 
 			const oldSubjects = tx
 				.select()
