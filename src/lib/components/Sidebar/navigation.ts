@@ -5,9 +5,9 @@ import {
 	Bell,
 	BookOpen,
 	ClipboardCheck,
-	Layers,
 	Gauge,
 	GraduationCap,
+	Layers,
 	Mail,
 	Settings,
 	SquareChartGantt,
@@ -33,7 +33,12 @@ const items: SidebarItem[] = [
 	{ label: 'Registrars', href: resolve('/user/registrars'), icon: UserShield, roles: [Role.ADMIN] },
 	{ label: 'Applicants', href: resolve('/user/applicants'), icon: SquareUserRound, roles: staff },
 	{ label: 'Students', href: resolve('/user/students'), icon: Users, roles: staff },
-	{ label: 'Enrollment', href: resolve('/user/enrollment'), icon: ClipboardCheck },
+	{
+		label: 'Enrollment',
+		href: resolve('/user/enrollment'),
+		icon: ClipboardCheck,
+		roles: [Role.STUDENT]
+	},
 	{
 		label: 'Subjects',
 		href: resolve('/user/subjects'),
