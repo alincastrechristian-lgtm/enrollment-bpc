@@ -12,10 +12,47 @@
 	import { filterCurriculumSchema } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Eye, Layers, Pencil, Plus, Settings, Trash2 } from '@lucide/svelte';
+	import {
+		Archive,
+		ArchiveRestore,
+		CircleCheck,
+		CircleMinus,
+		Eye,
+		Layers,
+		Pencil,
+		Plus,
+		Settings,
+		Trash2
+	} from '@lucide/svelte';
+	import { confirmCurriculumActivation, confirmCurriculumStateChange } from './activation.js';
 	import type { PageProps } from './$types';
 	let { data }: PageProps = $props();
 	let busy = $state(false);
+	async function changeState(
+		record: (typeof data.records)[number],
+		action: 'archive' | 'restore' | 'deactivate'
+	) {
+		if (busy || !data.canManage) return;
+		busy = true;
+		try {
+			await confirmCurriculumStateChange(record, action);
+		} catch (cause) {
+			showError(cause instanceof Error ? cause.message : 'Failed to change curriculum state');
+		} finally {
+			busy = false;
+		}
+	}
+	async function activate(record: (typeof data.records)[number]) {
+		if (busy || !data.canManage || record.status === 'active') return;
+		busy = true;
+		try {
+			await confirmCurriculumActivation(record);
+		} catch (cause) {
+			showError(cause instanceof Error ? cause.message : 'Failed to activate curriculum');
+		} finally {
+			busy = false;
+		}
+	}
 
 	async function remove(record: (typeof data.records)[number]) {
 		if (busy || !data.canManage) return;
@@ -58,11 +95,13 @@
 			filterSchema={filterCurriculumSchema}
 			placeholder="Search by curriculum or program..."
 			searchLabel="Search curricula"
-			filterLabel="Publication status"
+			filterLabel="Curriculum status"
 			statusOptions={[
 				{ value: 'all', label: 'All statuses' },
 				{ value: 'draft', label: 'Draft' },
-				{ value: 'published', label: 'Published' }
+				{ value: 'active', label: 'Active' },
+				{ value: 'inactive', label: 'Inactive' },
+				{ value: 'archived', label: 'Archived' }
 			]}
 		>
 			{#if data.canManage}<a
@@ -107,9 +146,15 @@
 			<td
 				><div class="flex flex-wrap gap-1.5">
 					<span
-						class={`badge border-none text-xs font-semibold ${row.publishedAt ? 'badge-success' : 'badge-warning'}`}
-						>{row.publishedAt ? 'Published' : 'Draft'}</span
-					>{#if !row.isActive}<span class="badge badge-ghost text-xs">Inactive</span>{/if}
+						class={`badge border-none text-xs font-semibold ${row.status === 'active' ? 'badge-success' : row.status === 'draft' ? 'badge-warning' : 'badge-ghost'}`}
+						>{row.status === 'active'
+							? 'Active'
+							: row.status === 'draft'
+								? 'Draft'
+								: row.status === 'inactive'
+									? 'Inactive'
+									: 'Archived'}</span
+					>
 				</div></td
 			>
 			<td class="pr-5"
@@ -123,7 +168,39 @@
 								>
 							</li>
 							{#if data.canManage}
-								{#if !row.publishedAt}<li>
+								{#if row.status !== 'active'}<li>
+										<button
+											type="button"
+											disabled={busy || !row.subjectCount}
+											onclick={() => activate(row)}
+											><CircleCheck class="size-4" aria-hidden="true" />Activate</button
+										>
+									</li>{/if}
+								{#if row.status === 'active'}<li>
+										<button
+											type="button"
+											disabled={busy}
+											onclick={() => changeState(row, 'deactivate')}
+											><CircleMinus class="size-4" aria-hidden="true" />Deactivate</button
+										>
+									</li>{/if}
+								{#if row.status === 'archived'}<li>
+										<button
+											type="button"
+											disabled={busy}
+											onclick={() => changeState(row, 'restore')}
+											><ArchiveRestore class="size-4" aria-hidden="true" />Unarchive</button
+										>
+									</li>
+								{:else}<li>
+										<button
+											type="button"
+											disabled={busy}
+											onclick={() => changeState(row, 'archive')}
+											><Archive class="size-4" aria-hidden="true" />Archive</button
+										>
+									</li>{/if}
+								{#if row.status === 'draft'}<li>
 										<a
 											href={resolve('/user/curriculum/[curriculumId]/edit', {
 												curriculumId: row.id
@@ -131,7 +208,10 @@
 										>
 									</li>{/if}
 								<li class="text-error">
-									<button type="button" disabled={busy} onclick={() => remove(row)}
+									<button
+										type="button"
+										disabled={busy || row.status === 'active'}
+										onclick={() => remove(row)}
 										><Trash2 class="size-4" aria-hidden="true" />Delete</button
 									>
 								</li>

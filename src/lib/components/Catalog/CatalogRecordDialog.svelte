@@ -5,23 +5,39 @@
 		name: string;
 		description: string | null;
 		isActive: boolean;
+		activeCurriculumId?: string | null;
+	};
+	export type CurriculumOption = {
+		id: string;
+		programId: string;
+		name: string;
+		publishedAt: Date | null;
+		status: 'draft' | 'active' | 'inactive' | 'archived';
 	};
 </script>
 
 <script lang="ts">
 	import { createProgram, updateProgram } from '#lib/actions/program.remote.js';
 	import { createSubject, updateSubject } from '#lib/actions/subject.remote.js';
-	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
+	import {
+		showError,
+		showLoading,
+		showSuccess,
+		showYesNo
+	} from '#lib/components/Popup/Popup.svelte.js';
+	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
 	import { refreshAll } from '$app/navigation';
 	import { Hash, Pencil, Plus, X } from '@lucide/svelte';
 
 	let {
 		kind,
+		curricula = [],
 		busy = $bindable(false),
 		oncreated
 	}: {
 		kind: 'program' | 'subject';
+		curricula?: CurriculumOption[];
 		busy?: boolean;
 		oncreated?: (record: CatalogRecord) => void;
 	} = $props();
@@ -35,10 +51,15 @@
 	let selected = $state<CatalogRecord | null>(null);
 	const emptyDraft = () => ({ code: '', name: '', description: '', isActive: true });
 	let draft = $state(emptyDraft());
+	let activeCurriculumId = $state('');
+	const programCurricula = $derived(
+		curricula.filter((record) => record.programId === selected?.id)
+	);
 
 	export function open(record: CatalogRecord | null = null) {
 		if (busy) return;
 		selected = record;
+		activeCurriculumId = record?.activeCurriculumId ?? '';
 		draft = record
 			? {
 					code: record.code,
@@ -56,13 +77,41 @@
 		event.preventDefault();
 		if (busy) return;
 		busy = true;
-		showLoading();
 		let saved = false;
 		try {
+			const selectionChanged =
+				kind === 'program' &&
+				selected !== null &&
+				activeCurriculumId !== (selected.activeCurriculumId ?? '');
+			if (selectionChanged) {
+				const chosen = programCurricula.find((record) => record.id === activeCurriculumId);
+				if (activeCurriculumId && !chosen)
+					throw new Error('Select a curriculum belonging to this program.');
+				if (
+					!(await showYesNo({
+						title: 'Change active curriculum?',
+						message: chosen
+							? `Activate ${chosen.name} for ${draft.code}? ${chosen.publishedAt === null ? 'This publishes the curriculum and locks editing. ' : ''}The previous active curriculum will be archived. Existing enrollment assignments stay unchanged.`
+							: `Remove the active curriculum for ${draft.code}? The program will have no active curriculum. Existing enrollment assignments stay unchanged.`,
+						warning: true,
+						yesText: 'Save changes',
+						noText: 'Cancel'
+					}))
+				)
+					return;
+			}
+			showLoading();
 			const payload = { ...draft, description: draft.description.trim() || null };
 			let created: CatalogRecord | undefined;
-			if (selected) await actions[kind].update({ ...payload, id: selected.id });
-			else created = await actions[kind].create(payload);
+			if (selected) {
+				if (kind === 'program')
+					await updateProgram({
+						...payload,
+						id: selected.id,
+						...(selectionChanged ? { activeCurriculumId: activeCurriculumId || null } : {})
+					});
+				else await updateSubject({ ...payload, id: selected.id });
+			} else created = await actions[kind].create(payload);
 			saved = true;
 			dialog.close();
 			if (created) oncreated?.(created);
@@ -151,6 +200,30 @@
 						bind:value={draft.description}
 						placeholder={`Describe this ${kind}`}></textarea>
 				</div>
+				{#if kind === 'program' && selected}<div class="space-y-2">
+						<label for="program-active-curriculum" class="text-sm font-semibold"
+							>Active curriculum</label
+						>
+						<SearchableSelect
+							id="program-active-curriculum"
+							label="Active curriculum"
+							bind:value={activeCurriculumId}
+							options={[
+								{ value: '', label: 'None' },
+								...programCurricula.map((record) => ({
+									value: record.id,
+									label: `${record.name} (${record.status.charAt(0).toUpperCase() + record.status.slice(1)})`
+								}))
+							]}
+							placeholder="Select a curriculum"
+							searchLabel="Search curricula"
+							disabled={busy}
+						/>
+						<p class="text-xs text-base-content/50">
+							Choose a curriculum for this program, or None to leave it without an active
+							curriculum.
+						</p>
+					</div>{/if}
 				<label
 					class="flex cursor-pointer items-start gap-3 rounded-xl border border-base-300 bg-base-200 p-4"
 					><input

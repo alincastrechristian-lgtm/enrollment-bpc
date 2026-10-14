@@ -23,11 +23,16 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			export function beforeNavigate(hook){hooks.add(hook);onDestroy(()=>hooks.delete(hook));}
 			window.attemptNavigation=(url)=>{let cancelled=false;for(const hook of hooks)hook({to:{url:new URL(url,window.location.href)},willUnload:false,cancel:()=>cancelled=true});return !cancelled;};
 			export async function goto(url,options){if(window.attemptNavigation(url)){window.navigation.push({url,options});page.url=new URL(url,window.location.href);}}
-			export async function refreshAll(){window.refreshes++;if(window.failRefresh)throw new Error("Refresh failed");window.updateCatalogs?.();}`,
-		'actions.js': `window.creations=[];window.updates=[];window.deletions=[];window.failSave=false;
+			export async function refreshAll(){window.refreshes++;if(window.failRefresh)throw new Error("Refresh failed");window.updateCatalogs?.();window.updateCurriculum?.();}`,
+		'actions.js': `window.creations=[];window.updates=[];window.deletions=[];window.activations=[];window.curriculumEvents=[];window.stateChanges=[];window.failSave=false;
+			export async function activateCurriculum(id){window.activations.push(id);window.curriculumEvents.push('active');return {id};}
+			export async function changeCurriculumState(data){window.stateChanges.push(data);window.curriculumEvents.push(data.action==='archive'?'archived':'inactive');return {id:data.id};}
 			export async function createCurriculum(data){if(window.failSave)throw new Error('Save failed');window.creations.push(data);return {id:'created'};}
 			export async function updateCurriculum(data){if(window.failSave)throw new Error('Save failed');window.updates.push(data);return {id:data.id};}
 			export async function deleteCurriculum(id){window.deletions.push(id);}`,
+		'applicant-actions.js': `window.applicantCreations=[];window.applicantUpdates=[];
+			export async function createApplicant(data){window.applicantCreations.push(data);}
+			export async function updateApplicant(data){window.applicantUpdates.push(data);}`,
 		'catalog-actions.js': `window.programCreations=[];window.subjectCreations=[];window.newPrograms=[];window.newSubjects=[];window.catalogUpdates=[];window.failCatalogSave=false;
 			function create(kind,data){if(window.failCatalogSave)throw new Error('Duplicate code');window[kind+'Creations'].push(data);const record={...data,id:kind+'-'+window[kind+'Creations'].length,name:data.name.trim(),code:data.code.trim()};window[kind==='program'?'newPrograms':'newSubjects'].push(record);return record;}
 			export async function createProgram(data){return create('program',data);}
@@ -36,32 +41,40 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			export async function updateSubject(data){window.catalogUpdates.push({kind:'subject',data});}
 			export async function deleteProgram(){}
 			export async function deleteSubject(){}`,
-		'popup.js': `window.messages=[];window.confirmDelete=true;window.confirmSave=true;window.saveQuestions=[];
+		'popup.js': `window.messages=[];window.confirmDelete=true;window.confirmSave=true;window.saveQuestions=[];window.confirmActivation=true;window.activationQuestions=[];window.programWarnings=[];
 			export function showError(message){window.messages.push(message);}
 			export function showLoading(){}
 			export function showSuccess(message){window.messages.push(message);}
-			export async function showYesNo(props){if(props?.title==='Save curriculum?'){window.saveQuestions.push(props);if(window.deferSave)return new Promise(resolve=>window.resolveSave=resolve);return window.confirmSave;}return window.confirmDelete;}`,
+			export async function showYesNo(props){if(props?.title==='Change active curriculum?'){window.programWarnings.push(props);if(window.deferProgramChange)return new Promise(resolve=>window.resolveProgramChange=resolve);return window.confirmDelete;}if(props?.title==='Activate curriculum?'){window.activationQuestions.push(props);if(window.deferActivation)return new Promise(resolve=>window.resolveActivation=resolve);return window.confirmActivation;}if(props?.title==='Save curriculum?'){window.saveQuestions.push(props);if(window.deferSave)return new Promise(resolve=>window.resolveSave=resolve);return window.confirmSave;}return window.confirmDelete;}`,
 		'Harness.svelte': `<script>
 			import Editor from '${path.resolve('src/routes/user/curriculum/CurriculumEditor.svelte').replaceAll('\\', '/')}';
+			import ApplicantDialog from '${path.resolve('src/routes/user/applicants/ApplicantDialog.svelte').replaceAll('\\', '/')}';
 			import RecordCatalog from '${path.resolve('src/lib/components/Catalog/RecordCatalog.svelte').replaceAll('\\', '/')}';
 			import List from '${path.resolve('src/routes/user/curriculum/+page.svelte').replaceAll('\\', '/')}';
 			import View from '${path.resolve('src/routes/user/curriculum/[curriculumId]/+page.svelte').replaceAll('\\', '/')}';
 			let mode=$state('new'); window.show=(value)=>mode=value;
+			let curriculumStatus=$state('draft');window.setCurriculumStatus=(value)=>curriculumStatus=value;
+			window.updateCurriculum=()=>{if(window.curriculumEvents.length)curriculumStatus=window.curriculumEvents.at(-1);};
 			let programs=$state([{id:'p',name:'Information Systems',code:'BSIS',isActive:true}]);
 			let subjects=$state([{id:'s1',name:'Introduction',code:'IS101',isActive:true},{id:'s2',name:'Programming',code:'IS102',isActive:true}]);
 			window.updateCatalogs=()=>{programs=[programs[0],...window.newPrograms];subjects=[...subjects.slice(0,2),...window.newSubjects];};
 			const curriculum={id:'c',name:'2026 Curriculum',programId:'p',programName:'Information Systems',programCode:'BSIS',yearLevels:4,semesters:2,publishedAt:null,isActive:true};
 			const entries=[{id:'entry-1',curriculumId:'c',subjectId:'s1',subjectName:'Original Introduction',subjectCode:'IS101',yearLevel:1,semester:1,units:3}];
 			const multiEntries=[...entries,{...entries[0],id:'entry-2',subjectId:'s2',subjectName:'Programming',subjectCode:'IS102',yearLevel:2,semester:2,units:4}];
+			let applicantDialog=$state();
+			const applicantPrograms=[{id:'p',code:'BSIS',name:'Information Systems',isActive:true},{id:'act',code:'ACT',name:'Computer Technology',isActive:true}];
+			const applicant={id:'a',applicationId:'2026-1',name:'Existing Applicant',program:'BSIS',yearLevel:1,dateApplied:new Date(),email:'existing@example.com',contactNumber:'09123456789',address:'Bulacan',hasBirthCertificate:false,hasForm138:false,hasGoodMoral:false,hasPicture:false};
+			const programCurricula=[{id:'c',programId:'p',name:'2026 Curriculum',publishedAt:new Date(),status:'active'},{id:'replacement',programId:'p',name:'Replacement Curriculum',publishedAt:null,status:'draft'},{id:'foreign',programId:'other',name:'Foreign Curriculum',publishedAt:null,status:'draft'}];
 		</script>
 		{#key mode}
-			{#if mode==='new'}<Editor {programs} {subjects} />
-			{:else if mode.startsWith('catalog-')}<RecordCatalog kind={mode.includes('subject')?'subject':'program'} records={(mode.includes('subject')?subjects:programs).map(record=>({...record,description:'Existing description'}))} total={1} search="" filters={{}} canManage={!mode.endsWith('registrar')} />
+			{#if mode.startsWith('applicant-')}<button onclick={()=>applicantDialog.openApplicant(mode==='applicant-edit'?applicant:null)}>Open applicant</button><ApplicantDialog bind:this={applicantDialog} programs={mode==='applicant-empty'?[]:applicantPrograms} />
+			{:else if mode==='new'}<Editor {programs} {subjects} />
+			{:else if mode.startsWith('catalog-')}<RecordCatalog kind={mode.includes('subject')?'subject':'program'} curricula={programCurricula} records={(mode.includes('subject')?subjects:programs).map(record=>({...record,description:'Existing description',activeCurriculumId:mode.startsWith('catalog-program-linked')&&record.id==='p'?'c':null}))} total={1} search="" filters={{}} canManage={!mode.endsWith('registrar')} />
 			{:else if mode==='edit'}<Editor {programs} {subjects} {curriculum} {entries} />
 			{:else if mode==='multi-edit'}<Editor {programs} {subjects} {curriculum} entries={multiEntries} />
 			{:else if mode==='empty'}<Editor programs={[]} subjects={[]} />
-			{:else if mode.startsWith('list')}<List data={{records:[{...curriculum,subjectCount:1,totalUnits:3}],total:1,search:'',status:'all',filters:{},canManage:mode==='list-admin'}} />
-			{:else}<View data={{curriculum:{...curriculum,publishedAt:mode==='published'?new Date():null,semesters:mode==='third-semester-view'?3:2},entries:mode==='multi-view'?multiEntries:mode==='third-semester-view'?entries.map(entry=>({...entry,semester:3})):entries,canManage:mode!=='registrar' && mode!=='multi-view'}} />{/if}
+			{:else if mode.startsWith('list')}<List data={{records:[{...curriculum,status:curriculumStatus,publishedAt:curriculumStatus==='draft'?null:new Date(),subjectCount:1,totalUnits:3}],total:1,search:'',status:'all',filters:{},canManage:mode==='list-admin'}} />
+			{:else}<View data={{curriculum:{...curriculum,status:mode==='published'?'archived':curriculumStatus,publishedAt:mode==='published'||curriculumStatus!=='draft'?new Date():null,semesters:mode==='third-semester-view'?3:2},entries:mode==='multi-view'?multiEntries:mode==='third-semester-view'?entries.map(entry=>({...entry,semester:3})):entries,canManage:mode!=='registrar' && mode!=='multi-view'}} />{/if}
 		{/key}`
 	};
 	let server, browser;
@@ -86,6 +99,10 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 						replacement: path.join(root, 'catalog-actions.js')
 					},
 					{ find: '#lib/actions/curriculum.remote.js', replacement: path.join(root, 'actions.js') },
+					{
+						find: '#lib/actions/applicant.remote.js',
+						replacement: path.join(root, 'applicant-actions.js')
+					},
 					{
 						find: '#lib/components/Popup/Popup.svelte.js',
 						replacement: path.join(root, 'popup.js')
@@ -551,6 +568,223 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await expect(page.getByRole('tabpanel')).toHaveAccessibleName('Year 2 2nd Semester');
 		await page.getByRole('button', { name: 'All subjects', exact: true }).click();
 		await expect(page.getByRole('table')).toHaveCount(2);
+		// Applicants reuse the picker inside a modal, without admin-only program creation.
+		await page.evaluate(() => window.show('applicant-new'));
+		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
+		const applicantForm = page.getByRole('dialog', { name: 'New Applicant', exact: true });
+		await applicantForm.getByLabel('Full name', { exact: true }).fill('New Applicant');
+		await applicantForm.getByLabel('Application ID', { exact: true }).fill('2026-2');
+		await applicantForm.getByLabel('Email address', { exact: true }).fill('new@example.com');
+		await applicantForm.getByLabel('Contact number', { exact: true }).fill('09123456789');
+		await applicantForm.getByLabel('Address', { exact: true }).fill('Bulacan');
+		await applicantForm.getByRole('button', { name: 'Create Applicant', exact: true }).click();
+		await expect(
+			page.getByRole('searchbox', { name: 'Search programs', exact: true })
+		).toBeFocused();
+		assert.equal(await page.evaluate(() => window.applicantCreations.length), 0);
+		await expect(page.getByRole('button', { name: 'New Program', exact: true })).toHaveCount(0);
+		await page.getByRole('searchbox', { name: 'Search programs', exact: true }).fill('information');
+		await expect(page.getByRole('button', { name: /^BSIS / })).toBeVisible();
+		await expect(page.getByRole('button', { name: /^ACT / })).toHaveCount(0);
+		await page
+			.getByRole('searchbox', { name: 'Search programs', exact: true })
+			.fill('no matching program');
+		await expect(page.getByText('No matches found.')).toBeVisible();
+		await page.getByRole('searchbox', { name: 'Search programs', exact: true }).fill('bsis');
+		await page.getByRole('searchbox', { name: 'Search programs', exact: true }).press('Enter');
+		await expect(applicantForm.getByRole('button', { name: 'Program', exact: true })).toContainText(
+			'BSIS'
+		);
+		await applicantForm.getByRole('button', { name: 'Create Applicant', exact: true }).click();
+		await expect(applicantForm).toBeHidden();
+		assert.equal(await page.evaluate(() => window.applicantCreations[0].program), 'BSIS');
+		await page.evaluate(() => window.show('applicant-edit'));
+		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
+		const editApplicant = page.getByRole('dialog', { name: 'Edit Applicant', exact: true });
+		await expect(editApplicant.getByRole('button', { name: 'Program', exact: true })).toContainText(
+			'BSIS'
+		);
+		await editApplicant.getByRole('button', { name: 'Program', exact: true }).click();
+		await page.getByRole('searchbox', { name: 'Search programs', exact: true }).fill('computer');
+		await page.getByRole('button', { name: /^ACT / }).click();
+		await editApplicant.getByRole('button', { name: 'Save changes', exact: true }).click();
+		await expect(editApplicant).toBeHidden();
+		assert.equal(await page.evaluate(() => window.applicantUpdates[0].program), 'ACT');
+		assert.equal(await page.evaluate(() => window.applicantUpdates[0].id), 'a');
+		await page.evaluate(() => window.show('applicant-empty'));
+		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
+		await expect(
+			page.getByText('No programs available. Add a program in the program catalog first.')
+		).toBeVisible();
+		await page.getByRole('button', { name: 'Program', exact: true }).click();
+		await expect(page.getByText('No matches found.')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'New Program', exact: true })).toHaveCount(0);
+		// Activation requires confirmation and updates the list and view after refresh.
+		await page.evaluate(() => {
+			window.show('activation-view');
+			window.confirmActivation = false;
+		});
+		await expect(page.getByText('Draft', { exact: true })).toBeVisible();
+		await page.getByRole('button', { name: 'Activate', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Activate', exact: true })).toBeEnabled();
+		assert.equal(await page.evaluate(() => window.activations.length), 0);
+		assert.match(
+			await page.evaluate(() => window.activationQuestions.at(-1).message),
+			/locks editing.*previous active curriculum will be archived.*Existing students keep/
+		);
+		await page.evaluate(() => {
+			window.confirmActivation = true;
+			window.deferActivation = true;
+		});
+		await page.getByRole('button', { name: 'Activate', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Activate', exact: true })).toBeDisabled();
+		assert.equal(await page.evaluate(() => window.activations.length), 0);
+		await page.evaluate(() => {
+			window.deferActivation = false;
+			window.resolveActivation(true);
+		});
+		await expect(page.getByText('Active', { exact: true })).toBeVisible();
+		assert.deepEqual(await page.evaluate(() => window.activations), ['c']);
+		await expect(page.getByRole('button', { name: 'Activate', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('link', { name: 'Edit curriculum', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+		await page.evaluate(() => window.setCurriculumStatus('archived'));
+		await expect(page.getByText('Archived', { exact: true })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Edit curriculum', exact: true })).toHaveCount(0);
+		await page.getByRole('button', { name: 'Activate', exact: true }).click();
+		await expect(page.getByText('Active', { exact: true })).toBeVisible();
+		assert.equal(await page.evaluate(() => window.activations.length), 2);
+		await page.evaluate(() => window.show('registrar'));
+		await expect(page.getByRole('button', { name: 'Activate', exact: true })).toHaveCount(0);
+		await page.evaluate(() => {
+			window.setCurriculumStatus('draft');
+			window.show('list-admin');
+		});
+		await page.getByRole('button', { name: 'Actions for 2026 Curriculum', exact: true }).click();
+		await page.getByRole('button', { name: 'Activate', exact: true }).click();
+		await expect(page.getByRole('table').getByText('Active', { exact: true })).toBeVisible();
+		assert.equal(await page.evaluate(() => window.activations.length), 3);
+		assert.equal(await page.evaluate(() => window.activationQuestions.at(-1).warning), true);
+		// Admins can leave a program without an active curriculum and restore without activating.
+		await page.evaluate(() => window.show('manual-state-view'));
+		async function stateAction(name) {
+			await page.evaluate(() =>
+				document.querySelectorAll('[popover]:popover-open').forEach((panel) => panel.hidePopover())
+			);
+			await page.getByRole('button', { name: 'Curriculum actions', exact: true }).click();
+			await expect(page.getByRole('button', { name, exact: true }).locator('svg')).toHaveCount(1);
+			await page.getByRole('button', { name, exact: true }).click();
+		}
+		await page.evaluate(() => (window.confirmDelete = false));
+		await stateAction('Deactivate');
+		assert.equal(await page.evaluate(() => window.stateChanges.length), 0);
+		await page.evaluate(() => (window.confirmDelete = true));
+		await stateAction('Deactivate');
+		await expect(page.getByText('Inactive', { exact: true })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Edit curriculum', exact: true })).toHaveCount(0);
+		await stateAction('Archive');
+		await expect(page.getByText('Archived', { exact: true })).toBeVisible();
+		await stateAction('Unarchive');
+		await expect(page.getByText('Inactive', { exact: true })).toBeVisible();
+		assert.deepEqual(await page.evaluate(() => window.stateChanges.map(({ action }) => action)), [
+			'deactivate',
+			'archive',
+			'restore'
+		]);
+		await page.getByRole('button', { name: 'Activate', exact: true }).click();
+		await expect(page.getByText('Active', { exact: true })).toBeVisible();
+		await page.evaluate(() => window.show('registrar'));
+		await expect(page.getByRole('button', { name: 'Curriculum actions', exact: true })).toHaveCount(
+			0
+		);
+		// Program links are available to both roles, and disappear when no curriculum is selected.
+		for (const mode of ['catalog-program-linked', 'catalog-program-linked-registrar']) {
+			await page.evaluate((mode) => window.show(mode), mode);
+			await expect(
+				page.getByRole('link', { name: 'View curriculum', exact: true })
+			).toHaveAttribute('href', '/portal/user/curriculum/c');
+		}
+		await page.evaluate(() => window.show('catalog-program-registrar'));
+		await expect(page.getByRole('link', { name: 'View curriculum', exact: true })).toHaveCount(0);
+		await expect(page.getByText('No active curriculum', { exact: true }).first()).toBeVisible();
+		// Program editing searches only its own curricula, with an explicit None option.
+		await page.evaluate(() => window.show('catalog-program-linked'));
+		async function editProgram() {
+			await page
+				.getByRole('button', { name: 'Actions for Information Systems', exact: true })
+				.click();
+			await page.getByRole('button', { name: 'Edit', exact: true }).click();
+		}
+		await editProgram();
+		const programEdit = page.getByRole('dialog', { name: 'Edit Program', exact: true });
+		await expect(
+			programEdit.getByRole('button', { name: 'Active curriculum', exact: true })
+		).toContainText('2026 Curriculum');
+		await programEdit.getByRole('button', { name: 'Active curriculum', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'None', exact: true })).toBeVisible();
+		const curriculumSearch = page.getByRole('searchbox', { name: 'Search curricula', exact: true });
+		await curriculumSearch.fill('foreign');
+		await expect(page.getByText('No matches found.')).toBeVisible();
+		await curriculumSearch.fill('replacement');
+		await page.getByRole('button', { name: 'Replacement Curriculum (Draft)', exact: true }).click();
+		await programEdit.getByLabel('Name', { exact: true }).fill('Edited Program');
+		const priorUpdates = await page.evaluate(() => window.catalogUpdates.length);
+		await page.evaluate(() => (window.confirmDelete = false));
+		await programEdit.getByRole('button', { name: 'Save changes', exact: true }).click();
+		await expect(
+			programEdit.getByRole('button', { name: 'Save changes', exact: true })
+		).toBeEnabled();
+		assert.equal(await page.evaluate(() => window.catalogUpdates.length), priorUpdates);
+		await expect(programEdit.getByLabel('Name', { exact: true })).toHaveValue('Edited Program');
+		assert.equal(await page.evaluate(() => window.programWarnings.at(-1).warning), true);
+		assert.match(
+			await page.evaluate(() => window.programWarnings.at(-1).message),
+			/publishes.*locks editing.*previous active curriculum will be archived/
+		);
+		await page.evaluate(() => {
+			window.confirmDelete = true;
+			window.deferProgramChange = true;
+		});
+		await programEdit.getByRole('button', { name: 'Save changes', exact: true }).click();
+		await expect(
+			programEdit.getByRole('button', { name: 'Saving...', exact: true })
+		).toBeDisabled();
+		assert.equal(await page.evaluate(() => window.catalogUpdates.length), priorUpdates);
+		await page.evaluate(() => {
+			window.deferProgramChange = false;
+			window.resolveProgramChange(true);
+		});
+		await expect(programEdit).toBeHidden();
+		assert.equal(
+			await page.evaluate(() => window.catalogUpdates.at(-1).data.activeCurriculumId),
+			'replacement'
+		);
+		assert.equal(
+			await page.evaluate(() => window.catalogUpdates.at(-1).data.name),
+			'Edited Program'
+		);
+		await editProgram();
+		await programEdit.getByRole('button', { name: 'Active curriculum', exact: true }).click();
+		await page.getByRole('button', { name: 'None', exact: true }).click();
+		await programEdit.getByRole('button', { name: 'Save changes', exact: true }).click();
+		await expect(programEdit).toBeHidden();
+		assert.equal(
+			await page.evaluate(() => window.catalogUpdates.at(-1).data.activeCurriculumId),
+			null
+		);
+		assert.match(
+			await page.evaluate(() => window.programWarnings.at(-1).message),
+			/program will have no active curriculum/
+		);
+		await editProgram();
+		const warningsBefore = await page.evaluate(() => window.programWarnings.length);
+		await programEdit.getByRole('button', { name: 'Save changes', exact: true }).click();
+		await expect(programEdit).toBeHidden();
+		assert.equal(await page.evaluate(() => window.programWarnings.length), warningsBefore);
+		assert.equal(
+			await page.evaluate(() => 'activeCurriculumId' in window.catalogUpdates.at(-1).data),
+			false
+		);
 		assert.deepEqual(errors, []);
 	} finally {
 		await browser?.close();

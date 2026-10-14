@@ -8,7 +8,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = ({ locals, params }) => {
 	validateUser(locals, [Role.ADMIN]);
 	const data = getCurriculum(params.curriculumId);
-	if (data.curriculum.publishedAt !== null)
+	if (data.curriculum.publishedAt !== null || data.curriculum.archivedAt !== null)
 		redirect(302, resolve('/user/curriculum/[curriculumId]', params));
 	return { ...data, ...getCurriculumCatalogs() };
 };

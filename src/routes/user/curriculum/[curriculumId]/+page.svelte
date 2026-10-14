@@ -8,11 +8,47 @@
 	} from '#lib/components/Popup/Popup.svelte.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { BookOpen, CalendarDays, Layers, LockKeyhole, Pencil, Trash2 } from '@lucide/svelte';
+	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
+	import {
+		Archive,
+		ArchiveRestore,
+		CircleCheck,
+		CircleMinus,
+		BookOpen,
+		CalendarDays,
+		Layers,
+		LockKeyhole,
+		Pencil,
+		Settings,
+		Trash2
+	} from '@lucide/svelte';
 	import type { PageProps } from './$types';
 	import SubjectLayout, { semesterLabel } from '../SubjectLayout.svelte';
+	import { confirmCurriculumActivation, confirmCurriculumStateChange } from '../activation.js';
 	let { data }: PageProps = $props();
 	let busy = $state(false);
+	async function changeState(action: 'archive' | 'restore' | 'deactivate') {
+		if (busy || !data.canManage) return;
+		busy = true;
+		try {
+			await confirmCurriculumStateChange(data.curriculum, action);
+		} catch (cause) {
+			showError(cause instanceof Error ? cause.message : 'Failed to change curriculum state');
+		} finally {
+			busy = false;
+		}
+	}
+	async function activate() {
+		if (busy || !data.canManage || data.curriculum.status === 'active') return;
+		busy = true;
+		try {
+			await confirmCurriculumActivation(data.curriculum);
+		} catch (cause) {
+			showError(cause instanceof Error ? cause.message : 'Failed to activate curriculum');
+		} finally {
+			busy = false;
+		}
+	}
 	let subjectLayout = $state<'all' | 'tabbed'>('all');
 	let selectedYear = $state(1);
 	let selectedSemester = $state(1);
@@ -93,15 +129,26 @@
 						<span class="badge badge-ghost text-xs">{data.curriculum.yearLevels} years</span>
 						<span class="badge badge-ghost text-xs">{data.curriculum.semesters} semesters</span>
 						<span
-							class={`badge border-none text-xs font-semibold ${data.curriculum.publishedAt ? 'badge-success' : 'badge-warning'}`}
-							>{data.curriculum.publishedAt ? 'Published' : 'Draft'}</span
-						>{#if !data.curriculum.isActive}<span class="badge badge-ghost text-xs">Inactive</span
-							>{/if}
+							class={`badge border-none text-xs font-semibold ${data.curriculum.status === 'active' ? 'badge-success' : data.curriculum.status === 'draft' ? 'badge-warning' : 'badge-ghost'}`}
+							>{data.curriculum.status === 'active'
+								? 'Active'
+								: data.curriculum.status === 'draft'
+									? 'Draft'
+									: data.curriculum.status === 'inactive'
+										? 'Inactive'
+										: 'Archived'}</span
+						>
 					</div>
 				</div>
 			</div>
 			{#if data.canManage}<div class="flex flex-wrap gap-2">
-					{#if !data.curriculum.publishedAt}<a
+					{#if data.curriculum.status !== 'active'}<button
+							type="button"
+							disabled={busy || !data.entries.length}
+							class="btn btn-primary btn-sm"
+							onclick={activate}><CircleCheck class="size-4" aria-hidden="true" />Activate</button
+						>{/if}
+					{#if data.curriculum.status === 'draft'}<a
 							href={resolve('/user/curriculum/[curriculumId]/edit', {
 								curriculumId: data.curriculum.id
 							})}
@@ -109,10 +156,30 @@
 							><Pencil class="size-4" aria-hidden="true" />Edit curriculum</a
 						>{/if}<button
 						type="button"
-						disabled={busy}
+						disabled={busy || data.curriculum.status === 'active'}
 						class="btn gap-2 btn-ghost text-error btn-sm"
 						onclick={remove}><Trash2 class="size-4" aria-hidden="true" />Delete</button
 					>
+					<Dropdown id="curriculum-state-actions" label="Curriculum actions" disabled={busy}>
+						{#snippet trigger()}<Settings class="size-4" aria-hidden="true" />{/snippet}
+						<ul class="menu w-full p-0">
+							{#if data.curriculum.status === 'active'}<li>
+									<button type="button" disabled={busy} onclick={() => changeState('deactivate')}
+										><CircleMinus class="size-4" aria-hidden="true" />Deactivate</button
+									>
+								</li>{/if}
+							{#if data.curriculum.status === 'archived'}<li>
+									<button type="button" disabled={busy} onclick={() => changeState('restore')}
+										><ArchiveRestore class="size-4" aria-hidden="true" />Unarchive</button
+									>
+								</li>
+							{:else}<li>
+									<button type="button" disabled={busy} onclick={() => changeState('archive')}
+										><Archive class="size-4" aria-hidden="true" />Archive</button
+									>
+								</li>{/if}
+						</ul>
+					</Dropdown>
 				</div>{/if}
 		</div>
 		<div class="grid grid-cols-3 divide-x divide-base-300 border-t border-base-300 bg-base-200/40">
@@ -138,6 +205,10 @@
 				Published on {dateFormatter.format(data.curriculum.publishedAt)}. This curriculum is
 				read-only.
 			</p>
+		</div>{:else if data.curriculum.status === 'archived'}<div
+			class="rounded-xl border border-base-300 bg-base-100 p-4 text-sm text-base-content/60"
+		>
+			This draft is archived. Unarchive it to edit.
 		</div>{/if}
 	<section
 		class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
@@ -193,7 +264,7 @@
 								: 'No subjects in this curriculum'}
 						</h2>
 						<p class="mt-1 text-sm text-base-content/50">
-							{data.canManage && !data.curriculum.publishedAt
+							{data.canManage && data.curriculum.status === 'draft'
 								? 'Edit this draft to add subjects.'
 								: 'No subjects have been added yet.'}
 						</p>

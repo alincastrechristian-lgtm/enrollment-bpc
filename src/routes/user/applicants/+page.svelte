@@ -164,4 +164,4 @@
 	{/each}
 </CatalogPage>
 
-<ApplicantDialog bind:this={applicantDialog} bind:busy />
+<ApplicantDialog programs={data.programs} bind:this={applicantDialog} bind:busy />

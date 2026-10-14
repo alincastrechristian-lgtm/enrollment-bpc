@@ -17,6 +17,9 @@ export async function load({ locals, params }) {
 	}
 
 	return {
+		programs: await db.query.program.findMany({
+			orderBy: (program, { asc }) => [asc(program.name), asc(program.id)]
+		}),
 		applicant: result
 	};
 }

@@ -1,6 +1,7 @@
 import { Role } from '#lib/Roles.js';
-import { curriculum, curriculumSubject, enrollment, subject } from '#lib/schema.js';
+import { curriculum, curriculumSubject, enrollment, program, subject } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
+import { setProgramCurriculum, validateSubjectLimits } from '#lib/server/curriculum.js';
 import { command, getRequestEvent } from '$app/server';
 import { error, isHttpError } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm/sql/expressions';
@@ -61,21 +62,6 @@ const curriculumUpdateSchema = curriculumFieldsSchema.partial().extend({
 export type CurriculumInsertSchema = z.infer<typeof curriculumInsertSchema>;
 
 export type CurriculumUpdateSchema = z.infer<typeof curriculumUpdateSchema>;
-
-function validateSubjectLimits(
-	subjects: CurriculumInsertSchema['subjects'],
-	yearLevels: number,
-	semesters: number
-) {
-	for (const entry of subjects) {
-		if (entry.yearLevel > yearLevels) {
-			error(400, `Subject year level must be between 1 and ${yearLevels}.`);
-		}
-		if (entry.semester > semesters) {
-			error(400, `Subject semester must be between 1 and ${semesters}.`);
-		}
-	}
-}
 
 function insertSubjects(
 	tx: Transaction,
@@ -165,6 +151,7 @@ export const updateCurriculum = command(curriculumUpdateSchema, (data) => {
 			if (existing.publishedAt !== null) {
 				error(409, 'Published curricula cannot be edited. Create a revision.');
 			}
+			if (existing.archivedAt !== null) error(409, 'Unarchive this draft before editing it.');
 
 			validateSubjectLimits(
 				subjects,
@@ -293,9 +280,65 @@ export const updateCurriculum = command(curriculumUpdateSchema, (data) => {
 	}
 });
 
+export const activateCurriculum = command(z.string().trim().min(1), (curriculumId) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN]);
+	try {
+		return db.transaction((tx) => {
+			const selected = tx.select().from(curriculum).where(eq(curriculum.id, curriculumId)).get();
+			if (!selected) error(404, 'Curriculum not found.');
+			setProgramCurriculum(tx, selected.programId, selected.id);
+			return { id: selected.id };
+		});
+	} catch (cause) {
+		if (isHttpError(cause)) throw cause;
+		console.error('Failed to activate curriculum:', cause);
+		error(500, 'Failed to activate curriculum.');
+	}
+});
+
+export const changeCurriculumState = command(
+	z.object({ id: z.string().trim().min(1), action: z.enum(['archive', 'restore', 'deactivate']) }),
+	({ id, action }) => {
+		const { locals } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN]);
+		try {
+			return db.transaction((tx) => {
+				const selected = tx.select().from(curriculum).where(eq(curriculum.id, id)).get();
+				if (!selected) error(404, 'Curriculum not found.');
+				if (action !== 'restore') {
+					tx.update(program)
+						.set({ activeCurriculumId: null })
+						.where(and(eq(program.id, selected.programId), eq(program.activeCurriculumId, id)))
+						.run();
+				}
+				if (action === 'archive' && selected.archivedAt === null) {
+					tx.update(curriculum).set({ archivedAt: new Date() }).where(eq(curriculum.id, id)).run();
+				} else if (action === 'restore' && selected.archivedAt !== null) {
+					tx.update(curriculum).set({ archivedAt: null }).where(eq(curriculum.id, id)).run();
+				}
+				return { id };
+			});
+		} catch (cause) {
+			if (isHttpError(cause)) throw cause;
+			console.error('Failed to change curriculum state:', cause);
+			error(500, 'Failed to change curriculum state.');
+		}
+	}
+);
+
 export const deleteCurriculum = command(z.string().min(1), async (curriculumId) => {
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN]);
+	if (
+		db
+			.select({ id: program.id })
+			.from(program)
+			.where(eq(program.activeCurriculumId, curriculumId))
+			.get()
+	) {
+		error(400, 'Deactivate or archive the curriculum before deleting it.');
+	}
 
 	const curriculumInUse = db
 		.select()

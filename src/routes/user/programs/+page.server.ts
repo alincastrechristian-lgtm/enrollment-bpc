@@ -1,11 +1,12 @@
 import { MAX_ITEMS_PER_PAGE } from '#lib/components/Table/TableValues.js';
 import { Role } from '#lib/Roles.js';
-import { program, filterProgramSchema } from '#lib/schema.js';
+import { curriculum, program, filterProgramSchema } from '#lib/schema.js';
+import { curriculumStatus } from '#lib/server/curriculum.js';
 import { schemaFilters } from '#lib/server/filters.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { redirect } from '@sveltejs/kit';
-import { and, asc, count, like, or } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, like, or } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url }) => {
@@ -39,5 +40,27 @@ export const load: PageServerLoad = ({ locals, url }) => {
 		.limit(MAX_ITEMS_PER_PAGE)
 		.offset((page - 1) * MAX_ITEMS_PER_PAGE)
 		.all();
-	return { records, total, search, status, filters, canManage: locals.user?.role === Role.ADMIN };
+	const canManage = locals.user?.role === Role.ADMIN;
+	const curricula =
+		canManage && records.length
+			? db
+					.select({
+						id: curriculum.id,
+						name: curriculum.name,
+						programId: curriculum.programId,
+						publishedAt: curriculum.publishedAt,
+						status: curriculumStatus
+					})
+					.from(curriculum)
+					.innerJoin(program, eq(curriculum.programId, program.id))
+					.where(
+						inArray(
+							curriculum.programId,
+							records.map((record) => record.id)
+						)
+					)
+					.orderBy(asc(curriculum.name), asc(curriculum.id))
+					.all()
+			: [];
+	return { records, curricula, total, search, status, filters, canManage };
 };

@@ -1,5 +1,5 @@
 import { Role } from '#lib/Roles.js';
-import { applicant } from '#lib/schema.js';
+import { applicant, program } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { command, getRequestEvent } from '$app/server';
@@ -32,6 +32,9 @@ export const createApplicant = command(applicationInsertSchema, async (data) => 
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 
+	if (!db.select({ id: program.id }).from(program).where(eq(program.code, data.program)).get()) {
+		error(400, 'Select a program from the program catalog.');
+	}
 	await db.insert(applicant).values(data);
 });
 
@@ -41,6 +44,12 @@ export const updateApplicant = command(applicationUpdateSchema, async (data) => 
 
 	if (!data.id) {
 		error(400, 'Applicant ID is required for update.');
+	}
+	if (
+		data.program !== undefined &&
+		!db.select({ id: program.id }).from(program).where(eq(program.code, data.program)).get()
+	) {
+		error(400, 'Select a program from the program catalog.');
 	}
 
 	const result = await db.update(applicant).set(data).where(eq(applicant.id, data.id));

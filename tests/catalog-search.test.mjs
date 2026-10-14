@@ -168,8 +168,11 @@ function fixture(t, kind) {
 		 address TEXT, has_birth_certificate INTEGER DEFAULT 0, has_form_138 INTEGER DEFAULT 0,
 		 has_good_moral INTEGER DEFAULT 0, has_picture INTEGER DEFAULT 0, created_at INTEGER DEFAULT 0,
 		 updated_at INTEGER DEFAULT 0);
+		CREATE TABLE program (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+		 description TEXT, active_curriculum_id TEXT, is_active INTEGER NOT NULL DEFAULT 1);
 	`);
 	const db = drizzle(sqlite, { schema });
+	db.insert(schema.program).values({ id: 'p', code: 'BSIS', name: 'Information Systems' }).run();
 	const load = loadModule(`src/routes/user/${kind}/+page.server.ts`, {
 		'#lib/Roles.js': { Role },
 		'#lib/schema.js': schema,

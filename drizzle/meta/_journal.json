@@ -71,6 +71,27 @@
       "when": 1791793309167,
       "tag": "0009_rename_curriculum_semesters",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791861482479,
+      "tag": "0010_applicant_program_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791881357382,
+      "tag": "0011_program_active_curriculum",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791882941562,
+      "tag": "0012_manual_curriculum_archive",
+      "breakpoints": true
     }
   ]
 }

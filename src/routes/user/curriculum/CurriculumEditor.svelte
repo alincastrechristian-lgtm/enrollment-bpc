@@ -158,7 +158,7 @@
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
 		if (busy || catalogBusy || saved) return;
-		if (curriculum?.publishedAt) return;
+		if (curriculum?.publishedAt || curriculum?.archivedAt) return;
 		error = '';
 		const form = event.currentTarget as HTMLFormElement;
 		const invalidIndex = rows.findIndex(

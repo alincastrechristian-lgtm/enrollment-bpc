@@ -64,6 +64,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	});
 
 	return {
+		programs: await db.query.program.findMany({
+			orderBy: (program, { asc }) => [asc(program.name), asc(program.id)]
+		}),
 		applicants,
 		total,
 		search,

@@ -23,8 +23,8 @@
 		required?: boolean;
 		disabled?: boolean;
 		small?: boolean;
-		createLabel: string;
-		oncreate: () => void;
+		createLabel?: string;
+		oncreate?: () => void;
 	} = $props();
 
 	const panelId = $derived(`${id}-dropdown`);
@@ -52,7 +52,7 @@
 		close();
 	}
 	function create() {
-		if (disabled) return;
+		if (disabled || !oncreate) return;
 		close();
 		oncreate();
 	}
@@ -175,14 +175,14 @@
 			</li>
 		{/each}
 	</ul>
-	<div class="mt-2 border-t border-base-300 pt-2">
-		<button
-			type="button"
-			data-choice
-			class="btn w-full justify-start gap-2 btn-ghost text-primary btn-sm"
-			{disabled}
-			onclick={create}
-			onkeydown={choiceKeydown}><Plus class="size-4" aria-hidden="true" />{createLabel}</button
-		>
-	</div>
+	{#if createLabel && oncreate}<div class="mt-2 border-t border-base-300 pt-2">
+			<button
+				type="button"
+				data-choice
+				class="btn w-full justify-start gap-2 btn-ghost text-primary btn-sm"
+				{disabled}
+				onclick={create}
+				onkeydown={choiceKeydown}><Plus class="size-4" aria-hidden="true" />{createLabel}</button
+			>
+		</div>{/if}
 </div>

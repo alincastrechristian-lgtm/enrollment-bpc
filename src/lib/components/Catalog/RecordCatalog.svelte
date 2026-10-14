@@ -8,16 +8,21 @@
 		showSuccess,
 		showYesNo
 	} from '#lib/components/Popup/Popup.svelte.js';
-	import CatalogRecordDialog, { type CatalogRecord } from './CatalogRecordDialog.svelte';
+	import CatalogRecordDialog, {
+		type CatalogRecord,
+		type CurriculumOption
+	} from './CatalogRecordDialog.svelte';
 	import CatalogPage from './CatalogPage.svelte';
 	import CatalogToolbar from './CatalogToolbar.svelte';
 	import { filterProgramSchema, filterSubjectSchema } from '#lib/schema.js';
 	import type { FilterValues } from '../Filter/fields.js';
 	import { refreshAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { BookOpen, GraduationCap, Pencil, Plus, Settings, Trash2 } from '@lucide/svelte';
 
 	let {
 		kind,
+		curricula = [],
 		records,
 		total,
 		search,
@@ -26,6 +31,7 @@
 	}: {
 		kind: 'program' | 'subject';
 		records: CatalogRecord[];
+		curricula?: CurriculumOption[];
 		total: number;
 		search: string;
 		filters: FilterValues;
@@ -98,9 +104,9 @@
 		<tr
 			class="border-b border-base-300 bg-base-200 text-[11px] font-extrabold tracking-wider text-base-content/60 uppercase"
 		>
-			<th class="py-4 pl-5">{label}</th><th>Code</th><th>Description</th><th
-				class={canManage ? '' : 'pr-5'}>Status</th
-			>
+			<th class="py-4 pl-5">{label}</th><th>Code</th><th>Description</th>{#if kind === 'program'}<th
+					>Curriculum</th
+				>{/if}<th class={canManage ? '' : 'pr-5'}>Status</th>
 			{#if canManage}<th class="pr-5 text-right">Actions</th>{/if}
 		</tr>
 	{/snippet}
@@ -125,6 +131,15 @@
 					{row.description || 'No description'}
 				</p></td
 			>
+			{#if kind === 'program'}<td>
+					{#if row.activeCurriculumId}<a
+							class="link text-sm font-semibold link-primary"
+							href={resolve('/user/curriculum/[curriculumId]', {
+								curriculumId: row.activeCurriculumId
+							})}>View curriculum</a
+						>
+					{:else}<span class="text-xs text-base-content/50">No active curriculum</span>{/if}
+				</td>{/if}
 			<td
 				><span
 					class={`badge gap-1.5 border-none px-3 text-xs font-semibold ${row.isActive ? 'badge-success' : 'badge-ghost'}`}
@@ -155,7 +170,7 @@
 		</tr>
 	{:else}
 		<tr
-			><td colspan={canManage ? 5 : 4} class="py-12 text-center"
+			><td colspan={(canManage ? 5 : 4) + (kind === 'program' ? 1 : 0)} class="py-12 text-center"
 				><p class="font-semibold">No {kind}s found</p>
 				<p class="mt-1 text-sm text-base-content/50">
 					{search || Object.keys(filters).length > 0
@@ -170,5 +185,5 @@
 </CatalogPage>
 
 {#if canManage}
-	<CatalogRecordDialog bind:this={recordDialog} {kind} bind:busy />
+	<CatalogRecordDialog bind:this={recordDialog} {kind} {curricula} bind:busy />
 {/if}

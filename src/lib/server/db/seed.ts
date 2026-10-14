@@ -7,75 +7,65 @@ import { admin } from 'better-auth/plugins/admin';
 import Database from 'better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { seed } from 'drizzle-seed';
 import * as schema from '../../schema.ts';
-import { systemSettings } from '../../schema.ts';
+import { seedAcademicData } from './seed-data.ts';
 
 async function main() {
-	const sqlite = new Database(process.env.DATABASE_URL!);
+	if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+	const sqlite = new Database(process.env.DATABASE_URL);
 	const db = drizzle(sqlite, { schema });
-
-	const auth = betterAuth({
-		baseURL: process.env.ORIGIN!,
-		secret: process.env.BETTER_AUTH_SECRET!,
-		database: drizzleAdapter(db, { provider: 'sqlite' }),
-		emailAndPassword: { enabled: true, disableSignUp: false },
-		plugins: [
-			admin({
-				defaultRole: Role.STUDENT
-			})
-		]
-	});
-
+	const adminEmail = (process.env.INITIAL_ADMIN_EMAIL || 'admin@admin.com').trim().toLowerCase();
 	try {
-		await db.insert(systemSettings).values({ id: 1 }).onConflictDoNothing();
-	} catch (error) {
-		console.error(`Failed to insert system settings: ${(error as Error).message}`);
-	}
-
-	try {
-		// @ts-expect-error Weird type error with drizzle-seed, but it works fine at runtime
-
-		await seed(db, {
-			applicant: schema.applicant
-		}).refine((funcs) => ({
-			applicant: {
-				count: 20,
-				columns: {
-					yearLevel: funcs.int({
-						minValue: 1,
-						maxValue: 4
+		db.insert(schema.systemSettings).values({ id: 1 }).onConflictDoNothing().run();
+		const created = seedAcademicData(db);
+		console.log(
+			`Added ${created.programs} programs, ${created.subjects} subjects, ${created.curricula} curricula, and ${created.applicants} applicants. No students created.`
+		);
+		if (
+			!db
+				.select({ id: schema.user.id })
+				.from(schema.user)
+				.where(eq(schema.user.email, adminEmail))
+				.get()
+		) {
+			const auth = betterAuth({
+				baseURL: process.env.ORIGIN!,
+				secret: process.env.BETTER_AUTH_SECRET!,
+				database: drizzleAdapter(db, { provider: 'sqlite' }),
+				emailAndPassword: { enabled: true, disableSignUp: false },
+				plugins: [
+					admin({
+						defaultRole: Role.ADMIN
 					})
+				]
+			});
+
+			const adminResult = await auth.api.signUpEmail({
+				body: {
+					email: adminEmail,
+					password: process.env.INITIAL_ADMIN_PASSWORD || 'admin123',
+					name: 'Admin'
 				}
-			}
-		}));
-	} catch (error) {
-		console.error(`Failed to seed applicants: ${(error as Error).message}`);
-	}
+			});
 
-	try {
-		const adminResult = await auth.api.signUpEmail({
-			body: {
-				email: process.env.INITIAL_ADMIN_EMAIL || 'admin@admin.com',
-				password: process.env.INITIAL_ADMIN_PASSWORD || 'admin123',
-				name: 'Admin'
+			if (adminResult) {
+				console.log('Created admin user successfully');
 			}
-		});
-
-		if (adminResult) {
-			console.log('Created admin user successfully');
 		}
-	} catch (error) {
-		console.error(`Failed to create admin user: ${(error as Error).message}`);
+
+		await db
+			.update(schema.user)
+			.set({ role: Role.ADMIN, setupComplete: true })
+			.where(eq(schema.user.email, adminEmail))
+			.execute();
+
+		console.log('Seeding complete!');
+	} finally {
+		sqlite.close();
 	}
-
-	await db
-		.update(schema.user)
-		.set({ role: Role.ADMIN, setupComplete: true })
-		.where(eq(schema.user.email, 'admin@admin.com'))
-		.execute();
-
-	console.log('Seeding complete!');
 }
 
-main();
+main().catch((cause) => {
+	console.error('Seeding failed:', cause instanceof Error ? cause.message : cause);
+	process.exitCode = 1;
+});

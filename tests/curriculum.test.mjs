@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { eq } from 'drizzle-orm';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -62,6 +63,12 @@ function fixture(t) {
 		)
 	);
 	sqlite.pragma('foreign_keys = ON');
+	sqlite.exec(
+		readFileSync(new URL('../drizzle/0011_program_active_curriculum.sql', import.meta.url), 'utf8')
+	);
+	sqlite.exec(
+		readFileSync(new URL('../drizzle/0012_manual_curriculum_archive.sql', import.meta.url), 'utf8')
+	);
 	const db = drizzle(sqlite, { schema });
 	db.insert(schema.program).values({ id: 'p', code: 'BSIS', name: 'Information Systems' }).run();
 	db.insert(schema.subject)
@@ -377,8 +384,10 @@ test('curriculum list searches, filters, totals and pagination use persisted rec
 	assert.equal(f.page('', '?q=Curriculum%2000').records[0].subjectCount, 1);
 	assert.equal(f.page('', '?q=Curriculum%2000').records[0].totalUnits, 3);
 	assert.equal(f.page('', '?status=draft').total, 11);
-	assert.equal(f.page('', '?status=published&filter.publishedAt.min=2026-10-08').total, 1);
-	assert.equal(f.page('', '?filter.name=00&filter.isActive=false').total, 0);
+	f.db.update(schema.program).set({ activeCurriculumId: 'c0' }).run();
+	assert.equal(f.page('', '?status=active&filter.publishedAt.min=2026-10-08').total, 1);
+	assert.equal(f.page('', '?status=archived').total, 0);
+	assert.equal(f.page('', '?filter.name=00&status=draft').total, 0);
 	assert.throws(() => f.page('', '?page=999&q=Curriculum%2000'), { status: 302 });
 	assert.equal(f.page('', '?q=missing').total, 0);
 });
@@ -454,4 +463,293 @@ test('curriculum deletion cascades subject entries but preserves enrollment refe
 		.run();
 	await assert.rejects(f.deleteCurriculum(used.id), { status: 400 });
 	assert.equal(f.helpers.getCurriculum(used.id).entries.length, 1);
+});
+
+test('activation archives the previous version without moving existing enrollments', async (t) => {
+	const f = fixture(t);
+	const a = await f.createCurriculum({
+		name: 'First Curriculum',
+		programId: 'p',
+		subjects: [entry('s1')]
+	});
+	const b = await f.createCurriculum({
+		name: 'Replacement Curriculum',
+		programId: 'p',
+		subjects: [entry('s2')]
+	});
+	f.db
+		.update(schema.subject)
+		.set({ name: 'Published snapshot' })
+		.where(eq(schema.subject.id, 's1'))
+		.run();
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.status, 'draft');
+	await f.activateCurriculum(a.id);
+	const original = f.helpers.getCurriculum(a.id);
+	assert.equal(original.curriculum.status, 'active');
+	assert.equal(original.curriculum.activeCurriculumId, a.id);
+	assert.equal(original.entries[0].subjectName, 'Published snapshot');
+	await assert.rejects(f.updateCurriculum({ id: a.id, subjects: [] }), { status: 409 });
+	await assert.rejects(f.deleteCurriculum(a.id), { status: 400 });
+	f.sqlite.exec("INSERT INTO user (id) VALUES ('u')");
+	f.db
+		.insert(schema.studentData)
+		.values({ id: 'student', userId: 'u', studentNumber: '2026-1' })
+		.run();
+	f.db
+		.insert(schema.academicTerm)
+		.values({
+			id: 'term',
+			startYear: 2026,
+			semester: 1,
+			enrollmentOpensAt: new Date(0),
+			enrollmentClosesAt: new Date(1000)
+		})
+		.run();
+	f.db
+		.insert(schema.enrollment)
+		.values({
+			id: 'enrolled',
+			studentId: 'student',
+			termId: 'term',
+			curriculumId: a.id,
+			yearLevel: 1
+		})
+		.run();
+	const enrolled = f.db.select().from(schema.enrollment).all();
+	await f.activateCurriculum(b.id);
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.status, 'archived');
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'active');
+	assert.deepEqual(f.db.select().from(schema.enrollment).all(), enrolled);
+	assert.deepEqual(f.helpers.getCurriculum(a.id).entries, original.entries);
+	await assert.rejects(f.deleteCurriculum(a.id), { status: 400 });
+	await assert.rejects(f.updateCurriculum({ id: a.id, subjects: [] }), { status: 409 });
+	f.db.update(schema.subject).set({ name: 'Changed catalog name' }).run();
+	await f.activateCurriculum(a.id);
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.status, 'active');
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'archived');
+	assert.deepEqual(f.helpers.getCurriculum(a.id).entries, original.entries);
+	assert.equal(
+		f.helpers.getCurriculum(a.id).curriculum.publishedAt.getTime(),
+		original.curriculum.publishedAt.getTime()
+	);
+	await f.activateCurriculum(a.id);
+	assert.equal(f.page('', '?status=active').total, 1);
+	assert.equal(f.page('', '?status=archived').total, 1);
+	assert.deepEqual(f.db.select().from(schema.enrollment).all(), enrolled);
+	await f.changeCurriculumState({ id: a.id, action: 'deactivate' });
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.status, 'inactive');
+	assert.equal(f.db.select().from(schema.program).get().activeCurriculumId, null);
+	await f.changeCurriculumState({ id: b.id, action: 'restore' });
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'inactive');
+	assert.equal(f.page('', '?status=inactive').total, 2);
+	await f.activateCurriculum(b.id);
+	await f.changeCurriculumState({ id: a.id, action: 'deactivate' });
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'active');
+	await f.changeCurriculumState({ id: a.id, action: 'archive' });
+	const archivedAt = f.helpers.getCurriculum(a.id).curriculum.archivedAt.getTime();
+	await f.changeCurriculumState({ id: a.id, action: 'archive' });
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.archivedAt.getTime(), archivedAt);
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'active');
+	await f.changeCurriculumState({ id: a.id, action: 'restore' });
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.status, 'inactive');
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'active');
+	await f.changeCurriculumState({ id: b.id, action: 'archive' });
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'archived');
+	assert.equal(f.db.select().from(schema.program).get().activeCurriculumId, null);
+	assert.equal(f.page('', '?status=active').total, 0);
+	await f.changeCurriculumState({ id: b.id, action: 'restore' });
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'inactive');
+	assert.equal(f.db.select().from(schema.program).get().activeCurriculumId, null);
+	assert.deepEqual(f.db.select().from(schema.enrollment).all(), enrolled);
+	assert.deepEqual(f.helpers.getCurriculum(a.id).entries, original.entries);
+	assert.equal(
+		f.helpers.getCurriculum(a.id).curriculum.publishedAt.getTime(),
+		original.curriculum.publishedAt.getTime()
+	);
+	await assert.rejects(f.updateCurriculum({ id: a.id, subjects: [] }), { status: 409 });
+});
+
+test('archived drafts must be restored before editing; manual state changes are admin-only', async (t) => {
+	const f = fixture(t);
+	const draft = await f.createCurriculum({
+		name: 'Draft Curriculum',
+		programId: 'p',
+		subjects: []
+	});
+	await f.changeCurriculumState({ id: draft.id, action: 'archive' });
+	assert.equal(f.helpers.getCurriculum(draft.id).curriculum.status, 'archived');
+	assert.equal(f.helpers.getCurriculum(draft.id).curriculum.publishedAt, null);
+	assert.throws(() => f.page('/[curriculumId]/edit', '', draft.id), { status: 302 });
+	await assert.rejects(f.updateCurriculum({ id: draft.id, name: 'Invalid edit', subjects: [] }), {
+		status: 409
+	});
+	await f.changeCurriculumState({ id: draft.id, action: 'restore' });
+	assert.equal(f.helpers.getCurriculum(draft.id).curriculum.status, 'draft');
+	await f.updateCurriculum({ id: draft.id, name: 'Restored Draft', subjects: [] });
+	const before = f.helpers.getCurriculum(draft.id);
+	for (const role of [Role.REGISTRAR, Role.STUDENT, null]) {
+		f.locals.user = role ? { role } : null;
+		for (const action of ['archive', 'restore', 'deactivate']) {
+			await assert.rejects(f.changeCurriculumState({ id: draft.id, action }), {
+				status: role ? 403 : 401
+			});
+		}
+	}
+	f.locals.user = { role: Role.ADMIN };
+	assert.deepEqual(f.helpers.getCurriculum(draft.id), before);
+	await assert.rejects(f.changeCurriculumState({ id: 'missing', action: 'archive' }), {
+		status: 404
+	});
+	await assert.rejects(f.changeCurriculumState({ id: draft.id, action: 'invalid' }));
+});
+
+test('failed manual archive rolls back the program pointer and curriculum state together', async (t) => {
+	const f = fixture(t);
+	const a = await f.createCurriculum({
+		name: 'Active Curriculum',
+		programId: 'p',
+		subjects: [entry('s1')]
+	});
+	await f.activateCurriculum(a.id);
+	const before = f.helpers.getCurriculum(a.id);
+	t.mock.method(console, 'error', () => {});
+	f.sqlite.exec(
+		"CREATE TRIGGER fail_archive BEFORE UPDATE OF archived_at ON curriculum WHEN NEW.archived_at IS NOT NULL BEGIN SELECT RAISE(ABORT, 'test failure'); END;"
+	);
+	await assert.rejects(f.changeCurriculumState({ id: a.id, action: 'archive' }), { status: 500 });
+	assert.deepEqual(f.helpers.getCurriculum(a.id), before);
+});
+
+test('manual archive migration preserves prior statuses and enrollment history', (t) => {
+	const sqlite = new Database(':memory:');
+	t.after(() => sqlite.close());
+	sqlite.exec(`CREATE TABLE curriculum (id TEXT PRIMARY KEY, published_at INTEGER);
+		CREATE TABLE program (id TEXT PRIMARY KEY, active_curriculum_id TEXT REFERENCES curriculum(id));
+		CREATE TABLE enrollment (id TEXT PRIMARY KEY, curriculum_id TEXT REFERENCES curriculum(id));
+		INSERT INTO curriculum VALUES ('current', 10), ('old', 20), ('draft', NULL);
+		INSERT INTO program VALUES ('p', 'current'); INSERT INTO enrollment VALUES ('student', 'old');`);
+	const curricula = sqlite.prepare('SELECT * FROM curriculum').all();
+	const enrollments = sqlite.prepare('SELECT * FROM enrollment').all();
+	sqlite.exec(
+		readFileSync(new URL('../drizzle/0012_manual_curriculum_archive.sql', import.meta.url), 'utf8')
+	);
+	const migrated = sqlite.prepare('SELECT * FROM curriculum').all();
+	assert.deepEqual(
+		migrated.map(({ id, published_at }) => ({ id, published_at })),
+		curricula
+	);
+	assert.equal(migrated.find((record) => record.id === 'current').archived_at, null);
+	assert.equal(migrated.find((record) => record.id === 'old').archived_at, 20);
+	assert.equal(migrated.find((record) => record.id === 'draft').archived_at, null);
+	assert.deepEqual(sqlite.prepare('SELECT * FROM enrollment').all(), enrollments);
+	sqlite.exec('ALTER TABLE curriculum DROP COLUMN archived_at');
+	assert.deepEqual(sqlite.prepare('SELECT * FROM curriculum').all(), curricula);
+});
+
+test('activation validates drafts, rejects non-admins, and rolls back a failed switch', async (t) => {
+	const f = fixture(t);
+	const empty = await f.createCurriculum({
+		name: 'Empty Curriculum',
+		programId: 'p',
+		subjects: []
+	});
+	await assert.rejects(f.activateCurriculum(empty.id), { status: 400 });
+	await assert.rejects(f.activateCurriculum('missing'), { status: 404 });
+	const a = await f.createCurriculum({
+		name: 'First Curriculum',
+		programId: 'p',
+		subjects: [entry('s1')]
+	});
+	const b = await f.createCurriculum({
+		name: 'Second Curriculum',
+		programId: 'p',
+		subjects: [entry('s2')]
+	});
+	for (const role of [Role.REGISTRAR, Role.STUDENT]) {
+		f.locals.user.role = role;
+		await assert.rejects(f.activateCurriculum(a.id), { status: 403 });
+	}
+	f.locals.user.role = Role.ADMIN;
+	f.db.update(schema.program).set({ isActive: false }).run();
+	await assert.rejects(f.activateCurriculum(a.id), { status: 400 });
+	f.db.update(schema.program).set({ isActive: true }).run();
+	await f.activateCurriculum(a.id);
+	const before = f.helpers.getCurriculum(b.id);
+	f.sqlite.exec(`CREATE TRIGGER fail_activation BEFORE UPDATE OF active_curriculum_id ON program
+		WHEN NEW.active_curriculum_id != OLD.active_curriculum_id BEGIN SELECT RAISE(ABORT, 'test failure'); END;`);
+	await assert.rejects(f.activateCurriculum(b.id), { status: 500 });
+	assert.deepEqual(f.helpers.getCurriculum(b.id), before);
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.status, 'active');
+	f.sqlite.exec(
+		"DROP TRIGGER fail_activation; UPDATE curriculum_subject SET semester = 3 WHERE subject_id = 's2';"
+	);
+	await assert.rejects(f.activateCurriculum(b.id), { status: 400 });
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.publishedAt, null);
+	f.sqlite.exec("UPDATE curriculum_subject SET semester = 1, units = 1.5 WHERE subject_id = 's2';");
+	await assert.rejects(f.activateCurriculum(b.id), { status: 400 });
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.status, 'active');
+});
+
+test('independent programs keep their own active curriculum during repeated switches', async (t) => {
+	const f = fixture(t);
+	f.db.insert(schema.program).values({ id: 'p2', code: 'ACT', name: 'Computer Technology' }).run();
+	const a = await f.createCurriculum({
+		name: 'First Curriculum',
+		programId: 'p',
+		subjects: [entry('s1')]
+	});
+	const b = await f.createCurriculum({
+		name: 'Second Curriculum',
+		programId: 'p',
+		subjects: [entry('s2')]
+	});
+	const c = await f.createCurriculum({
+		name: 'Other Program',
+		programId: 'p2',
+		subjects: [entry('s1')]
+	});
+	await f.activateCurriculum(c.id);
+	await Promise.all([f.activateCurriculum(a.id), f.activateCurriculum(b.id)]);
+	assert.equal(f.helpers.getCurriculum(c.id).curriculum.status, 'active');
+	assert.equal(f.helpers.getCurriculum(a.id).curriculum.status, 'archived');
+	assert.equal(f.helpers.getCurriculum(b.id).curriculum.status, 'active');
+	assert.equal(f.page('', '?status=active').total, 2);
+	assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+});
+
+test('active curriculum migration preserves records and chooses one published version per program', (t) => {
+	const sqlite = new Database(':memory:');
+	t.after(() => sqlite.close());
+	sqlite.exec(`CREATE TABLE program (id TEXT PRIMARY KEY, is_active INTEGER NOT NULL DEFAULT 1);
+		CREATE TABLE curriculum (id TEXT PRIMARY KEY, program_id TEXT, published_at INTEGER, is_active INTEGER DEFAULT 1);
+		CREATE TABLE enrollment (id TEXT PRIMARY KEY, curriculum_id TEXT REFERENCES curriculum(id));
+		INSERT INTO program (id) VALUES ('p'), ('draft-only');
+		INSERT INTO curriculum (id, program_id, published_at, is_active) VALUES
+		('old', 'p', 1, 1), ('current', 'p', 2, 1), ('inactive', 'p', 3, 0), ('draft', 'p', NULL, 1), ('other', 'draft-only', NULL, 1);
+		INSERT INTO enrollment VALUES ('student', 'old');`);
+	sqlite.pragma('foreign_keys = ON');
+	const curricula = sqlite.prepare('SELECT * FROM curriculum').all();
+	const enrollments = sqlite.prepare('SELECT * FROM enrollment').all();
+	sqlite.exec(
+		readFileSync(new URL('../drizzle/0011_program_active_curriculum.sql', import.meta.url), 'utf8')
+	);
+	assert.equal(
+		sqlite.prepare("SELECT active_curriculum_id FROM program WHERE id = 'p'").get()
+			.active_curriculum_id,
+		'current'
+	);
+	assert.equal(
+		sqlite.prepare("SELECT active_curriculum_id FROM program WHERE id = 'draft-only'").get()
+			.active_curriculum_id,
+		null
+	);
+	assert.deepEqual(sqlite.prepare('SELECT * FROM curriculum').all(), curricula);
+	assert.deepEqual(sqlite.prepare('SELECT * FROM enrollment').all(), enrollments);
+	assert.throws(
+		() => sqlite.prepare("DELETE FROM curriculum WHERE id = 'current'").run(),
+		/FOREIGN KEY/
+	);
+	sqlite.exec('ALTER TABLE program DROP COLUMN active_curriculum_id');
+	assert.deepEqual(sqlite.prepare('SELECT * FROM curriculum').all(), curricula);
+	assert.deepEqual(sqlite.prepare('SELECT * FROM enrollment').all(), enrollments);
 });

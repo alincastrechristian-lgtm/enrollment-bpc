@@ -2,7 +2,8 @@
 	import { createApplicant, updateApplicant } from '#lib/actions/applicant.remote.js';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
-	import type { Applicant } from '#lib/schema.js';
+	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
+	import type { Applicant, Program } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
 	import {
 		FileCheck,
@@ -19,7 +20,7 @@
 	} from '@lucide/svelte';
 	import { dateValue } from './functions.js';
 
-	let { busy = $bindable(false) }: { busy?: boolean } = $props();
+	let { programs, busy = $bindable(false) }: { programs: Program[]; busy?: boolean } = $props();
 	let applicantDialog: HTMLDialogElement;
 	let selectedApplicant = $state<Applicant | null>(null);
 
@@ -226,13 +227,23 @@
 						>
 						<div class="grid gap-4 sm:grid-cols-2">
 							<div class="space-y-2">
-								<label for="applicant-program" class="text-sm font-semibold">Program</label><input
+								<label for="applicant-program" class="text-sm font-semibold">Program</label
+								><SearchableSelect
 									id="applicant-program"
-									class="input-bordered input w-full bg-base-200 text-sm"
+									label="Program"
 									bind:value={draft.program}
-									placeholder="e.g. BSIS"
+									options={programs.map((record) => ({
+										value: record.code,
+										label: `${record.code} — ${record.name}${record.isActive ? '' : ' (Inactive)'}`
+									}))}
+									placeholder="Select a program"
+									searchLabel="Search programs"
+									disabled={busy}
 									required
 								/>
+								{#if !programs.length}<p class="text-xs text-base-content/60">
+										No programs available. Add a program in the program catalog first.
+									</p>{/if}
 							</div>
 							<div class="space-y-2">
 								<label for="applicant-year" class="text-sm font-semibold">Year level</label><select

@@ -4,15 +4,19 @@ import { curriculum, curriculumSubject, filterCurriculumSchema, program } from '
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { schemaFilters } from '#lib/server/filters.js';
+import { curriculumStatus } from '#lib/server/curriculum.js';
 import { redirect } from '@sveltejs/kit';
-import { and, asc, count, eq, isNotNull, isNull, like, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, like, or, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url }) => {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 	const search = url.searchParams.get('q')?.trim() ?? '';
 	const value = url.searchParams.get('status');
-	const status = value === 'draft' || value === 'published' ? value : 'all';
+	const status =
+		value === 'draft' || value === 'inactive' || value === 'active' || value === 'archived'
+			? value
+			: 'all';
 	const { filters, where: filterWhere } = schemaFilters(
 		filterCurriculumSchema,
 		curriculum,
@@ -27,11 +31,7 @@ export const load: PageServerLoad = ({ locals, url }) => {
 					like(program.code, `%${search}%`)
 				)
 			: undefined,
-		status === 'draft'
-			? isNull(curriculum.publishedAt)
-			: status === 'published'
-				? isNotNull(curriculum.publishedAt)
-				: undefined
+		status !== 'all' ? eq(curriculumStatus, status) : undefined
 	);
 	const total = db
 		.select({ count: count() })
@@ -52,7 +52,9 @@ export const load: PageServerLoad = ({ locals, url }) => {
 			id: curriculum.id,
 			name: curriculum.name,
 			publishedAt: curriculum.publishedAt,
+			archivedAt: curriculum.archivedAt,
 			isActive: curriculum.isActive,
+			status: curriculumStatus,
 			programName: program.name,
 			programCode: program.code,
 			subjectCount: sql<number>`(select count(*) from ${curriculumSubject} where ${curriculumSubject.curriculumId} = ${curriculum.id})`,

@@ -2,6 +2,7 @@ import { Role } from '#lib/Roles.js';
 import { relations, sql } from 'drizzle-orm';
 import {
 	check,
+	type AnySQLiteColumn,
 	index,
 	integer,
 	real,
@@ -31,6 +32,10 @@ export const program = sqliteTable('program', {
 	code: text('code').notNull().unique(),
 	name: text('name').notNull(),
 	description: text('description'),
+	activeCurriculumId: text('active_curriculum_id').references(
+		(): AnySQLiteColumn => curriculum.id,
+		{ onDelete: 'restrict' }
+	),
 	isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull()
 });
 
@@ -57,6 +62,7 @@ export const curriculum = sqliteTable(
 
 		// if publishedAt is null, the curriculum is still in draft mode.
 		publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+		archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
 		isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull()
 	},
 	(table) => [uniqueIndex('curriculum_program_name_unique').on(table.programId, table.name)]
@@ -224,7 +230,9 @@ export const applicant = sqliteTable(
 		applicationId: text('application_id').notNull().unique(),
 
 		name: text('name').notNull(),
-		program: text('program').notNull(),
+		program: text('program')
+			.notNull()
+			.references(() => program.code, { onUpdate: 'cascade', onDelete: 'restrict' }),
 		yearLevel: integer('year_level').notNull(),
 		dateApplied: integer('date_applied', { mode: 'timestamp_ms' }).notNull(),
 		email: text('email').notNull(),
@@ -433,7 +441,8 @@ export const programSchema = createSelectSchema(program);
 export type Program = z.infer<typeof programSchema>;
 
 export const filterProgramSchema = createUpdateSchema(program).omit({
-	id: true
+	id: true,
+	activeCurriculumId: true
 });
 export type FilterProgram = z.infer<typeof filterProgramSchema>;
 
@@ -448,6 +457,5 @@ export type Curriculum = z.infer<typeof curriculumSchema>;
 
 export const filterCurriculumSchema = createUpdateSchema(curriculum).pick({
 	name: true,
-	isActive: true,
 	publishedAt: true
 });

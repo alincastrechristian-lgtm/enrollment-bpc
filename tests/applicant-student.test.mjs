@@ -18,7 +18,7 @@ function loadTypeScript(filename, dependencies = {}, sourceOverride) {
 	return exports;
 }
 const { Role } = loadTypeScript('src/lib/Roles.ts');
-const schema = loadTypeScript('src/lib/server/db/schema.ts', { '#lib/Roles.js': { Role } });
+const schema = loadTypeScript('src/lib/schema.ts', { '#lib/Roles.js': { Role } });
 const documents = loadTypeScript('src/lib/applicants.ts');
 const authSource = readFileSync(new URL('../src/lib/server/auth.ts', import.meta.url), 'utf8');
 const validateUserSource = ts
@@ -43,6 +43,8 @@ function fixture(t, role = Role.REGISTRAR) {
    has_birth_certificate INTEGER NOT NULL DEFAULT 0, has_form_138 INTEGER NOT NULL DEFAULT 0,
    has_good_moral INTEGER NOT NULL DEFAULT 0, has_picture INTEGER NOT NULL DEFAULT 0,
    created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0);
+  CREATE TABLE program (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+   description TEXT, is_active INTEGER NOT NULL DEFAULT 1);
  `);
 	const db = drizzle(sqlite, { schema });
 	db.insert(schema.applicant)
