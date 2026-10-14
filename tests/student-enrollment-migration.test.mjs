@@ -4,6 +4,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { migrationConfigThrough } from './migration-config.mjs';
 
 const config = { migrationsFolder: 'drizzle' };
 const migrations = readMigrationFiles(config);
@@ -47,7 +48,7 @@ function snapshot(sqlite) {
 test('student numbers replace UUIDs, enrollment history is preserved, retries are safe, and no backups remain', (t) => {
 	const sqlite = fixture(t);
 	const before = snapshot(sqlite);
-	migrate(drizzle(sqlite), config);
+	migrate(drizzle(sqlite), migrationConfigThrough(t, 17));
 	assert.deepEqual(sqlite.prepare('SELECT * FROM student').get(), {
 		id: '2026-001',
 		user_id: 'u',
@@ -72,7 +73,7 @@ test('student numbers replace UUIDs, enrollment history is preserved, retries ar
 			.get().n,
 		0
 	);
-	migrate(drizzle(sqlite), config);
+	migrate(drizzle(sqlite), migrationConfigThrough(t, 17));
 	assert.deepEqual(snapshot(sqlite), after);
 	sqlite.exec("UPDATE student SET enrollment_id = 'e' WHERE id = '2026-001'");
 	assert.throws(() => sqlite.exec("UPDATE student SET enrollment_id = 'missing'"), /FOREIGN KEY/);
@@ -86,7 +87,7 @@ test('ID swaps cannot cause transient enrollment uniqueness collisions', (t) => 
 		INSERT INTO enrollment (id, student_id, curriculum_id, section, school_year_start, semester, year_level)
 		VALUES ('e2', 'other', 'c', 'B', 2026, 1, 1);
 	`);
-	migrate(drizzle(sqlite), config);
+	migrate(drizzle(sqlite), migrationConfigThrough(t, 17));
 	assert.equal(
 		sqlite.prepare("SELECT student_id FROM enrollment WHERE id = 'e'").get().student_id,
 		'other'
@@ -104,7 +105,7 @@ test('orphaned enrollment aborts migration and restores every original row', (t)
 	sqlite.pragma('foreign_keys = ON');
 	const before = snapshot(sqlite);
 	assert.throws(
-		() => migrate(drizzle(sqlite), config),
+		() => migrate(drizzle(sqlite), migrationConfigThrough(t, 17)),
 		(cause) => /NOT NULL/.test(cause.cause?.message ?? cause.message)
 	);
 	assert.deepEqual(snapshot(sqlite), before);

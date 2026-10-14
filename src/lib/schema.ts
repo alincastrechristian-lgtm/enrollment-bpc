@@ -309,7 +309,7 @@ export const enrollmentSubject = sqliteTable(
 			onDelete: 'restrict'
 		}),
 
-		remarks: text('remarks'),
+		grade: real('grade'),
 
 		// Historical values for this specific subject attempt.
 		subjectCode: text('subject_code').notNull(),
@@ -327,6 +327,10 @@ export const enrollmentSubject = sqliteTable(
 		uniqueIndex('enrollment_subject_unique').on(table.enrollmentId, table.subjectId),
 		index('enrollment_subject_subject_idx').on(table.subjectId),
 		check('enrollment_subject_units_positive', sql`${table.units} > 0`),
+		check(
+			'enrollment_subject_grade_range',
+			sql`${table.grade} IS NULL OR ${table.grade} BETWEEN 1 AND 5`
+		),
 		check('enrollment_subject_source_valid', sql`${table.source} IN ('curriculum', 'extra')`),
 		check(
 			'enrollment_subject_curriculum_source',

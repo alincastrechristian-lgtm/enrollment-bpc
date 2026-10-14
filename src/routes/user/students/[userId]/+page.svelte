@@ -240,7 +240,7 @@
 									<th>Subject</th>
 									<th>Source</th>
 									<th>Units</th>
-									<th>Remarks</th>
+									<th>Grade</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -254,7 +254,7 @@
 											</span>
 										</td>
 										<td>{subject.units}</td>
-										<td>{subject.remarks ?? '—'}</td>
+										<td>{subject.grade ?? 'No grade'}</td>
 									</tr>
 								{/each}
 							</tbody>

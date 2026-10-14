@@ -245,6 +245,13 @@ for (const role of [Role.ADMIN, Role.REGISTRAR]) {
 		assert.equal(created.email, 'stored@example.com');
 		assert.equal(created.role, Role.STUDENT);
 		assert.equal(f.record().userId, created.id);
+		assert.ok(
+			f.db
+				.select()
+				.from(schema.enrollmentSubject)
+				.all()
+				.every((subject) => subject.grade === null)
+		);
 		assert.equal(result.userId, created.id);
 		assert.equal(result.email, created.email);
 		assert.equal(result.studentId, 'MA-202610-000001');
@@ -593,6 +600,7 @@ test('student view loads profile, current enrollment and historical subject snap
 			source: 'extra',
 			subjectCode: 'OLD101',
 			subjectName: 'Historical snapshot',
+			grade: 1.25,
 			units: 1.5,
 			addedBy: 'operator'
 		})
@@ -607,6 +615,7 @@ test('student view loads profile, current enrollment and historical subject snap
 	);
 	assert.equal(student.studentData.enrollments[0].curriculum.program.code, 'BSIS');
 	assert.equal(student.studentData.enrollments[1].subjects[0].subjectName, 'Historical snapshot');
+	assert.equal(student.studentData.enrollments[1].subjects[0].grade, 1.25);
 	assert.equal('accounts' in student, false);
 	await assert.rejects(f.loadStudentPage('operator'), { status: 404 });
 	await assert.rejects(f.loadStudentPage('missing'), { status: 404 });

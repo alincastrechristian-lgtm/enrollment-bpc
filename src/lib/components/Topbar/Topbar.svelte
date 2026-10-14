@@ -64,7 +64,7 @@
 				Bulacan Polytechnic College
 			</p>
 
-			<span class="hidden text-xl font-semibold text-primary/90 xl:inline"> - Main Campus </span>
+			<span class="hidden text-xl font-semibold text-primary/90 xl:inline">- Main Campus</span>
 		</div>
 
 		<div class="flex items-center gap-4">
@@ -106,11 +106,19 @@
 					{:else}
 						<a
 							class="link link-hover"
-							href={index === 0 ? '/' : `/${pagePath.slice(0, index + 1).join('/')}`}
-							>{segment.toUpperCase()}</a
+							href={index === 0
+								? '/'
+								: `/${pagePath
+										.slice(0, index + 1)
+										.join('/')
+										.toLowerCase()}`}
 						>
+							{segment.toUpperCase()}
+						</a>
 					{/if}
-					{#if index < pagePath.length - 1}<span class="mx-1.5">/</span>{/if}
+					{#if index < pagePath.length - 1}
+						<span class="mx-1.5">/</span>
+					{/if}
 				{/each}
 			</p>
 		</div>

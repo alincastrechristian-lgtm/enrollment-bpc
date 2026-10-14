@@ -52,8 +52,8 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			const curriculum={id:'c',name:'2026 Curriculum',programCode:'BSIS',program,yearLevels:2,semesters:2,publishedAt:new Date(),archivedAt:null,isActive:true};
 			const entries=[{id:'cs1',subjectId:'s1',subjectCode:'SNAP101',subjectName:'Published Introduction',yearLevel:1,semester:1,units:3},{id:'cs2',subjectId:'s2',subjectCode:'SNAP102',subjectName:'Published Programming',yearLevel:1,semester:2,units:4},{id:'cs3',subjectId:'s3',subjectCode:'SNAP201',subjectName:'Published Databases',yearLevel:2,semester:1,units:2}];
 			const subjects=[{id:'s1',code:'LIVE101',name:'Changed Introduction',isActive:true},{id:'s2',code:'LIVE102',name:'Other term',isActive:true},{id:'s3',code:'LIVE201',name:'Databases',isActive:true},{id:'s4',code:'EXTRA',name:'Extra subject',isActive:true}];
-			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'pending',enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,remarks:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,remarks:'Additional subject'}]};
-			const historical={...current,id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,remarks:null}]};
+			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'pending',enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
+			const historical={...current,id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,grade:null}]};
 			const student={id:'u',name:applicant.name,email:applicant.email,image:null,emailVerified:false,setupComplete:false,banned:false,banReason:null,createdAt:new Date(),updatedAt:new Date(),applicant,studentData:{studentId:'MA-202610-000001',applicant,applicantId:'a',currentEnrollmentId:'current',currentEnrollment:current,enrollments:[current,historical]}};
 		</script>
 		<Topbar pageTitle={metadata.pageTitle} pageDescription={metadata.pageDescription} />
@@ -198,7 +198,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			})
 		).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Back to students', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('link', { name: 'View applicant', exact: true })).toHaveAttribute(
+		await expect(page.getByRole('link', { name: 'View application', exact: true })).toHaveAttribute(
 			'href',
 			'/portal/user/applicants/a'
 		);
@@ -211,7 +211,9 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			page.getByRole('heading', { name: 'Current enrollment', exact: true })
 		).toBeVisible();
 		await expect(page.getByText('Historical subject', { exact: true })).toBeVisible();
-		await expect(page.getByText('Additional subject', { exact: true })).toBeVisible();
+		await expect(page.getByRole('columnheader', { name: 'Grade', exact: true })).toHaveCount(2);
+		await expect(page.getByRole('cell', { name: 'No grade', exact: true })).toHaveCount(2);
+		await expect(page.getByRole('cell', { name: '1.25', exact: true })).toHaveCount(2);
 		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
 		await page.setViewportSize({ width: 1360, height: 960 });
 		await page.screenshot({ path: path.resolve('.tmp/student-page-desktop.png'), fullPage: true });
