@@ -147,11 +147,11 @@ export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 				.insert(schema.curriculum)
 				.values({
 					name: '2026 Sample Curriculum',
-					programId: program.id,
+					programCode: program.code,
 					yearLevels: template.yearLevels,
 					semesters: 2
 				})
-				.onConflictDoNothing({ target: [schema.curriculum.programId, schema.curriculum.name] })
+				.onConflictDoNothing({ target: [schema.curriculum.programCode, schema.curriculum.name] })
 				.returning()
 				.get();
 			// Do not restore removed subjects or change edited/published curricula on reruns.
@@ -182,7 +182,7 @@ export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 					return {
 						applicationId: `SEED-2026-${String(index + 1).padStart(6, '0')}`,
 						name,
-						program: template.programCode,
+						programCode: template.programCode,
 						yearLevel: (index % template.yearLevels) + 1,
 						dateApplied: new Date(`2026-06-${String(index + 1).padStart(2, '0')}T09:00:00+08:00`),
 						email: `applicant.seed.${index + 1}@example.com`,

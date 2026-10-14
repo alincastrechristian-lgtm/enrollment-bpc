@@ -51,7 +51,7 @@ export const updateProgram = command(programUpdateSchema, async (data) => {
 				tx.update(program).set(details).where(eq(program.id, id)).run();
 			}
 			if (activeCurriculumId !== undefined && activeCurriculumId !== existing.activeCurriculumId) {
-				setProgramCurriculum(tx, id, activeCurriculumId);
+				setProgramCurriculum(tx, details.code ?? existing.code, activeCurriculumId);
 			}
 		});
 	} catch (cause) {
@@ -65,22 +65,23 @@ export const deleteProgram = command(z.string(), async (programId) => {
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN]);
 
+	const selectedProgram = db.select().from(program).where(eq(program.id, programId)).get();
+	if (!selectedProgram) error(404, 'Program not found.');
+
 	const programInUse = db
 		.select()
 		.from(curriculum)
-		.where(eq(curriculum.programId, programId))
+		.where(eq(curriculum.programCode, selectedProgram.code))
 		.get();
 
 	if (programInUse) {
 		error(400, 'Cannot delete program because it is in use by a curriculum.');
 	}
-	const selectedProgram = db.select().from(program).where(eq(program.id, programId)).get();
 	if (
-		selectedProgram &&
 		db
 			.select({ id: applicant.id })
 			.from(applicant)
-			.where(eq(applicant.program, selectedProgram.code))
+			.where(eq(applicant.programCode, selectedProgram.code))
 			.get()
 	) {
 		error(400, 'Cannot delete program because it is in use by an applicant.');

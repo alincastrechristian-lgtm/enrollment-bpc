@@ -33,14 +33,14 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		'applicant-actions.js': `window.applicantCreations=[];window.applicantUpdates=[];
 			export async function createApplicant(data){window.applicantCreations.push(data);}
 			export async function updateApplicant(data){window.applicantUpdates.push(data);}`,
-		'catalog-actions.js': `window.programCreations=[];window.subjectCreations=[];window.newPrograms=[];window.newSubjects=[];window.catalogUpdates=[];window.failCatalogSave=false;
+		'catalog-actions.js': `window.programCreations=[];window.subjectCreations=[];window.newPrograms=[];window.newSubjects=[];window.catalogUpdates=[];window.catalogDeletions=[];window.failCatalogSave=false;
 			function create(kind,data){if(window.failCatalogSave)throw new Error('Duplicate code');window[kind+'Creations'].push(data);const record={...data,id:kind+'-'+window[kind+'Creations'].length,name:data.name.trim(),code:data.code.trim()};window[kind==='program'?'newPrograms':'newSubjects'].push(record);return record;}
 			export async function createProgram(data){return create('program',data);}
 			export async function createSubject(data){return create('subject',data);}
 			export async function updateProgram(data){window.catalogUpdates.push({kind:'program',data});}
 			export async function updateSubject(data){window.catalogUpdates.push({kind:'subject',data});}
-			export async function deleteProgram(){}
-			export async function deleteSubject(){}`,
+			export async function deleteProgram(id){window.catalogDeletions.push({kind:'program',id});}
+			export async function deleteSubject(id){window.catalogDeletions.push({kind:'subject',id});}`,
 		'popup.js': `window.messages=[];window.confirmDelete=true;window.confirmSave=true;window.saveQuestions=[];window.confirmActivation=true;window.activationQuestions=[];window.programWarnings=[];
 			export function showError(message){window.messages.push(message);}
 			export function showLoading(){}
@@ -49,7 +49,8 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		'Harness.svelte': `<script>
 			import Editor from '${path.resolve('src/routes/user/curriculum/CurriculumEditor.svelte').replaceAll('\\', '/')}';
 			import ApplicantDialog from '${path.resolve('src/routes/user/applicants/ApplicantDialog.svelte').replaceAll('\\', '/')}';
-			import RecordCatalog from '${path.resolve('src/lib/components/Catalog/RecordCatalog.svelte').replaceAll('\\', '/')}';
+			import Programs from '${path.resolve('src/routes/user/programs/+page.svelte').replaceAll('\\', '/')}';
+			import Subjects from '${path.resolve('src/routes/user/subjects/+page.svelte').replaceAll('\\', '/')}';
 			import List from '${path.resolve('src/routes/user/curriculum/+page.svelte').replaceAll('\\', '/')}';
 			import View from '${path.resolve('src/routes/user/curriculum/[curriculumId]/+page.svelte').replaceAll('\\', '/')}';
 			let mode=$state('new'); window.show=(value)=>mode=value;
@@ -58,18 +59,19 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			let programs=$state([{id:'p',name:'Information Systems',code:'BSIS',isActive:true}]);
 			let subjects=$state([{id:'s1',name:'Introduction',code:'IS101',isActive:true},{id:'s2',name:'Programming',code:'IS102',isActive:true}]);
 			window.updateCatalogs=()=>{programs=[programs[0],...window.newPrograms];subjects=[...subjects.slice(0,2),...window.newSubjects];};
-			const curriculum={id:'c',name:'2026 Curriculum',programId:'p',programName:'Information Systems',programCode:'BSIS',yearLevels:4,semesters:2,publishedAt:null,isActive:true};
+			const curriculum={id:'c',name:'2026 Curriculum',programName:'Information Systems',programCode:'BSIS',yearLevels:4,semesters:2,publishedAt:null,isActive:true};
 			const entries=[{id:'entry-1',curriculumId:'c',subjectId:'s1',subjectName:'Original Introduction',subjectCode:'IS101',yearLevel:1,semester:1,units:3}];
 			const multiEntries=[...entries,{...entries[0],id:'entry-2',subjectId:'s2',subjectName:'Programming',subjectCode:'IS102',yearLevel:2,semester:2,units:4}];
 			let applicantDialog=$state();
 			const applicantPrograms=[{id:'p',code:'BSIS',name:'Information Systems',isActive:true},{id:'act',code:'ACT',name:'Computer Technology',isActive:true}];
-			const applicant={id:'a',applicationId:'2026-1',name:'Existing Applicant',program:'BSIS',yearLevel:1,dateApplied:new Date(),email:'existing@example.com',contactNumber:'09123456789',address:'Bulacan',hasBirthCertificate:false,hasForm138:false,hasGoodMoral:false,hasPicture:false};
-			const programCurricula=[{id:'c',programId:'p',name:'2026 Curriculum',publishedAt:new Date(),status:'active'},{id:'replacement',programId:'p',name:'Replacement Curriculum',publishedAt:null,status:'draft'},{id:'foreign',programId:'other',name:'Foreign Curriculum',publishedAt:null,status:'draft'}];
+			const applicant={id:'a',applicationId:'2026-1',name:'Existing Applicant',programCode:'BSIS',yearLevel:1,dateApplied:new Date(),email:'existing@example.com',contactNumber:'09123456789',address:'Bulacan',hasBirthCertificate:false,hasForm138:false,hasGoodMoral:false,hasPicture:false};
+			const programCurricula=[{id:'c',programCode:'BSIS',name:'2026 Curriculum',publishedAt:new Date(),status:'active'},{id:'replacement',programCode:'BSIS',name:'Replacement Curriculum',publishedAt:null,status:'draft'},{id:'foreign',programCode:'ACT',name:'Foreign Curriculum',publishedAt:null,status:'draft'}];
 		</script>
 		{#key mode}
 			{#if mode.startsWith('applicant-')}<button onclick={()=>applicantDialog.openApplicant(mode==='applicant-edit'?applicant:null)}>Open applicant</button><ApplicantDialog bind:this={applicantDialog} programs={mode==='applicant-empty'?[]:applicantPrograms} />
 			{:else if mode==='new'}<Editor {programs} {subjects} />
-			{:else if mode.startsWith('catalog-')}<RecordCatalog kind={mode.includes('subject')?'subject':'program'} curricula={programCurricula} records={(mode.includes('subject')?subjects:programs).map(record=>({...record,description:'Existing description',activeCurriculumId:mode.startsWith('catalog-program-linked')&&record.id==='p'?'c':null}))} total={1} search="" filters={{}} canManage={!mode.endsWith('registrar')} />
+			{:else if mode.startsWith('catalog-subject')}<Subjects data={{records:subjects.map(record=>({...record,description:'Existing description'})),total:1,search:'',status:'all',filters:{},canManage:!mode.endsWith('registrar')}} />
+			{:else if mode.startsWith('catalog-program')}<Programs data={{records:programs.map(record=>({...record,description:'Existing description',activeCurriculumId:mode.startsWith('catalog-program-linked')&&record.id==='p'?'c':null,activeCurriculum:mode.startsWith('catalog-program-linked')&&record.id==='p'?curriculum:null})),curricula:programCurricula,total:1,search:'',status:'all',filters:{},canManage:!mode.endsWith('registrar')}} />
 			{:else if mode==='edit'}<Editor {programs} {subjects} {curriculum} {entries} />
 			{:else if mode==='multi-edit'}<Editor {programs} {subjects} {curriculum} entries={multiEntries} />
 			{:else if mode==='empty'}<Editor programs={[]} subjects={[]} />
@@ -236,7 +238,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await expect.poll(() => page.evaluate(() => window.creations.length)).toBe(1);
 		assert.deepEqual(await page.evaluate(() => window.creations[0]), {
 			name: '2027 Curriculum',
-			programId: 'p',
+			programCode: 'BSIS',
 			yearLevels: 4,
 			semesters: 2,
 			subjects: [{ subjectId: 's1', yearLevel: 2, semester: 2, units: 4 }]
@@ -309,7 +311,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await expect(page.getByRole('dialog', { name: 'New Subject' })).toBeVisible();
 		await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
 
-		// The catalogs use the same dialog for both creation and editing.
+		// Each catalog uses its own dialog for creation and editing.
 		for (const kind of ['program', 'subject']) {
 			const label = kind === 'program' ? 'Program' : 'Subject';
 			const originalName = kind === 'program' ? 'Information Systems' : 'Introduction';
@@ -331,6 +333,23 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			assert.equal(update.kind, kind);
 			assert.equal(update.data.id, kind === 'program' ? 'p' : 's1');
 			assert.equal(update.data.name, `Updated ${label}`);
+			const priorDeletions = await page.evaluate(() => window.catalogDeletions.length);
+			await page.evaluate(() => (window.confirmDelete = false));
+			await page.getByRole('button', { name: `Actions for ${originalName}` }).click();
+			await page.getByRole('button', { name: 'Delete', exact: true }).click();
+			await expect(page.getByRole('button', { name: `New ${label}`, exact: true })).toBeEnabled();
+			assert.equal(await page.evaluate(() => window.catalogDeletions.length), priorDeletions);
+			await page.keyboard.press('Escape');
+			await page.evaluate(() => (window.confirmDelete = true));
+			await page.getByRole('button', { name: `Actions for ${originalName}` }).click();
+			await page.getByRole('button', { name: 'Delete', exact: true }).click();
+			await expect
+				.poll(() => page.evaluate(() => window.catalogDeletions.length))
+				.toBe(priorDeletions + 1);
+			assert.deepEqual(await page.evaluate(() => window.catalogDeletions.at(-1)), {
+				kind,
+				id: kind === 'program' ? 'p' : 's1'
+			});
 			await page.evaluate((mode) => window.show(mode), `catalog-${kind}-registrar`);
 			await expect(page.getByRole('button', { name: `New ${label}`, exact: true })).toHaveCount(0);
 			await expect(page.locator('dialog')).toHaveCount(0);
@@ -368,7 +387,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.creations.length)).toBe(2);
 		const fresh = await page.evaluate(() => window.creations.at(-1));
-		assert.equal(fresh.programId, 'program-3');
+		assert.equal(fresh.programCode, 'FRESH');
 		assert.equal(fresh.subjects[0].subjectId, 'subject-3');
 		// Only configured semesters appear; shrinking limits clears removed selections.
 		await page.setViewportSize({ width: 1360, height: 960 });
@@ -573,7 +592,10 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
 		const applicantForm = page.getByRole('dialog', { name: 'New Applicant', exact: true });
 		await applicantForm.getByLabel('Full name', { exact: true }).fill('New Applicant');
-		await applicantForm.getByLabel('Application ID', { exact: true }).fill('2026-2');
+		await expect(applicantForm.getByLabel('Application ID', { exact: true })).toHaveAttribute(
+			'readonly',
+			''
+		);
 		await applicantForm.getByLabel('Email address', { exact: true }).fill('new@example.com');
 		await applicantForm.getByLabel('Contact number', { exact: true }).fill('09123456789');
 		await applicantForm.getByLabel('Address', { exact: true }).fill('Bulacan');
@@ -597,7 +619,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		);
 		await applicantForm.getByRole('button', { name: 'Create Applicant', exact: true }).click();
 		await expect(applicantForm).toBeHidden();
-		assert.equal(await page.evaluate(() => window.applicantCreations[0].program), 'BSIS');
+		assert.equal(await page.evaluate(() => window.applicantCreations[0].programCode), 'BSIS');
 		await page.evaluate(() => window.show('applicant-edit'));
 		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
 		const editApplicant = page.getByRole('dialog', { name: 'Edit Applicant', exact: true });
@@ -609,7 +631,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await page.getByRole('button', { name: /^ACT / }).click();
 		await editApplicant.getByRole('button', { name: 'Save changes', exact: true }).click();
 		await expect(editApplicant).toBeHidden();
-		assert.equal(await page.evaluate(() => window.applicantUpdates[0].program), 'ACT');
+		assert.equal(await page.evaluate(() => window.applicantUpdates[0].programCode), 'ACT');
 		assert.equal(await page.evaluate(() => window.applicantUpdates[0].id), 'a');
 		await page.evaluate(() => window.show('applicant-empty'));
 		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
@@ -701,11 +723,11 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		for (const mode of ['catalog-program-linked', 'catalog-program-linked-registrar']) {
 			await page.evaluate((mode) => window.show(mode), mode);
 			await expect(
-				page.getByRole('link', { name: 'View curriculum', exact: true })
+				page.getByRole('link', { name: '2026 Curriculum', exact: true })
 			).toHaveAttribute('href', '/portal/user/curriculum/c');
 		}
 		await page.evaluate(() => window.show('catalog-program-registrar'));
-		await expect(page.getByRole('link', { name: 'View curriculum', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('link', { name: '2026 Curriculum', exact: true })).toHaveCount(0);
 		await expect(page.getByText('No active curriculum', { exact: true }).first()).toBeVisible();
 		// Program editing searches only its own curricula, with an explicit None option.
 		await page.evaluate(() => window.show('catalog-program-linked'));

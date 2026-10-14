@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { deleteApplicant } from '#lib/actions/applicant.remote.js';
-	import { createStudent } from '#lib/actions/user.remote.js';
-	import { hasAllApplicantDocuments } from '#lib/applicants.js';
+	import { canCreateStudentAccount } from '#lib/applicants.js';
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
 	import {
 		showError,
@@ -9,7 +8,7 @@
 		showSuccess,
 		showYesNo
 	} from '#lib/components/Popup/Popup.svelte.js';
-	import { goto, refreshAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import {
 		CalendarDays,
 		Check,
@@ -27,14 +26,15 @@
 		UserPlus
 	} from '@lucide/svelte';
 	import ApplicantDialog from '../ApplicantDialog.svelte';
+	import EnrollStudentDialog from '../EnrollStudentDialog.svelte';
 	import { getApplicantStatus, statusBadge } from '../functions';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let applicantDialog: ReturnType<typeof ApplicantDialog>;
+	let enrollStudentDialog: ReturnType<typeof EnrollStudentDialog>;
 	let busy = $state(false);
 	const applicant = $derived(data.applicant);
-	const canCreateStudent = $derived(hasAllApplicantDocuments(applicant) && !applicant.userId);
 
 	async function removeApplicant() {
 		if (busy) return;
@@ -60,34 +60,6 @@
 		}
 	}
 
-	async function createStudentAccount() {
-		if (busy || !canCreateStudent) return;
-		busy = true;
-		const creating = applicant;
-		try {
-			const confirmed = await showYesNo({
-				title: 'Create student account?',
-				message: `Create a student account for ${creating.name} (${creating.applicationId}) using ${creating.email}?`,
-				yesText: 'Create account',
-				noText: 'Cancel'
-			});
-			if (!confirmed) return;
-			showLoading();
-			const result = await createStudent({ applicantId: creating.id });
-			await refreshAll();
-			if (result.invitationSent) {
-				showSuccess('Student account created successfully');
-			} else {
-				showError(
-					'Student account created, but invitation failed. Resend it from the Students page.'
-				);
-			}
-		} catch (err) {
-			showError(err instanceof Error ? err.message : 'Failed to create student account');
-		} finally {
-			busy = false;
-		}
-	}
 	const initials = $derived(
 		applicant.name
 			.trim()
@@ -171,13 +143,13 @@
 							<li>
 								<button
 									type="button"
-									disabled={busy || !canCreateStudent}
-									title={canCreateStudent
-										? 'Create a linked student account'
-										: 'Receive all documents before creating a student account'}
-									onclick={createStudentAccount}
+									disabled={busy || !canCreateStudentAccount(applicant)}
+									title={canCreateStudentAccount(applicant)
+										? 'Enroll student'
+										: 'Receive all documents before enrolling a student'}
+									onclick={() => enrollStudentDialog.openDialog(applicant)}
 								>
-									<UserPlus class="size-4" aria-hidden="true" />Create Student Account
+									<UserPlus class="size-4" aria-hidden="true" />Enroll Student
 								</button>
 							</li>
 						{/if}
@@ -195,7 +167,7 @@
 				<dt class="flex items-center gap-2 text-xs font-semibold text-base-content/50">
 					<GraduationCap class="size-4" aria-hidden="true" />Program
 				</dt>
-				<dd class="mt-2 text-sm font-bold wrap-break-word">{applicant.program}</dd>
+				<dd class="mt-2 text-sm font-bold wrap-break-word">{applicant.programCode}</dd>
 			</div>
 			<div>
 				<dt class="flex items-center gap-2 text-xs font-semibold text-base-content/50">
@@ -208,9 +180,9 @@
 					<CalendarDays class="size-4" aria-hidden="true" />Date applied
 				</dt>
 				<dd class="mt-2 text-sm font-bold">
-					<time datetime={applicant.dateApplied.toISOString()}
-						>{dateFormatter.format(applicant.dateApplied)}</time
-					>
+					<time datetime={applicant.dateApplied.toISOString()}>
+						{dateFormatter.format(applicant.dateApplied)}
+					</time>
 				</dd>
 			</div>
 		</dl>
@@ -275,9 +247,9 @@
 					<h2 id="requirements-title" class="flex items-center gap-2 font-bold">
 						<FileCheck class="size-5 text-primary" aria-hidden="true" />Document requirements
 					</h2>
-					<span class="text-xs font-semibold text-base-content/60"
-						>{receivedCount} of {requirements.length} received</span
-					>
+					<span class="text-xs font-semibold text-base-content/60">
+						{receivedCount} of {requirements.length} received
+					</span>
 				</div>
 				<p class="mt-1 text-xs text-base-content/50">
 					Physical documents received by the registrar.
@@ -296,39 +268,40 @@
 							<div
 								class={`flex size-9 shrink-0 items-center justify-center rounded-xl ${requirement.received ? 'bg-success/10 text-success' : 'bg-base-200 text-base-content/40'}`}
 							>
-								{#if requirement.received}<Check class="size-4" aria-hidden="true" />{:else}<Clock3
-										class="size-4"
-										aria-hidden="true"
-									/>{/if}
+								{#if requirement.received}
+									<Check class="size-4" aria-hidden="true" />
+								{:else}
+									<Clock3 class="size-4" aria-hidden="true" />
+								{/if}
 							</div>
 							<p class="text-sm font-medium">{requirement.name}</p>
 						</div>
 						<span
 							class={`badge shrink-0 gap-1.5 border-none text-xs font-semibold ${requirement.received ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}
-							>{requirement.received ? 'Received' : 'Missing'}</span
 						>
+							{requirement.received ? 'Received' : 'Missing'}
+						</span>
 					</li>
 				{/each}
 			</ul>
 			<div
 				class={`flex items-start gap-2 border-t border-base-300 px-5 py-4 text-xs sm:px-6 ${receivedCount === requirements.length ? 'bg-success/5 text-success' : 'bg-base-200/40 text-base-content/60'}`}
 			>
-				{#if receivedCount === requirements.length}<CircleCheck
-						class="size-4 shrink-0"
-						aria-hidden="true"
-					/>
-					<p>All required documents have been received.</p>{:else}<Clock3
-						class="size-4 shrink-0"
-						aria-hidden="true"
-					/>
+				{#if receivedCount === requirements.length}
+					<CircleCheck class="size-4 shrink-0" aria-hidden="true" />
+					<p>All required documents have been received.</p>
+				{:else}
+					<Clock3 class="size-4 shrink-0" aria-hidden="true" />
 					<p>
 						{requirements.length - receivedCount} document{requirements.length - receivedCount === 1
 							? ''
 							: 's'} still needed to complete the requirements.
-					</p>{/if}
+					</p>
+				{/if}
 			</div>
 		</article>
 	</div>
 </section>
 
 <ApplicantDialog programs={data.programs} bind:this={applicantDialog} bind:busy />
+<EnrollStudentDialog bind:this={enrollStudentDialog} bind:busy />

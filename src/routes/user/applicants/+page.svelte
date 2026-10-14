@@ -1,5 +1,8 @@
 ﻿<script lang="ts">
 	import { deleteApplicant } from '#lib/actions/applicant.remote.js';
+	import { canCreateStudentAccount } from '#lib/applicants.js';
+	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
+	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
 	import {
 		showError,
@@ -7,15 +10,16 @@
 		showSuccess,
 		showYesNo
 	} from '#lib/components/Popup/Popup.svelte.js';
-	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
-	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import { filterApplicantSchema, type Applicant } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
-	import { Eye, Pencil, Plus, Settings, Trash2 } from '@lucide/svelte';
+	import { Eye, Pencil, Plus, Settings, Trash2, UserPlus } from '@lucide/svelte';
 	import ApplicantDialog from './ApplicantDialog.svelte';
-	import { dateValue, getApplicantStatus, statusBadge } from './functions.js';
+	import EnrollStudentDialog from './EnrollStudentDialog.svelte';
+	import { ApplicantStatus, dateValue, getApplicantStatus, statusBadge } from './functions.js';
 
 	let { data } = $props();
+
+	let enrollStudentDialog: ReturnType<typeof EnrollStudentDialog>;
 
 	const applicants = $derived(data.applicants);
 
@@ -117,7 +121,7 @@
 			<!-- Program -->
 			<td>
 				<span class="font-semibold text-base-content/70">
-					{row.program}
+					{row.program?.code || 'N/A'}
 				</span>
 			</td>
 
@@ -137,7 +141,7 @@
 			<!-- Actions -->
 			<td class="pr-5">
 				<div class="flex justify-end pr-2">
-					<Dropdown id={`applicants-${row.id}`} label={`Actions for ${row.name}`}>
+					<Dropdown id={`applicants-${row.id}`} label={`Actions for ${row.name}`} disabled={busy}>
 						{#snippet trigger()}
 							<Settings class="h-4 w-4" />
 						{/snippet}
@@ -148,13 +152,28 @@
 									type="button"
 									disabled={busy}
 									onclick={() => applicantDialog.openApplicant(row)}
-									><Pencil class="h-4 w-4" />Edit</button
 								>
+									<Pencil class="h-4 w-4" />Edit
+								</button>
 							</li>
+							{#if getApplicantStatus(row) === ApplicantStatus.UnderReview}
+								<li>
+									<button
+										type="button"
+										disabled={busy || !canCreateStudentAccount(row)}
+										title={canCreateStudentAccount(row)
+											? 'Enroll student'
+											: 'Receive all documents before enrolling a student'}
+										onclick={() => enrollStudentDialog.openDialog(row)}
+									>
+										<UserPlus class="size-4" aria-hidden="true" />Enroll Student
+									</button>
+								</li>
+							{/if}
 							<li class="text-error">
-								<button type="button" disabled={busy} onclick={() => removeApplicant(row)}
-									><Trash2 class="h-4 w-4" />Delete</button
-								>
+								<button type="button" disabled={busy} onclick={() => removeApplicant(row)}>
+									<Trash2 class="h-4 w-4" />Delete
+								</button>
 							</li>
 						</ul>
 					</Dropdown>
@@ -165,3 +184,4 @@
 </CatalogPage>
 
 <ApplicantDialog programs={data.programs} bind:this={applicantDialog} bind:busy />
+<EnrollStudentDialog bind:this={enrollStudentDialog} bind:busy />

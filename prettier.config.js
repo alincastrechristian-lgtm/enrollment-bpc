@@ -1,11 +1,23 @@
 /** @type {import("prettier").Config} */
+
+import * as svelteBlocks from './prettier-plugin-svelte-blocks.js';
+
 const config = {
 	useTabs: true,
 	singleQuote: true,
 	trailingComma: 'none',
 	printWidth: 100,
-	plugins: ['prettier-plugin-svelte', 'prettier-plugin-tailwindcss'],
-	overrides: [{ files: '*.svelte', options: { parser: 'svelte' } }],
+	singleAttributePerLine: false,
+	plugins: ['prettier-plugin-svelte', 'prettier-plugin-tailwindcss', svelteBlocks],
+	overrides: [
+		{
+			files: '*.svelte',
+			options: {
+				parser: 'svelte',
+				htmlWhitespaceSensitivity: 'ignore'
+			}
+		}
+	],
 	tailwindStylesheet: './src/routes/layout.css'
 };
 

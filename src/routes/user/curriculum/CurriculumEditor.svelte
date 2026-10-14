@@ -4,19 +4,19 @@
 		updateCurriculum,
 		type CurriculumUpdateSchema
 	} from '#lib/actions/curriculum.remote.js';
-	import CatalogRecordDialog, {
-		type CatalogRecord
-	} from '#lib/components/Catalog/CatalogRecordDialog.svelte';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
-	import type { Curriculum, curriculumSubject } from '#lib/schema.js';
+	import type { Curriculum, curriculumSubject, Program, Subject } from '#lib/schema.js';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { BookOpen, GraduationCap, Layers, Plus, Save, Trash2 } from '@lucide/svelte';
 	import { tick, untrack } from 'svelte';
 	import SubjectLayout, { levelOptions, semesterLabel } from './SubjectLayout.svelte';
+	import ProgramDialog from '../programs/ProgramDialog.svelte';
+	import SubjectDialog from '../subjects/SubjectDialog.svelte';
 
-	type CatalogOption = Omit<CatalogRecord, 'description'>;
+	type ProgramOption = Pick<Program, 'id' | 'code' | 'name' | 'isActive'>;
+	type SubjectOption = Pick<Subject, 'id' | 'code' | 'name' | 'isActive'>;
 	type DraftEntry = {
 		key: string;
 		id?: string;
@@ -33,11 +33,11 @@
 	}: {
 		curriculum?: Curriculum | null;
 		entries?: (typeof curriculumSubject.$inferSelect)[];
-		programs: CatalogOption[];
-		subjects: CatalogOption[];
+		programs: ProgramOption[];
+		subjects: SubjectOption[];
 	} = $props();
 	let name = $state(untrack(() => curriculum?.name ?? ''));
-	let programId = $state(untrack(() => curriculum?.programId ?? ''));
+	let programCode = $state(untrack(() => curriculum?.programCode ?? ''));
 	let yearLevels = $state<number | undefined>(untrack(() => curriculum?.yearLevels ?? 4));
 	let semesters = $state<number | undefined>(untrack(() => curriculum?.semesters ?? 2));
 	const yearOptions = $derived(levelOptions(yearLevels));
@@ -66,9 +66,9 @@
 					(entry.yearLevel === selectedYear && entry.semester === selectedSemester)
 			)
 	);
-	const initial = untrack(() => JSON.stringify({ name, programId, yearLevels, semesters, rows }));
+	const initial = untrack(() => JSON.stringify({ name, programCode, yearLevels, semesters, rows }));
 	const dirty = $derived(
-		JSON.stringify({ name, programId, yearLevels, semesters, rows }) !== initial
+		JSON.stringify({ name, programCode, yearLevels, semesters, rows }) !== initial
 	);
 	const totalUnits = $derived(rows.reduce((total, entry) => total + (Number(entry.units) || 0), 0));
 	const termCount = $derived(
@@ -80,11 +80,11 @@
 	let saved = $state(false);
 	let error = $state('');
 	let catalogBusy = $state(false);
-	let programDialog: CatalogRecordDialog;
-	let subjectDialog: CatalogRecordDialog;
+	let programDialog: ProgramDialog;
+	let subjectDialog: SubjectDialog;
 	let subjectTarget = $state<string | null>(null);
-	let addedPrograms = $state<CatalogRecord[]>([]);
-	let addedSubjects = $state<CatalogRecord[]>([]);
+	let addedPrograms = $state<Program[]>([]);
+	let addedSubjects = $state<Subject[]>([]);
 	const programOptions = $derived([
 		...programs,
 		...addedPrograms.filter((record) => !programs.some((item) => item.id === record.id))
@@ -93,8 +93,8 @@
 		...subjects,
 		...addedSubjects.filter((record) => !subjects.some((item) => item.id === record.id))
 	]);
-	const selectedProgram = $derived(programOptions.find((record) => record.id === programId));
-	function optionLabel(record: CatalogOption) {
+	const selectedProgram = $derived(programOptions.find((record) => record.code === programCode));
+	function optionLabel(record: ProgramOption | SubjectOption) {
 		return `${record.code} — ${record.name}${record.isActive ? '' : ' (Inactive)'}`;
 	}
 	function changeYearLevels(event: Event) {
@@ -111,11 +111,11 @@
 			if (entry.semester !== undefined && entry.semester > next) entry.semester = undefined;
 		}
 	}
-	function programCreated(record: CatalogRecord) {
+	function programCreated(record: Program) {
 		addedPrograms.push(record);
-		programId = record.id;
+		programCode = record.code;
 	}
-	function subjectCreated(record: CatalogRecord) {
+	function subjectCreated(record: Subject) {
 		addedSubjects.push(record);
 		const entry = rows.find((row) => row.key === subjectTarget);
 		if (entry) entry.subjectId = record.id;
@@ -206,7 +206,7 @@
 				return;
 			const details = {
 				name,
-				programId,
+				programCode,
 				yearLevels: Number(yearLevels),
 				semesters: Number(semesters),
 				subjects: payloadSubjects
@@ -215,6 +215,8 @@
 				? await updateCurriculum({ ...details, id: curriculum.id })
 				: await createCurriculum(details);
 			saved = true;
+
+			// since subject id was generated, we need to refresh the page to get the correct subject id
 			await goto(resolve('/user/curriculum/[curriculumId]', { curriculumId: result.id }), {
 				refreshAll: true
 			});
@@ -232,9 +234,9 @@
 	}
 </script>
 
-<svelte:head
-	><title>{curriculum ? 'Edit' : 'New'} Curriculum | BPC Enrollment System</title></svelte:head
->
+<svelte:head>
+	<title>{curriculum ? 'Edit' : 'New'} Curriculum | BPC Enrollment System</title>
+</svelte:head>
 <form class="mx-auto max-w-7xl space-y-6" onsubmit={save}>
 	<div class="flex justify-end">
 		<div class="flex items-center gap-2">
@@ -242,34 +244,38 @@
 				class="btn border-base-300 btn-outline btn-sm"
 				href={curriculum
 					? resolve('/user/curriculum/[curriculumId]', { curriculumId: curriculum.id })
-					: resolve('/user/curriculum')}>Cancel</a
+					: resolve('/user/curriculum')}
 			>
+				Cancel
+			</a>
 			<button
 				type="submit"
 				class="btn gap-2 btn-primary btn-sm"
 				disabled={busy || catalogBusy || saved || !programOptions.length}
 			>
-				{#if busy}<span class="loading loading-sm loading-spinner" aria-hidden="true"
-					></span>{:else}<Save class="size-4" aria-hidden="true" />{/if}{busy
-					? 'Saving...'
-					: 'Save curriculum'}
+				{#if busy}
+					<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>
+				{:else}
+					<Save class="size-4" aria-hidden="true" />
+				{/if}
+				{busy ? 'Saving...' : 'Save curriculum'}
 			</button>
 		</div>
 	</div>
-	{#if error}<p
-			role="alert"
-			class="rounded-xl border border-error/20 bg-error/10 p-4 text-sm text-error"
-		>
+	{#if error}
+		<p role="alert" class="rounded-xl border border-error/20 bg-error/10 p-4 text-sm text-error">
 			{error}
-		</p>{/if}
+		</p>
+	{/if}
 	<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
 		<div class="min-w-0 space-y-6">
 			<section class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6">
 				<div class="mb-5 flex items-center gap-3">
 					<span
 						class="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
-						><Layers class="size-5" aria-hidden="true" /></span
 					>
+						<Layers class="size-5" aria-hidden="true" />
+					</span>
 					<div>
 						<h2 class="font-bold">Curriculum details</h2>
 						<p class="mt-0.5 text-xs text-base-content/50">
@@ -279,8 +285,8 @@
 				</div>
 				<fieldset disabled={busy || catalogBusy || saved} class="grid gap-5 sm:grid-cols-2">
 					<div class="space-y-2">
-						<label for="curriculum-name" class="block text-sm font-semibold">Curriculum name</label
-						><input
+						<label for="curriculum-name" class="block text-sm font-semibold">Curriculum name</label>
+						<input
 							id="curriculum-name"
 							class="input w-full bg-base-200 text-sm"
 							bind:value={name}
@@ -290,13 +296,13 @@
 						/>
 					</div>
 					<div class="space-y-2">
-						<label for="curriculum-program" class="block text-sm font-semibold">Program</label
-						><SearchableSelect
+						<label for="curriculum-program" class="block text-sm font-semibold">Program</label>
+						<SearchableSelect
 							id="curriculum-program"
 							label="Program"
-							bind:value={programId}
+							bind:value={programCode}
 							options={programOptions.map((record) => ({
-								value: record.id,
+								value: record.code,
 								label: optionLabel(record)
 							}))}
 							placeholder="Select a program"
@@ -308,9 +314,9 @@
 						/>
 					</div>
 					<div class="space-y-2">
-						<label for="curriculum-year-levels" class="block text-sm font-semibold"
-							>Year levels</label
-						>
+						<label for="curriculum-year-levels" class="block text-sm font-semibold">
+							Year levels
+						</label>
 						<input
 							id="curriculum-year-levels"
 							type="number"
@@ -338,12 +344,16 @@
 						/>
 					</div>
 				</fieldset>
-				{#if !programOptions.length}<p class="mt-4 text-sm text-base-content/60">
+				{#if !programOptions.length}
+					<p class="mt-4 text-sm text-base-content/60">
 						Add a program before creating a curriculum. <a
 							class="link link-primary"
-							href={resolve('/user/programs')}>Open programs</a
+							href={resolve('/user/programs')}
 						>
-					</p>{/if}
+							Open programs
+						</a>
+					</p>
+				{/if}
 			</section>
 			<section class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
 				<SubjectLayout
@@ -358,8 +368,9 @@
 						<div class="flex items-center gap-3">
 							<span
 								class="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
-								><BookOpen class="size-5" aria-hidden="true" /></span
 							>
+								<BookOpen class="size-5" aria-hidden="true" />
+							</span>
 							<div>
 								<h2 class="font-bold">Subjects</h2>
 								<p class="mt-0.5 text-xs text-base-content/50">
@@ -373,32 +384,39 @@
 							type="button"
 							class="btn gap-2 border-base-300 btn-outline btn-sm"
 							disabled={busy || catalogBusy || saved}
-							onclick={addSubject}><Plus class="size-4" aria-hidden="true" />Add subject</button
+							onclick={addSubject}
 						>
+							<Plus class="size-4" aria-hidden="true" />Add subject
+						</button>
 					{/snippet}
 					{#if visibleRows.length}
 						<fieldset disabled={busy || catalogBusy || saved} class="min-w-0 overflow-x-auto">
 							<table class="table w-full">
-								<thead
-									><tr class="bg-base-200 text-xs text-base-content/55"
-										><th class="pl-5">Subject</th><th>Year</th><th>Semester</th><th>Units</th><th
-											><span class="sr-only">Remove</span></th
-										></tr
-									></thead
-								><tbody>
+								<thead>
+									<tr class="bg-base-200 text-xs text-base-content/55">
+										<th class="pl-5">Subject</th>
+										<th>Year</th>
+										<th>Semester</th>
+										<th>Units</th>
+										<th><span class="sr-only">Remove</span></th>
+									</tr>
+								</thead>
+								<tbody>
 									{#each visibleRows as { entry, index } (entry.key)}
 										{@const selected = subjectOptions.find(
 											(record) => record.id === entry.subjectId
 										)}
 										<tr class="border-b border-base-200 last:border-0">
 											<td class="min-w-64 py-4 pl-5">
-												{#if entry.id}<p class="text-sm font-semibold">
+												{#if entry.id}
+													<p class="text-sm font-semibold">
 														{selected?.code} — {selected?.name}
 													</p>
 													<p class="mt-1 text-[11px] text-base-content/50">
 														Remove and re-add to replace this subject.
 													</p>
-												{:else}<SearchableSelect
+												{:else}
+													<SearchableSelect
 														id={`curriculum-subject-${entry.key}`}
 														label={`Subject ${index + 1}`}
 														bind:value={entry.subjectId}
@@ -419,35 +437,37 @@
 														disabled={busy || catalogBusy || saved}
 														small
 														required
-													/>{/if}
+													/>
+												{/if}
 											</td>
-											<td
-												><select
+											<td>
+												<select
 													aria-label={`Year for subject ${index + 1}`}
 													class="select w-28 bg-base-200 select-sm"
 													bind:value={entry.yearLevel}
 													required
 												>
 													<option value={undefined} disabled>Select year</option>
-													{#each yearOptions as year (year)}<option value={year}>Year {year}</option
-														>{/each}
-												</select></td
-											>
-											<td
-												><select
+													{#each yearOptions as year (year)}
+														<option value={year}>Year {year}</option>
+													{/each}
+												</select>
+											</td>
+											<td>
+												<select
 													aria-label={`Semester for subject ${index + 1}`}
 													class="select w-40 bg-base-200 select-sm"
 													required
 													bind:value={entry.semester}
 												>
 													<option value={undefined} disabled>Select semester</option>
-													{#each semesterOptions as semester (semester)}<option value={semester}
-															>{semesterLabel(semester)}</option
-														>{/each}
+													{#each semesterOptions as semester (semester)}
+														<option value={semester}>{semesterLabel(semester)}</option>
+													{/each}
 												</select>
 											</td>
-											<td
-												><input
+											<td>
+												<input
 													aria-label={`Units for subject ${index + 1}`}
 													class="input w-20 bg-base-200 input-sm"
 													type="number"
@@ -455,23 +475,25 @@
 													step="1"
 													bind:value={entry.units}
 													required
-												/></td
-											>
-											<td class="pr-5"
-												><button
+												/>
+											</td>
+											<td class="pr-5">
+												<button
 													type="button"
 													aria-label={`Remove subject ${index + 1}`}
 													class="btn btn-square btn-ghost text-error btn-sm"
 													onclick={() => removeSubject(entry.key)}
-													><Trash2 class="size-4" aria-hidden="true" /></button
-												></td
-											>
+												>
+													<Trash2 class="size-4" aria-hidden="true" />
+												</button>
+											</td>
 										</tr>
 									{/each}
 								</tbody>
 							</table>
 						</fieldset>
-					{:else}<div class="px-5 py-12 text-center">
+					{:else}
+						<div class="px-5 py-12 text-center">
 							<BookOpen class="mx-auto mb-3 size-8 text-base-content/25" aria-hidden="true" />
 							<p class="text-sm font-semibold">
 								{subjectLayout === 'tabbed' ? 'No subjects in this term' : 'No subjects added'}
@@ -483,11 +505,13 @@
 										? 'Add subjects to start building the curriculum.'
 										: 'Add subjects to the subject catalog first.'}
 							</p>
-							{#if !subjectOptions.length}<a
-									class="btn mt-4 btn-outline btn-sm"
-									href={resolve('/user/subjects')}>Open subjects</a
-								>{/if}
-						</div>{/if}
+							{#if !subjectOptions.length}
+								<a class="btn mt-4 btn-outline btn-sm" href={resolve('/user/subjects')}>
+									Open subjects
+								</a>
+							{/if}
+						</div>
+					{/if}
 				</SubjectLayout>
 			</section>
 		</div>
@@ -523,15 +547,5 @@
 	</div>
 </form>
 
-<CatalogRecordDialog
-	bind:this={programDialog}
-	kind="program"
-	bind:busy={catalogBusy}
-	oncreated={programCreated}
-/>
-<CatalogRecordDialog
-	bind:this={subjectDialog}
-	kind="subject"
-	bind:busy={catalogBusy}
-	oncreated={subjectCreated}
-/>
+<ProgramDialog bind:this={programDialog} bind:busy={catalogBusy} oncreated={programCreated} />
+<SubjectDialog bind:this={subjectDialog} bind:busy={catalogBusy} oncreated={subjectCreated} />

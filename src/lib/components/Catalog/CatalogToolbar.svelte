@@ -31,7 +31,7 @@
 		statusOptions?: { value: string; label: string }[];
 		filterSchema?: FilterSchema;
 		filters?: FilterValues;
-		children: Snippet;
+		children?: Snippet;
 	} = $props();
 
 	let query = $state(untrack(() => search));
@@ -176,7 +176,9 @@
 				<div
 					class={`min-w-0 space-y-2 rounded-xl border p-3.5 transition-colors ${selectedStatus !== 'all' ? 'border-primary/25 bg-primary/5' : 'border-base-300/80 bg-base-200/30'}`}
 				>
-					<label for={`status-${id}`} class="block text-xs font-semibold">{filterLabel}</label>
+					<label for={`status-${id}`} class="block text-xs font-semibold">
+						{filterLabel}
+					</label>
 					<select
 						id={`status-${id}`}
 						name="status"
@@ -185,14 +187,18 @@
 						class="select h-10 w-full rounded-lg border-base-300 bg-base-100 text-sm shadow-none focus:border-primary/50 focus:outline-primary/15"
 						onchange={schedule}
 					>
-						{#each statusOptions as option (option.value)}<option value={option.value}
-								>{option.label}</option
-							>{/each}
+						{#each statusOptions as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
 					</select>
 				</div>
 			{/if}
 		</Filter>
-		{@render children()}
+		{@render children?.()}
 	</div>
 </form>
-{#if error}<p role="alert" class="mt-2 text-sm text-error">{error}</p>{/if}
+{#if error}
+	<p role="alert" class="mt-2 text-sm text-error">
+		{error}
+	</p>
+{/if}

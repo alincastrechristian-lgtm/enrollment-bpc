@@ -8,3 +8,12 @@ export function hasAllApplicantDocuments(applicant: Applicant): boolean {
 		applicant.hasPicture
 	);
 }
+
+export function canCreateStudentAccount(applicant?: Applicant): boolean {
+	if (!applicant) return false;
+
+	// If the applicant already has a student account, we cannot create another one
+	if (applicant.userId) return false;
+
+	return hasAllApplicantDocuments(applicant);
+}

@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -47,29 +48,8 @@ const filters = loadModule('src/lib/server/filters.ts', {
 function fixture(t) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
-	sqlite.exec(
-		readFileSync(new URL('../drizzle/0007_right_wallflower.sql', import.meta.url), 'utf8').split(
-			'PRAGMA foreign_keys=OFF'
-		)[0]
-	);
-	sqlite.exec('CREATE TABLE user (id TEXT PRIMARY KEY);');
-	sqlite.exec(
-		readFileSync(new URL('../drizzle/0008_curriculum_limits.sql', import.meta.url), 'utf8')
-	);
-	sqlite.exec(
-		readFileSync(
-			new URL('../drizzle/0009_rename_curriculum_semesters.sql', import.meta.url),
-			'utf8'
-		)
-	);
-	sqlite.pragma('foreign_keys = ON');
-	sqlite.exec(
-		readFileSync(new URL('../drizzle/0011_program_active_curriculum.sql', import.meta.url), 'utf8')
-	);
-	sqlite.exec(
-		readFileSync(new URL('../drizzle/0012_manual_curriculum_archive.sql', import.meta.url), 'utf8')
-	);
 	const db = drizzle(sqlite, { schema });
+	migrate(db, { migrationsFolder: 'drizzle' });
 	db.insert(schema.program).values({ id: 'p', code: 'BSIS', name: 'Information Systems' }).run();
 	db.insert(schema.subject)
 		.values([
@@ -129,7 +109,7 @@ const entry = (subjectId, extra = {}) => ({
 test('curriculum create/update preserve entries and server-owned subject snapshots', async (t) => {
 	const f = fixture(t);
 	const created = await f.createCurriculum({
-		programId: 'p',
+		programCode: 'BSIS',
 		name: ' 2026 Curriculum ',
 		publishedAt: new Date(),
 		isActive: false,
@@ -146,7 +126,7 @@ test('curriculum create/update preserve entries and server-owned subject snapsho
 	await f.updateCurriculum({
 		id: created.id,
 		name: 'Updated Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s1', { id: previousId, yearLevel: 2, semester: 2, units: 4 }), entry('s2')]
 	});
 	data = f.helpers.getCurriculum(created.id);
@@ -252,7 +232,12 @@ test('curriculum limits reject malformed counts and out-of-range subject placeme
 	for (const field of ['yearLevels', 'semesters']) {
 		for (const value of [0, -1, 1.5, null, '2', NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
 			await assert.rejects(
-				f.createCurriculum({ name: 'Invalid limits', programId: 'p', subjects: [], [field]: value })
+				f.createCurriculum({
+					name: 'Invalid limits',
+					programCode: 'BSIS',
+					subjects: [],
+					[field]: value
+				})
 			);
 		}
 	}
@@ -260,7 +245,7 @@ test('curriculum limits reject malformed counts and out-of-range subject placeme
 		await assert.rejects(
 			f.createCurriculum({
 				name: 'Out of bounds',
-				programId: 'p',
+				programCode: 'BSIS',
 				subjects: [entry('s1', placement)]
 			}),
 			{ status: 400 }
@@ -269,14 +254,14 @@ test('curriculum limits reject malformed counts and out-of-range subject placeme
 	assert.equal(f.db.select().from(schema.curriculum).all().length, 0);
 	const standard = await f.createCurriculum({
 		name: 'Default Semesters',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s1', { yearLevel: 4, semester: 2 })]
 	});
 	assert.equal(f.helpers.getCurriculum(standard.id).entries[0].semester, 2);
 	await assert.rejects(
 		f.createCurriculum({
 			name: 'Extra Semester',
-			programId: 'p',
+			programCode: 'BSIS',
 			yearLevels: 3,
 			semesters: 3,
 			subjects: [entry('s2', { yearLevel: 3, semester: 4 })]
@@ -285,7 +270,7 @@ test('curriculum limits reject malformed counts and out-of-range subject placeme
 	);
 	const custom = await f.createCurriculum({
 		name: 'Custom Semesters',
-		programId: 'p',
+		programCode: 'BSIS',
 		yearLevels: 3,
 		semesters: 3,
 		subjects: [entry('s2', { yearLevel: 3, semester: 3 })]
@@ -329,18 +314,30 @@ test('curriculum invalid subjects and foreign entry IDs roll back changes', asyn
 	await assert.rejects(
 		f.createCurriculum({
 			name: 'Bad draft',
-			programId: 'p',
+			programCode: 'BSIS',
 			subjects: [entry('s1'), entry('missing')]
 		}),
 		{ status: 400 }
 	);
 	assert.equal(f.db.select().from(schema.curriculum).all().length, 0);
 	await assert.rejects(
-		f.createCurriculum({ name: 'Bad draft', programId: 'p', subjects: [entry('s1'), entry('s1')] }),
+		f.createCurriculum({
+			name: 'Bad draft',
+			programCode: 'BSIS',
+			subjects: [entry('s1'), entry('s1')]
+		}),
 		{ status: 400 }
 	);
-	const a = await f.createCurriculum({ name: 'Draft A', programId: 'p', subjects: [entry('s1')] });
-	const b = await f.createCurriculum({ name: 'Draft B', programId: 'p', subjects: [entry('s2')] });
+	const a = await f.createCurriculum({
+		name: 'Draft A',
+		programCode: 'BSIS',
+		subjects: [entry('s1')]
+	});
+	const b = await f.createCurriculum({
+		name: 'Draft B',
+		programCode: 'BSIS',
+		subjects: [entry('s2')]
+	});
 	const foreign = f.helpers.getCurriculum(b.id).entries[0];
 	await assert.rejects(
 		f.updateCurriculum({ id: a.id, name: 'Changed', subjects: [entry('s2', { id: foreign.id })] }),
@@ -363,7 +360,7 @@ test('curriculum list searches, filters, totals and pagination use persisted rec
 			Array.from({ length: 12 }, (_, index) => ({
 				id: `c${index}`,
 				name: `Curriculum ${String(index).padStart(2, '0')}`,
-				programId: 'p',
+				programCode: 'BSIS',
 				publishedAt: index === 0 ? new Date('2026-10-08T12:00:00+08:00') : null
 			}))
 		)
@@ -396,7 +393,7 @@ test('registrars can view; only admins can create/edit/delete; published curricu
 	const f = fixture(t);
 	f.db
 		.insert(schema.curriculum)
-		.values({ id: 'c', name: 'Published Curriculum', programId: 'p', publishedAt: new Date() })
+		.values({ id: 'c', name: 'Published Curriculum', programCode: 'BSIS', publishedAt: new Date() })
 		.run();
 	assert.throws(() => f.page('/[curriculumId]/edit'), {
 		status: 302,
@@ -409,9 +406,12 @@ test('registrars can view; only admins can create/edit/delete; published curricu
 	assert.equal(f.page('/[curriculumId]').canManage, false);
 	assert.throws(() => f.page('/new'), { status: 403 });
 	assert.throws(() => f.page('/[curriculumId]/edit'), { status: 403 });
-	await assert.rejects(f.createCurriculum({ name: 'Forbidden', programId: 'p', subjects: [] }), {
-		status: 403
-	});
+	await assert.rejects(
+		f.createCurriculum({ name: 'Forbidden', programCode: 'BSIS', subjects: [] }),
+		{
+			status: 403
+		}
+	);
 	await assert.rejects(f.updateCurriculum({ id: 'c', subjects: [] }), { status: 403 });
 	await assert.rejects(f.deleteCurriculum('c'), { status: 403 });
 	f.locals.user.role = Role.STUDENT;
@@ -426,37 +426,27 @@ test('curriculum deletion cascades subject entries but preserves enrollment refe
 	const f = fixture(t);
 	const draft = await f.createCurriculum({
 		name: 'Draft Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s1')]
 	});
 	await f.deleteCurriculum(draft.id);
 	assert.equal(f.db.select().from(schema.curriculumSubject).all().length, 0);
 	const used = await f.createCurriculum({
 		name: 'Used Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s1')]
 	});
-	f.sqlite.exec("INSERT INTO user (id) VALUES ('u')");
-	f.db
-		.insert(schema.studentData)
-		.values({ id: 'student', userId: 'u', studentNumber: '2026-1' })
-		.run();
-	f.db
-		.insert(schema.academicTerm)
-		.values({
-			id: 'term',
-			startYear: 2026,
-			semester: 1,
-			enrollmentOpensAt: new Date(0),
-			enrollmentClosesAt: new Date(1000)
-		})
-		.run();
+	f.sqlite.exec(
+		"INSERT INTO user (id, name, email) VALUES ('u', 'Student', 'student@example.com'); INSERT INTO student (id, user_id) VALUES ('student', 'u')"
+	);
 	f.db
 		.insert(schema.enrollment)
 		.values({
 			id: 'enrollment',
 			studentId: 'student',
-			termId: 'term',
+			schoolYearStart: 2026,
+			semester: 1,
+			section: 'A',
 			curriculumId: used.id,
 			yearLevel: 1
 		})
@@ -469,12 +459,12 @@ test('activation archives the previous version without moving existing enrollmen
 	const f = fixture(t);
 	const a = await f.createCurriculum({
 		name: 'First Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s1')]
 	});
 	const b = await f.createCurriculum({
 		name: 'Replacement Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s2')]
 	});
 	f.db
@@ -490,27 +480,17 @@ test('activation archives the previous version without moving existing enrollmen
 	assert.equal(original.entries[0].subjectName, 'Published snapshot');
 	await assert.rejects(f.updateCurriculum({ id: a.id, subjects: [] }), { status: 409 });
 	await assert.rejects(f.deleteCurriculum(a.id), { status: 400 });
-	f.sqlite.exec("INSERT INTO user (id) VALUES ('u')");
-	f.db
-		.insert(schema.studentData)
-		.values({ id: 'student', userId: 'u', studentNumber: '2026-1' })
-		.run();
-	f.db
-		.insert(schema.academicTerm)
-		.values({
-			id: 'term',
-			startYear: 2026,
-			semester: 1,
-			enrollmentOpensAt: new Date(0),
-			enrollmentClosesAt: new Date(1000)
-		})
-		.run();
+	f.sqlite.exec(
+		"INSERT INTO user (id, name, email) VALUES ('u', 'Student', 'student@example.com'); INSERT INTO student (id, user_id) VALUES ('student', 'u')"
+	);
 	f.db
 		.insert(schema.enrollment)
 		.values({
 			id: 'enrolled',
 			studentId: 'student',
-			termId: 'term',
+			schoolYearStart: 2026,
+			semester: 1,
+			section: 'A',
 			curriculumId: a.id,
 			yearLevel: 1
 		})
@@ -573,7 +553,7 @@ test('archived drafts must be restored before editing; manual state changes are 
 	const f = fixture(t);
 	const draft = await f.createCurriculum({
 		name: 'Draft Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: []
 	});
 	await f.changeCurriculumState({ id: draft.id, action: 'archive' });
@@ -607,7 +587,7 @@ test('failed manual archive rolls back the program pointer and curriculum state 
 	const f = fixture(t);
 	const a = await f.createCurriculum({
 		name: 'Active Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s1')]
 	});
 	await f.activateCurriculum(a.id);
@@ -650,19 +630,19 @@ test('activation validates drafts, rejects non-admins, and rolls back a failed s
 	const f = fixture(t);
 	const empty = await f.createCurriculum({
 		name: 'Empty Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: []
 	});
 	await assert.rejects(f.activateCurriculum(empty.id), { status: 400 });
 	await assert.rejects(f.activateCurriculum('missing'), { status: 404 });
 	const a = await f.createCurriculum({
 		name: 'First Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s1')]
 	});
 	const b = await f.createCurriculum({
 		name: 'Second Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s2')]
 	});
 	for (const role of [Role.REGISTRAR, Role.STUDENT]) {
@@ -695,17 +675,17 @@ test('independent programs keep their own active curriculum during repeated swit
 	f.db.insert(schema.program).values({ id: 'p2', code: 'ACT', name: 'Computer Technology' }).run();
 	const a = await f.createCurriculum({
 		name: 'First Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s1')]
 	});
 	const b = await f.createCurriculum({
 		name: 'Second Curriculum',
-		programId: 'p',
+		programCode: 'BSIS',
 		subjects: [entry('s2')]
 	});
 	const c = await f.createCurriculum({
 		name: 'Other Program',
-		programId: 'p2',
+		programCode: 'ACT',
 		subjects: [entry('s1')]
 	});
 	await f.activateCurriculum(c.id);

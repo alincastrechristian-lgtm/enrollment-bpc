@@ -121,7 +121,10 @@ for (const kind of ['program', 'subject']) {
 		const f = fixture(t, 'registrar');
 		const api = f[kind];
 		const load = f[`load${label}`];
-		const data = load({ locals: f.locals, url: new URL(`https://example.com/user/${kind}s`) });
+		const data = await load({
+			locals: f.locals,
+			url: new URL(`https://example.com/user/${kind}s`)
+		});
 		assert.equal(data.canManage, false);
 		for (const [name, input] of [
 			[`create${label}`, { name: 'Record Name', code: 'CODE' }],
@@ -132,16 +135,16 @@ for (const kind of ['program', 'subject']) {
 			await assert.rejects(api[name](input), { status: 403 });
 		assert.equal(f.db.select().from(schema[kind]).all().length, 0);
 	});
-	test(`${kind}: student and anonymous cannot load page`, (t) => {
+	test(`${kind}: student and anonymous cannot load page`, async (t) => {
 		for (const role of ['student', null]) {
 			const f = fixture(t, role);
-			assert.throws(
-				() => f[`load${label}`]({ locals: f.locals, url: new URL('https://example.com/') }),
+			await assert.rejects(
+				async () => f[`load${label}`]({ locals: f.locals, url: new URL('https://example.com/') }),
 				{ status: role ? 403 : 401 }
 			);
 		}
 	});
-	test(`${kind}: search, status and pagination return matching data`, (t) => {
+	test(`${kind}: search, status and pagination return matching data`, async (t) => {
 		const f = fixture(t);
 		const table = schema[kind];
 		f.db
@@ -160,21 +163,21 @@ for (const kind of ['program', 'subject']) {
 				locals: f.locals,
 				url: new URL(`https://example.com/user/${kind}s${query}`)
 			});
-		assert.equal(load('?page=2').records.length, 2);
-		assert.equal(load('?page=2').total, 12);
-		assert.equal(load('?status=inactive').records.length, 1);
-		assert.equal(load('?status=active').total, 11);
-		assert.equal(load('?q=CODE-11').records[0].id, '11');
-		assert.equal(load('?q=Record%2005').total, 1);
-		assert.equal(load('?filter.code=CODE-1&filter.isActive=true').total, 3);
-		assert.equal(load('?filter.name=Record%2005&filter.isActive=false').total, 0);
-		assert.equal(load('?filter.code=CODE-11&filter.name=Record').records[0].id, '11');
-		assert.equal(load('?filter.id=0').total, 12);
-		assert.deepEqual(load('?status=inactive').filters, { isActive: 'false' });
-		assert.throws(() => load('?filter.isActive=invalid'), { status: 400 });
-		assert.equal(load('?page=invalid&status=invalid').records.length, 10);
-		assert.throws(
-			() => load('?page=999&q=CODE-11'),
+		assert.equal((await load('?page=2')).records.length, 2);
+		assert.equal((await load('?page=2')).total, 12);
+		assert.equal((await load('?status=inactive')).records.length, 1);
+		assert.equal((await load('?status=active')).total, 11);
+		assert.equal((await load('?q=CODE-11')).records[0].id, '11');
+		assert.equal((await load('?q=Record%2005')).total, 1);
+		assert.equal((await load('?filter.code=CODE-1&filter.isActive=true')).total, 3);
+		assert.equal((await load('?filter.name=Record%2005&filter.isActive=false')).total, 0);
+		assert.equal((await load('?filter.code=CODE-11&filter.name=Record')).records[0].id, '11');
+		assert.equal((await load('?filter.id=0')).total, 12);
+		assert.deepEqual((await load('?status=inactive')).filters, { isActive: 'false' });
+		await assert.rejects(async () => load('?filter.isActive=invalid'), { status: 400 });
+		assert.equal((await load('?page=invalid&status=invalid')).records.length, 10);
+		await assert.rejects(
+			async () => load('?page=999&q=CODE-11'),
 			(err) =>
 				err.status === 302 && err.location.includes('page=1') && err.location.includes('q=CODE-11')
 		);
@@ -193,7 +196,7 @@ test('catalog deletion preserves existing curriculum references', async (t) => {
 	f.db.insert(schema.subject).values({ id: 's', code: 'S', name: 'Subject' }).run();
 	f.db
 		.insert(schema.curriculum)
-		.values({ id: 'c', programId: 'p', name: 'Existing Curriculum' })
+		.values({ id: 'c', programCode: 'P', name: 'Existing Curriculum' })
 		.run();
 	f.db
 		.insert(schema.curriculumSubject)
@@ -238,14 +241,14 @@ test('applicants use catalog programs and keep program edits linked', async (t) 
 	const details = {
 		applicationId: '2026-000001',
 		name: 'Applicant',
-		program: 'BSIS',
+		programCode: 'BSIS',
 		yearLevel: 1,
 		dateApplied: new Date(),
 		email: 'applicant@example.com',
 		contactNumber: '09123456789',
 		address: 'Bulacan'
 	};
-	await assert.rejects(f.applicant.createApplicant({ ...details, program: 'Made up' }), {
+	await assert.rejects(f.applicant.createApplicant({ ...details, programCode: 'Made up' }), {
 		status: 400
 	});
 	assert.equal(f.db.select().from(schema.applicant).all().length, 0);
@@ -262,10 +265,10 @@ test('applicants use catalog programs and keep program edits linked', async (t) 
 	);
 	const view = await f.loadApplicant({ locals: f.locals, params: { applicantId: record.id } });
 	assert.deepEqual(view.programs, options.programs);
-	await assert.rejects(f.applicant.updateApplicant({ id: record.id, program: 'Missing' }), {
+	await assert.rejects(f.applicant.updateApplicant({ id: record.id, programCode: 'Missing' }), {
 		status: 400
 	});
-	assert.equal(f.db.select().from(schema.applicant).get().program, 'BSIS');
+	assert.equal(f.db.select().from(schema.applicant).get().programCode, 'BSIS');
 	await f.applicant.updateApplicant({ id: record.id, name: 'Updated Applicant' });
 	f.locals.user.role = 'student';
 	await assert.rejects(f.applicant.createApplicant({ ...details, applicationId: '2026-000002' }), {
@@ -282,10 +285,10 @@ test('applicants use catalog programs and keep program edits linked', async (t) 
 		message: 'Cannot delete program because it is in use by an applicant.'
 	});
 	await f.program.updateProgram({ id: selected.id, code: 'IS', name: 'Renamed Program' });
-	assert.equal(f.db.select().from(schema.applicant).get().program, 'IS');
-	await f.applicant.updateApplicant({ id: record.id, program: 'ACT' });
+	assert.equal(f.db.select().from(schema.applicant).get().programCode, 'IS');
+	await f.applicant.updateApplicant({ id: record.id, programCode: 'ACT' });
 	await f.program.deleteProgram(selected.id);
-	assert.equal(f.db.select().from(schema.applicant).get().program, 'ACT');
+	assert.equal(f.db.select().from(schema.applicant).get().programCode, 'ACT');
 });
 
 test('applicant catalog migration clears seed applicants and preserves other records', (t) => {
@@ -328,17 +331,17 @@ test('program edits change the active curriculum atomically, support None, and r
 	f.db.insert(schema.subject).values({ id: 's', code: 'IS101', name: 'Introduction' }).run();
 	const subjects = [{ subjectId: 's', yearLevel: 1, semester: 1, units: 3 }];
 	const a = await f.curriculum.createCurriculum({
-		programId: p.id,
+		programCode: p.code,
 		name: 'Original Curriculum',
 		subjects
 	});
 	const b = await f.curriculum.createCurriculum({
-		programId: p.id,
+		programCode: p.code,
 		name: 'Replacement Curriculum',
 		subjects
 	});
 	const foreign = await f.curriculum.createCurriculum({
-		programId: other.id,
+		programCode: other.code,
 		name: 'Other Curriculum',
 		subjects
 	});
@@ -347,13 +350,13 @@ test('program edits change the active curriculum atomically, support None, and r
 	assert.equal(original.curriculum.status, 'active');
 	assert.equal(original.curriculum.programName, 'Updated Program');
 	assert.ok(original.curriculum.publishedAt);
-	const catalogs = f.loadProgram({
+	const catalogs = await f.loadProgram({
 		locals: f.locals,
 		url: new URL('https://example.com/user/programs')
 	});
 	assert.deepEqual(
 		catalogs.curricula
-			.filter((record) => record.programId === p.id)
+			.filter((record) => record.programCode === p.code)
 			.map(({ id }) => id)
 			.sort(),
 		[a.id, b.id].sort()
@@ -371,9 +374,9 @@ test('program edits change the active curriculum atomically, support None, and r
 	await f.program.updateProgram({ id: p.id, activeCurriculumId: null });
 	assert.equal(f.curriculumHelpers.getCurriculum(b.id).curriculum.status, 'inactive');
 	assert.equal(
-		f
-			.loadProgram({ locals: f.locals, url: new URL('https://example.com/user/programs') })
-			.records.find((row) => row.id === p.id).activeCurriculumId,
+		(
+			await f.loadProgram({ locals: f.locals, url: new URL('https://example.com/user/programs') })
+		).records.find((row) => row.id === p.id).activeCurriculumId,
 		null
 	);
 	await f.program.updateProgram({ id: p.id, activeCurriculumId: a.id });
@@ -402,4 +405,55 @@ test('program edits change the active curriculum atomically, support None, and r
 		[f.curriculumHelpers.getCurriculum(a.id), f.curriculumHelpers.getCurriculum(b.id)],
 		before
 	);
+});
+
+test('program code edits cascade curriculum ownership and switch active curriculum atomically', async (t) => {
+	const f = fixture(t);
+	const p = await f.program.createProgram({ code: 'BSIS', name: 'Information Systems' });
+	const other = await f.program.createProgram({ code: 'ACT', name: 'Computer Technology' });
+	f.db.insert(schema.subject).values({ id: 's', code: 'IS101', name: 'Introduction' }).run();
+	const subjects = [{ subjectId: 's', yearLevel: 1, semester: 1, units: 3 }];
+	const a = await f.curriculum.createCurriculum({
+		programCode: p.code,
+		name: 'Original',
+		subjects
+	});
+	const b = await f.curriculum.createCurriculum({
+		programCode: p.code,
+		name: 'Replacement',
+		subjects
+	});
+	const foreign = await f.curriculum.createCurriculum({
+		programCode: other.code,
+		name: 'Foreign',
+		subjects
+	});
+	await f.curriculum.activateCurriculum(a.id);
+	await f.program.updateProgram({ id: p.id, code: 'IS', activeCurriculumId: b.id });
+	for (const id of [a.id, b.id]) {
+		assert.equal(f.curriculumHelpers.getCurriculum(id).curriculum.programCode, 'IS');
+	}
+	assert.equal(f.curriculumHelpers.getCurriculum(a.id).curriculum.status, 'archived');
+	assert.equal(f.curriculumHelpers.getCurriculum(b.id).curriculum.status, 'active');
+	const catalog = await f.loadProgram({
+		locals: f.locals,
+		url: new URL('https://example.com/user/programs?q=IS')
+	});
+	assert.equal(catalog.curricula.length, 2);
+	assert.ok(catalog.curricula.every((record) => record.programCode === 'IS'));
+	const before = f.curriculumHelpers.getCurriculum(b.id);
+	await assert.rejects(
+		f.program.updateProgram({ id: p.id, code: 'WRONG', activeCurriculumId: foreign.id }),
+		{ status: 400 }
+	);
+	assert.deepEqual(f.curriculumHelpers.getCurriculum(b.id), before);
+	assert.equal(
+		f.db
+			.select()
+			.from(schema.program)
+			.all()
+			.find((record) => record.id === p.id).code,
+		'IS'
+	);
+	await assert.rejects(f.program.deleteProgram(p.id), { status: 400 });
 });

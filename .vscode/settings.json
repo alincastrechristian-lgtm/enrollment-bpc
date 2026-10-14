@@ -1,4 +1,9 @@
 {
+	"[svelte]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode",
+		"editor.formatOnSave": true
+	},
+	"prettier.documentSelectors": ["**/*.svelte"],
 	"files.associations": {
 		"*.css": "tailwindcss"
 	},

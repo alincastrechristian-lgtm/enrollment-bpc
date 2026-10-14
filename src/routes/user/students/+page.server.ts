@@ -1,9 +1,9 @@
 import { MAX_ITEMS_PER_PAGE } from '#lib/components/Table/TableValues.js';
 import { Role } from '#lib/Roles.js';
-import { user, filterUserSchema } from '#lib/schema.js';
-import { schemaFilters } from '#lib/server/filters.js';
+import { filterUserSchema, user } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
+import { schemaFilters } from '#lib/server/filters.js';
 import { redirect } from '@sveltejs/kit';
 import { and, count, eq, like, or } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';

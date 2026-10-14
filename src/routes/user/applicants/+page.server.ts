@@ -1,9 +1,9 @@
 import { MAX_ITEMS_PER_PAGE } from '#lib/components/Table/TableValues.js';
 import { Role } from '#lib/Roles.js';
 import { applicant, filterApplicantSchema } from '#lib/schema.js';
-import { schemaFilters } from '#lib/server/filters.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
+import { schemaFilters } from '#lib/server/filters.js';
 import { redirect } from '@sveltejs/kit';
 import { and, count, eq, isNotNull, isNull, like, not, or } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
@@ -60,7 +60,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		where,
 		limit: MAX_ITEMS_PER_PAGE,
 		offset,
-		orderBy: (applicant, { desc }) => [desc(applicant.dateApplied)]
+		orderBy: (applicant, { desc }) => [desc(applicant.dateApplied)],
+		with: {
+			program: true
+		}
 	});
 
 	return {

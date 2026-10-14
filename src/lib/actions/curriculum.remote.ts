@@ -11,7 +11,7 @@ import { db, type Transaction } from '../server/db';
 
 const curriculumFieldValidation = {
 	name: z.string().trim().min(2, 'Name must be at least 2 characters'),
-	programId: z.string().trim().min(1, 'Program is required'),
+	programCode: z.string().trim().min(1, 'Program is required'),
 	yearLevels: z.number().int().positive('Year levels must be a positive integer'),
 	semesters: z.number().int().positive('Semesters must be a positive integer')
 };
@@ -37,7 +37,7 @@ const curriculumSubjectInsertSchema = createInsertSchema(
 // Publishing and retiring should have their own commands.
 const curriculumFieldsSchema = createInsertSchema(curriculum, curriculumFieldValidation).pick({
 	name: true,
-	programId: true,
+	programCode: true,
 	yearLevels: true,
 	semesters: true
 });
@@ -287,7 +287,7 @@ export const activateCurriculum = command(z.string().trim().min(1), (curriculumI
 		return db.transaction((tx) => {
 			const selected = tx.select().from(curriculum).where(eq(curriculum.id, curriculumId)).get();
 			if (!selected) error(404, 'Curriculum not found.');
-			setProgramCurriculum(tx, selected.programId, selected.id);
+			setProgramCurriculum(tx, selected.programCode, selected.id);
 			return { id: selected.id };
 		});
 	} catch (cause) {
@@ -309,7 +309,7 @@ export const changeCurriculumState = command(
 				if (action !== 'restore') {
 					tx.update(program)
 						.set({ activeCurriculumId: null })
-						.where(and(eq(program.id, selected.programId), eq(program.activeCurriculumId, id)))
+						.where(and(eq(program.code, selected.programCode), eq(program.activeCurriculumId, id)))
 						.run();
 				}
 				if (action === 'archive' && selected.archivedAt === null) {

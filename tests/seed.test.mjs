@@ -66,13 +66,13 @@ test('seed creates linked catalog data, valid draft curricula and applicants wit
 	const programs = db.select().from(schema.program).all();
 	assert.ok(
 		applicants.every(
-			(record) => !record.userId && programs.some((program) => program.code === record.program)
+			(record) => !record.userId && programs.some((program) => program.code === record.programCode)
 		)
 	);
 	assert.ok(applicants.some((record) => record.hasPicture));
 	assert.ok(applicants.some((record) => !record.hasBirthCertificate));
 	assert.equal(db.select().from(schema.user).all().length, 0);
-	assert.equal(db.select().from(schema.studentData).all().length, 0);
+	assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM student').get().count, 0);
 	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
 	assert.deepEqual(seedAcademicData(db), { programs: 0, subjects: 0, curricula: 0, applicants: 0 });
 });
@@ -96,7 +96,7 @@ test('seed reuses existing catalog IDs and preserves edited and published record
 			.select()
 			.from(schema.curriculum)
 			.all()
-			.some((row) => row.programId === 'existing-program')
+			.some((row) => row.programCode === 'BSIS')
 	);
 	assert.ok(
 		db

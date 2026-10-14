@@ -26,10 +26,10 @@ export function validateSubjectLimits(
 // Call inside the caller's transaction so metadata edits and selection changes commit together.
 export function setProgramCurriculum(
 	tx: Transaction,
-	programId: string,
+	programCode: string,
 	curriculumId: string | null
 ) {
-	const owner = tx.select().from(program).where(eq(program.id, programId)).get();
+	const owner = tx.select().from(program).where(eq(program.code, programCode)).get();
 	if (!owner) error(404, 'Program not found.');
 	if (curriculumId === null) {
 		tx.update(program).set({ activeCurriculumId: null }).where(eq(program.id, owner.id)).run();
@@ -37,7 +37,8 @@ export function setProgramCurriculum(
 	}
 	const selected = tx.select().from(curriculum).where(eq(curriculum.id, curriculumId)).get();
 	if (!selected) error(404, 'Curriculum not found.');
-	if (selected.programId !== owner.id) error(400, 'Select a curriculum belonging to this program.');
+	if (selected.programCode !== owner.code)
+		error(400, 'Select a curriculum belonging to this program.');
 	if (!owner.isActive) error(400, 'The program must be active before activating a curriculum.');
 	if (owner.activeCurriculumId === selected.id && selected.archivedAt === null) return;
 	const entries = tx
@@ -86,17 +87,16 @@ export function getCurriculum(id: string) {
 			name: curriculum.name,
 			yearLevels: curriculum.yearLevels,
 			semesters: curriculum.semesters,
-			programId: curriculum.programId,
+			programCode: curriculum.programCode,
 			publishedAt: curriculum.publishedAt,
 			archivedAt: curriculum.archivedAt,
 			isActive: curriculum.isActive,
 			status: curriculumStatus,
 			activeCurriculumId: program.activeCurriculumId,
-			programName: program.name,
-			programCode: program.code
+			programName: program.name
 		})
 		.from(curriculum)
-		.innerJoin(program, eq(curriculum.programId, program.id))
+		.innerJoin(program, eq(curriculum.programCode, program.code))
 		.where(eq(curriculum.id, id))
 		.get();
 	if (!record) error(404, 'Curriculum not found.');
