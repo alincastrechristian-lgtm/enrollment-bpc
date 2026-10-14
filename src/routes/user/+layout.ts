@@ -1,3 +1,5 @@
+import type { LayoutLoad } from './$types';
+
 const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }> = {
 	'/user/dashboard': {
 		pageTitle: 'DASHBOARD',
@@ -15,9 +17,18 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'APPLICANT DETAILS',
 		pageDescription: 'View and manage applicant details.'
 	},
+	'/user/applicants/[applicantId]/enroll': {
+		pageTitle: 'ENROLL STUDENT',
+		pageDescription:
+			'Review applicant details, set enrollment information, and customize subjects and units.'
+	},
 	'/user/students': {
 		pageTitle: 'STUDENTS',
 		pageDescription: 'View and manage enrolled student records.'
+	},
+	'/user/students/[userId]': {
+		pageTitle: 'STUDENT DETAILS',
+		pageDescription: 'Review student information, account status, and enrollment history.'
 	},
 	'/user/enrollment': {
 		pageTitle: 'ENROLLMENT',
@@ -65,9 +76,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	}
 };
 
-export const load = ({ url }: { url: URL }) => {
+export const load: LayoutLoad = ({ url, route }) => {
 	const path = url.pathname.replace(/\/$/, '') || '/user/dashboard';
 	const meta =
+		routeMeta[route.id ?? ''] ??
 		routeMeta[path] ??
 		(path.startsWith('/user/applicants/') ? routeMeta['/user/applicants/*'] : undefined) ??
 		(path.startsWith('/user/curriculum/') ? routeMeta['/user/curriculum/*'] : undefined) ??

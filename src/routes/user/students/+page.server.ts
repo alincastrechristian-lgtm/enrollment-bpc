@@ -1,11 +1,11 @@
 import { MAX_ITEMS_PER_PAGE } from '#lib/components/Table/TableValues.js';
 import { Role } from '#lib/Roles.js';
-import { filterUserSchema, user } from '#lib/schema.js';
+import { filterUserSchema, studentData, user } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { schemaFilters } from '#lib/server/filters.js';
 import { redirect } from '@sveltejs/kit';
-import { and, count, eq, like, or } from 'drizzle-orm';
+import { and, count, eq, inArray, like, or } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -24,6 +24,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			? or(
 					like(user.name, `%${search}%`),
 					like(user.email, `%${search}%`),
+					inArray(
+						user.id,
+						db
+							.select({ id: studentData.userId })
+							.from(studentData)
+							.where(like(studentData.studentId, `%${search}%`))
+					),
 					like(user.id, `%${search}%`)
 				)
 			: undefined,
@@ -46,7 +53,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		offset,
 		where,
 		with: {
-			applicant: true
+			applicant: true,
+			studentData: { with: { currentEnrollment: true } }
 		}
 	});
 

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>%sveltekit.status% · Unable to load page | BPC Enrollment Portal</title>
+		<style>
+			:root {
+				color-scheme: light;
+				--background: #f3f6fb;
+				--surface: #fff;
+				--border: #e6ecf5;
+				--text: #3e5267;
+				--muted: #627184;
+				--primary: #2563eb;
+			}
+			@media (prefers-color-scheme: dark) {
+				:root {
+					color-scheme: dark;
+					--background: #1d232a;
+					--surface: #222a34;
+					--border: #374151;
+					--text: #f1f5f9;
+					--muted: #aab6c6;
+					--primary: #7369ff;
+				}
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				background: var(--background);
+				color: var(--text);
+				font-family: ui-sans-serif, system-ui, sans-serif;
+			}
+			main {
+				min-height: 100vh;
+				min-height: 100dvh;
+				display: grid;
+				place-content: center;
+				padding: 2rem 1rem;
+			}
+			.brand {
+				margin: 0 0 2rem;
+				text-align: center;
+				font-size: 0.875rem;
+				font-weight: 700;
+			}
+			.card {
+				width: 100%;
+				max-width: 36rem;
+				border: 1px solid var(--border);
+				border-top: 6px solid var(--primary);
+				border-radius: 1rem;
+				background: var(--surface);
+				padding: clamp(1.5rem, 5vw, 3rem);
+				text-align: center;
+				box-shadow: 0 1px 3px #0000000d;
+			}
+			.status {
+				color: var(--primary);
+				font-size: 0.75rem;
+				font-weight: 800;
+				letter-spacing: 0.15em;
+				text-transform: uppercase;
+			}
+			h1 {
+				font-size: clamp(1.5rem, 5vw, 2rem);
+				letter-spacing: -0.025em;
+			}
+			p {
+				color: var(--muted);
+				line-height: 1.6;
+				overflow-wrap: anywhere;
+			}
+			a {
+				display: inline-block;
+				margin-top: 1rem;
+				padding: 0.875rem 1.5rem;
+				border-radius: 0.5rem;
+				background: var(--primary);
+				color: #fff;
+				font-weight: 700;
+				text-decoration: none;
+			}
+			a:hover {
+				opacity: 0.9;
+			}
+			a:focus-visible {
+				outline: 3px solid var(--primary);
+				outline-offset: 4px;
+			}
+			.help {
+				margin: 1.5rem 0 0;
+				font-size: 0.75rem;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<div>
+				<p class="brand">BPC · Enrollment Portal</p>
+				<section class="card" aria-labelledby="error-title">
+					<p class="status">Error %sveltekit.status%</p>
+					<h1 id="error-title">Unable to load this page</h1>
+					<p>%sveltekit.error.message%</p>
+					<p>Please try again in a moment.</p>
+					<a href="">Try again</a>
+					<p class="help">If this keeps happening, contact the Registrar's Office.</p>
+				</section>
+			</div>
+		</main>
+	</body>
+</html>

@@ -212,7 +212,7 @@ export const studentData = sqliteTable('student', {
 		.notNull()
 });
 
-export const studentDataRelations = relations(studentData, ({ one }) => ({
+export const studentDataRelations = relations(studentData, ({ one, many }) => ({
 	user: one(user, {
 		fields: [studentData.userId],
 		references: [user.id]
@@ -220,7 +220,13 @@ export const studentDataRelations = relations(studentData, ({ one }) => ({
 	applicant: one(applicant, {
 		fields: [studentData.applicantId],
 		references: [applicant.id]
-	})
+	}),
+	currentEnrollment: one(enrollment, {
+		fields: [studentData.currentEnrollmentId],
+		references: [enrollment.id],
+		relationName: 'currentEnrollment'
+	}),
+	enrollments: many(enrollment, { relationName: 'studentEnrollments' })
 }));
 
 export const enrollment = sqliteTable(
@@ -264,6 +270,19 @@ export const enrollment = sqliteTable(
 		)
 	]
 );
+
+export const enrollmentRelations = relations(enrollment, ({ one, many }) => ({
+	student: one(studentData, {
+		fields: [enrollment.studentId],
+		references: [studentData.studentId],
+		relationName: 'studentEnrollments'
+	}),
+	curriculum: one(curriculum, {
+		fields: [enrollment.curriculumId],
+		references: [curriculum.id]
+	}),
+	subjects: many(enrollmentSubject)
+}));
 
 export enum SubjectSource {
 	CURRICULUM = 'curriculum',
@@ -315,6 +334,13 @@ export const enrollmentSubject = sqliteTable(
 		)
 	]
 );
+
+export const enrollmentSubjectRelations = relations(enrollmentSubject, ({ one }) => ({
+	enrollment: one(enrollment, {
+		fields: [enrollmentSubject.enrollmentId],
+		references: [enrollment.id]
+	})
+}));
 
 export const task = sqliteTable('task', {
 	id: text('id')

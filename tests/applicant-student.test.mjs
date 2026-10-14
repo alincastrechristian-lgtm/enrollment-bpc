@@ -153,11 +153,12 @@ function fixture(t, role = Role.REGISTRAR) {
 			}
 		}
 	};
-	const commands = loadTypeScript('src/lib/actions/user.remote.ts', {
+	const dependencies = {
 		'#lib/Roles.js': { Role },
 		'#lib/applicants.js': documents,
 		'#lib/schema.js': schema,
 		'../server/db': { db },
+		'#lib/server/db/index.js': { db },
 		'#lib/server/auth.js': { auth, validateUser },
 		'$app/server': {
 			command: (validation, handler) => async (data) => handler(validation.parse(data)),
@@ -167,9 +168,45 @@ function fixture(t, role = Role.REGISTRAR) {
 			})
 		},
 		'@sveltejs/kit': { error, isHttpError: (cause) => Number.isInteger(cause?.status) }
+	};
+	dependencies['#lib/server/enrollment.js'] = loadTypeScript(
+		'src/lib/server/enrollment.ts',
+		dependencies
+	);
+	const commands = loadTypeScript('src/lib/actions/user.remote.ts', dependencies);
+	const loadEnrollmentPage = loadTypeScript(
+		'src/routes/user/applicants/[applicantId]/enroll/+page.server.ts',
+		dependencies
+	).load;
+	const loadStudentPage = loadTypeScript(
+		'src/routes/user/students/[userId]/+page.server.ts',
+		dependencies
+	).load;
+	const fields = loadTypeScript('src/lib/components/Filter/fields.ts');
+	dependencies['#lib/server/filters.js'] = loadTypeScript('src/lib/server/filters.ts', {
+		...dependencies,
+		'#lib/components/Filter/fields.js': fields
 	});
+	dependencies['#lib/components/Table/TableValues.js'] = { MAX_ITEMS_PER_PAGE: 10 };
+	const loadStudents = loadTypeScript(
+		'src/routes/user/students/+page.server.ts',
+		dependencies
+	).load;
+
 	return {
 		...commands,
+		loadEnrollmentPage: (applicantId = input.applicantId) =>
+			loadEnrollmentPage({
+				...dependencies['$app/server'].getRequestEvent(),
+				params: { applicantId }
+			}),
+		loadStudentPage: (userId) =>
+			loadStudentPage({ ...dependencies['$app/server'].getRequestEvent(), params: { userId } }),
+		loadStudents: (query = '') =>
+			loadStudents({
+				...dependencies['$app/server'].getRequestEvent(),
+				url: new URL('https://example.com/user/students' + query)
+			}),
 		db,
 		sqlite,
 		state,
@@ -516,3 +553,90 @@ test('registrar creation retains admin-only access and correct role', async (t) 
 	);
 	assert.equal(registrar.state.creations, 0);
 });
+
+test('enrollment page shares eligibility checks and loads selected curriculum and catalog', async (t) => {
+	const f = fixture(t);
+	const data = f.loadEnrollmentPage();
+	assert.equal(data.curriculum.id, 'active');
+	assert.equal(data.program.code, 'BSIS');
+	assert.equal(data.entries.length, 2);
+	assert.equal(data.subjects.length, 3);
+	assert.ok(Number.isSafeInteger(data.schoolYearStart));
+	assert.equal(f.state.creations, 0);
+	f.db.update(schema.applicant).set({ hasPicture: false }).run();
+	assert.throws(() => f.loadEnrollmentPage(), { status: 400 });
+});
+
+test('student view loads profile, current enrollment and historical subject snapshots', async (t) => {
+	const f = fixture(t);
+	const result = await f.enrollStudent(input);
+	f.db
+		.insert(schema.enrollment)
+		.values({
+			id: 'historical',
+			studentId: result.studentId,
+			curriculumId: 'active',
+			section: 'A',
+			schoolYearStart: 2024,
+			semester: 2,
+			yearLevel: 1,
+			status: 'withdrawn',
+			enrolledAt: new Date(1000)
+		})
+		.run();
+	f.db
+		.insert(schema.enrollmentSubject)
+		.values({
+			id: 'historical-subject',
+			enrollmentId: 'historical',
+			subjectId: 's1',
+			source: 'extra',
+			subjectCode: 'OLD101',
+			subjectName: 'Historical snapshot',
+			units: 1.5,
+			addedBy: 'operator'
+		})
+		.run();
+	const { student } = await f.loadStudentPage(result.userId);
+	assert.equal(student.studentData.studentId, result.studentId);
+	assert.equal(student.studentData.applicant.id, input.applicantId);
+	assert.equal(student.studentData.currentEnrollmentId, result.enrollmentId);
+	assert.deepEqual(
+		student.studentData.enrollments.map((entry) => entry.schoolYearStart),
+		[2025, 2024]
+	);
+	assert.equal(student.studentData.enrollments[0].curriculum.program.code, 'BSIS');
+	assert.equal(student.studentData.enrollments[1].subjects[0].subjectName, 'Historical snapshot');
+	assert.equal('accounts' in student, false);
+	await assert.rejects(f.loadStudentPage('operator'), { status: 404 });
+	await assert.rejects(f.loadStudentPage('missing'), { status: 404 });
+});
+
+test('student list finds student numbers and displays real current year and section', async (t) => {
+	const f = fixture(t);
+	const result = await f.enrollStudent(input);
+	const data = await f.loadStudents('?q=MA-202610-000001');
+	assert.equal(data.total, 1);
+	assert.equal(data.users[0].id, result.userId);
+	assert.equal(data.users[0].studentData.currentEnrollment.section, 'B');
+	assert.equal(data.users[0].studentData.currentEnrollment.yearLevel, 1);
+});
+
+test('student view supports accounts without a student record', async (t) => {
+	const f = fixture(t);
+	f.db
+		.insert(schema.user)
+		.values({ id: 'legacy', name: 'Legacy Student', email: 'legacy@example.com' })
+		.run();
+	const data = await f.loadStudentPage('legacy');
+	assert.equal(data.student.studentData, null);
+	assert.equal(data.student.applicant, null);
+});
+
+for (const role of [Role.STUDENT, null]) {
+	test(`page loaders reject ${role ?? 'anonymous'} before loading personal data`, async (t) => {
+		const f = fixture(t, role);
+		assert.throws(() => f.loadEnrollmentPage(), { status: role ? 403 : 401 });
+		await assert.rejects(f.loadStudentPage('operator'), { status: role ? 403 : 401 });
+	});
+}

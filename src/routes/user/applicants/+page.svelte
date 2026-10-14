@@ -1,5 +1,6 @@
 ﻿<script lang="ts">
 	import { deleteApplicant } from '#lib/actions/applicant.remote.js';
+	import { resolve } from '$app/paths';
 	import { canCreateStudentAccount } from '#lib/applicants.js';
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
@@ -14,12 +15,9 @@
 	import { refreshAll } from '$app/navigation';
 	import { Eye, Pencil, Plus, Settings, Trash2, UserPlus } from '@lucide/svelte';
 	import ApplicantDialog from './ApplicantDialog.svelte';
-	import EnrollStudentDialog from './EnrollStudentDialog.svelte';
 	import { ApplicantStatus, dateValue, getApplicantStatus, statusBadge } from './functions.js';
 
 	let { data } = $props();
-
-	let enrollStudentDialog: ReturnType<typeof EnrollStudentDialog>;
 
 	const applicants = $derived(data.applicants);
 
@@ -158,16 +156,27 @@
 							</li>
 							{#if getApplicantStatus(row) === ApplicantStatus.UnderReview}
 								<li>
-									<button
-										type="button"
-										disabled={busy || !canCreateStudentAccount(row)}
-										title={canCreateStudentAccount(row)
-											? 'Enroll student'
-											: 'Receive all documents before enrolling a student'}
-										onclick={() => enrollStudentDialog.openDialog(row)}
-									>
-										<UserPlus class="size-4" aria-hidden="true" />Enroll Student
-									</button>
+									{#if canCreateStudentAccount(row)}
+										<a
+											href={resolve('/user/applicants/[applicantId]/enroll', {
+												applicantId: row.id
+											})}
+											aria-disabled={busy}
+											onclick={(event) => {
+												if (busy) event.preventDefault();
+											}}
+										>
+											<UserPlus class="size-4" aria-hidden="true" />Enroll Student
+										</a>
+									{:else}
+										<button
+											type="button"
+											disabled
+											title="Receive all documents before enrolling a student"
+										>
+											<UserPlus class="size-4" aria-hidden="true" />Enroll Student
+										</button>
+									{/if}
 								</li>
 							{/if}
 							<li class="text-error">
@@ -184,4 +193,3 @@
 </CatalogPage>
 
 <ApplicantDialog programs={data.programs} bind:this={applicantDialog} bind:busy />
-<EnrollStudentDialog bind:this={enrollStudentDialog} bind:busy />

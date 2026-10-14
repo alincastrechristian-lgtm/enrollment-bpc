@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { deleteApplicant } from '#lib/actions/applicant.remote.js';
+	import { resolve } from '$app/paths';
 	import { canCreateStudentAccount } from '#lib/applicants.js';
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
 	import {
@@ -26,13 +27,11 @@
 		UserPlus
 	} from '@lucide/svelte';
 	import ApplicantDialog from '../ApplicantDialog.svelte';
-	import EnrollStudentDialog from '../EnrollStudentDialog.svelte';
 	import { getApplicantStatus, statusBadge } from '../functions';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let applicantDialog: ReturnType<typeof ApplicantDialog>;
-	let enrollStudentDialog: ReturnType<typeof EnrollStudentDialog>;
 	let busy = $state(false);
 	const applicant = $derived(data.applicant);
 
@@ -114,7 +113,15 @@
 					</p>
 				</div>
 			</div>
-			<div class="flex shrink-0 items-center gap-2 self-end sm:self-center">
+			<div class="flex shrink-0 flex-wrap items-center justify-end gap-2 self-end sm:self-center">
+				{#if applicant.userId}
+					<a
+						class="btn border-base-300 btn-outline btn-sm"
+						href={resolve('/user/students/[userId]', { userId: applicant.userId })}
+					>
+						<GraduationCap class="size-4" aria-hidden="true" />View student
+					</a>
+				{/if}
 				<span
 					class={`badge h-auto shrink-0 gap-2 self-start border-none px-3 py-2 text-xs font-bold lg:self-center ${statusClass}`}
 				>
@@ -141,16 +148,27 @@
 						</li>
 						{#if !applicant.userId}
 							<li>
-								<button
-									type="button"
-									disabled={busy || !canCreateStudentAccount(applicant)}
-									title={canCreateStudentAccount(applicant)
-										? 'Enroll student'
-										: 'Receive all documents before enrolling a student'}
-									onclick={() => enrollStudentDialog.openDialog(applicant)}
-								>
-									<UserPlus class="size-4" aria-hidden="true" />Enroll Student
-								</button>
+								{#if canCreateStudentAccount(applicant)}
+									<a
+										href={resolve('/user/applicants/[applicantId]/enroll', {
+											applicantId: applicant.id
+										})}
+										aria-disabled={busy}
+										onclick={(event) => {
+											if (busy) event.preventDefault();
+										}}
+									>
+										<UserPlus class="size-4" aria-hidden="true" />Enroll Student
+									</a>
+								{:else}
+									<button
+										type="button"
+										disabled
+										title="Receive all documents before enrolling a student"
+									>
+										<UserPlus class="size-4" aria-hidden="true" />Enroll Student
+									</button>
+								{/if}
 							</li>
 						{/if}
 						<li class="mt-1 border-t border-base-300 pt-1 text-error">
@@ -304,4 +322,3 @@
 </section>
 
 <ApplicantDialog programs={data.programs} bind:this={applicantDialog} bind:busy />
-<EnrollStudentDialog bind:this={enrollStudentDialog} bind:busy />

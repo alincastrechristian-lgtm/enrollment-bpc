@@ -3,22 +3,15 @@
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
-	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
+	import { resolve } from '$app/paths';
 	import { filterUserSchema } from '#lib/schema.js';
-	import { Eye, MailCheck, Pencil, Settings, Trash2, X } from '@lucide/svelte';
-	import { resendMagicLink } from '../../../lib/actions/user.remote.js';
+	import { Eye, MailCheck, Pencil, Settings, Trash2 } from '@lucide/svelte';
+	import { resendMagicLink } from '#lib/actions/user.remote.js';
 
 	let { data } = $props();
 
 	const students = $derived(data.users);
-	let viewDialog: HTMLDialogElement;
-	let selectedStudent = $state<(typeof students)[number] | null>(null);
 	let resending = $state(false);
-
-	function viewStudent(student: (typeof students)[number]) {
-		selectedStudent = student;
-		viewDialog.showModal();
-	}
 
 	async function resend(email: string) {
 		if (resending) return;
@@ -47,7 +40,7 @@
 	{#snippet toolbar()}
 		<CatalogToolbar
 			search={data.search}
-			placeholder="Search by name, account ID or email..."
+			placeholder="Search by name, student number or email..."
 			searchLabel="Search students"
 			filterSchema={filterUserSchema}
 			filters={data.filters}
@@ -86,6 +79,11 @@
 						<p class="mt-0.5 text-xs text-base-content/50">
 							{student.email}
 						</p>
+						{#if student.studentData}
+							<p class="mt-1 font-mono text-xs text-base-content/50">
+								{student.studentData.studentId}
+							</p>
+						{/if}
 					</div>
 				</div>
 			</td>
@@ -99,11 +97,13 @@
 
 			<!-- Year Level -->
 			<td class="text-sm font-medium text-base-content/60">
-				{student.applicant?.yearLevel || 'N/A'}
+				{student.studentData?.currentEnrollment?.yearLevel ?? student.applicant?.yearLevel ?? 'N/A'}
 			</td>
 
 			<!-- Section -->
-			<td class="pr-5 text-sm font-semibold text-base-content/70">N/A</td>
+			<td class="pr-5 text-sm font-semibold text-base-content/70">
+				{student.studentData?.currentEnrollment?.section ?? 'N/A'}
+			</td>
 
 			<!-- Verification -->
 			<td>
@@ -128,10 +128,10 @@
 
 						<ul class="menu w-full p-0">
 							<li>
-								<button type="button" onclick={() => viewStudent(student)}>
+								<a href={resolve('/user/students/[userId]', { userId: student.id })}>
 									<Eye class="h-4 w-4" />
 									View
-								</button>
+								</a>
 							</li>
 
 							<li>
@@ -163,41 +163,3 @@
 		</tr>
 	{/each}
 </CatalogPage>
-
-<dialog bind:this={viewDialog} class="z-0" aria-labelledby="view-student-title">
-	<PopupCard onClose={() => viewDialog.close()}>
-		<div class="card-body gap-6 p-6">
-			<div class="flex items-center justify-between gap-4">
-				<h2 id="view-student-title" class="text-lg font-semibold">Student details</h2>
-				<button
-					type="button"
-					class="btn btn-circle btn-ghost btn-sm"
-					aria-label="Close student details"
-					onclick={() => viewDialog.close()}
-				>
-					<X class="size-4" aria-hidden="true" />
-				</button>
-			</div>
-			{#if selectedStudent}
-				<dl class="space-y-4">
-					<div>
-						<dt class="text-sm text-base-content/60">Name</dt>
-						<dd class="font-semibold">{selectedStudent.name}</dd>
-					</div>
-					<div>
-						<dt class="text-sm text-base-content/60">Email</dt>
-						<dd class="break-all">{selectedStudent.email}</dd>
-					</div>
-					<div>
-						<dt class="text-sm text-base-content/60">Account ID</dt>
-						<dd class="font-mono text-sm break-all">{selectedStudent.id}</dd>
-					</div>
-					<div>
-						<dt class="text-sm text-base-content/60">Verification</dt>
-						<dd>{selectedStudent.setupComplete ? 'Verified' : 'Setup required'}</dd>
-					</div>
-				</dl>
-			{/if}
-		</div>
-	</PopupCard>
-</dialog>

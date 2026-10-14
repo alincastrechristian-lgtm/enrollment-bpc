@@ -1,0 +1,152 @@
+import { hasAllApplicantDocuments } from '#lib/applicants.js';
+import {
+	applicant,
+	curriculum,
+	curriculumSubject,
+	enrollmentSubject,
+	program,
+	studentData,
+	subject,
+	SubjectSource
+} from '#lib/schema.js';
+import type { db, Transaction } from '#lib/server/db/index.js';
+import { error } from '@sveltejs/kit';
+import { and, eq, inArray } from 'drizzle-orm';
+import { z } from 'zod';
+
+export const enrollStudentSchema = z.object({
+	applicantId: z.string().trim().min(1, 'Applicant ID is required'),
+	section: z.string().trim().min(1, 'Section is required'),
+	schoolYearStart: z.number().int().positive('School year start must be a positive integer'),
+	semester: z.number().int().positive('Semester must be a positive integer'),
+	yearLevel: z.number().int().positive('Year level must be a positive integer'),
+
+	subjects: z
+		.array(
+			z.object({
+				id: z.string().trim().min(1, 'Subject ID is required'),
+				units: z.number().positive('Units must be positive')
+			})
+		)
+		.min(1, 'At least one subject must be selected')
+});
+
+export type EnrollStudentInput = z.infer<typeof enrollStudentSchema>;
+type EnrollmentSubjectValues = Omit<
+	typeof enrollmentSubject.$inferInsert,
+	'enrollmentId' | 'addedBy'
+>;
+
+// Share eligibility and curriculum checks between enrollment pages and the command.
+export function getEnrollmentContext(
+	database: typeof db | Transaction,
+	applicantId: string,
+	linkedUserId?: string
+) {
+	// During commit, allow the account linked by this request; reject any competing account.
+	const record = database.select().from(applicant).where(eq(applicant.id, applicantId)).get();
+	if (!record) error(404, 'Applicant not found.');
+	if (record.userId && record.userId !== linkedUserId)
+		error(409, 'Applicant already has a student account.');
+	if (!hasAllApplicantDocuments(record)) {
+		error(400, 'All applicant documents must be received before creating a student account.');
+	}
+
+	if (
+		database
+			.select({ id: studentData.studentId })
+			.from(studentData)
+			.where(eq(studentData.applicantId, record.id))
+			.get()
+	) {
+		error(409, 'Applicant already has a student record.');
+	}
+
+	// Enrollment uses the program's selected, published curriculum.
+	const owner = database.select().from(program).where(eq(program.code, record.programCode)).get();
+	if (!owner) error(404, 'Program not found.');
+	if (!owner.isActive) error(400, 'The program must be active before enrolling students.');
+	if (!owner.activeCurriculumId)
+		error(404, 'Select an active curriculum for this program before enrolling students.');
+
+	const selectedCurriculum = database
+		.select()
+		.from(curriculum)
+		.where(eq(curriculum.id, owner.activeCurriculumId))
+		.get();
+	if (
+		!selectedCurriculum ||
+		selectedCurriculum.programCode !== owner.code ||
+		selectedCurriculum.publishedAt === null ||
+		selectedCurriculum.archivedAt !== null ||
+		!selectedCurriculum.isActive
+	) {
+		error(409, 'The active curriculum is unavailable. Refresh and try again.');
+	}
+
+	return { applicant: record, curriculum: selectedCurriculum, program: owner };
+}
+
+// Validate before auth creates an account, and again inside the commit transaction.
+export function getEnrollmentPlan(
+	database: typeof db | Transaction,
+	data: EnrollStudentInput,
+	linkedUserId?: string
+) {
+	const context = getEnrollmentContext(database, data.applicantId, linkedUserId);
+	const selectedCurriculum = context.curriculum;
+	if (
+		data.yearLevel > selectedCurriculum.yearLevels ||
+		data.semester > selectedCurriculum.semesters
+	) {
+		error(400, 'Year level and semester must be within the active curriculum limits.');
+	}
+
+	// Validate subject selection before auth creates an account.
+	const ids = data.subjects.map((entry) => entry.id);
+	if (new Set(ids).size !== ids.length)
+		error(400, 'A subject can only appear once in an enrollment.');
+
+	const catalog = new Map(
+		database
+			.select()
+			.from(subject)
+			.where(inArray(subject.id, ids))
+			.all()
+			.map((entry) => [entry.id, entry])
+	);
+	if (catalog.size !== ids.length) error(400, 'One or more subjects do not exist in the database.');
+
+	// Only subjects in this year and semester count as curriculum subjects. Others are extras.
+	const matchingSubjects = new Map(
+		database
+			.select()
+			.from(curriculumSubject)
+			.where(
+				and(
+					eq(curriculumSubject.curriculumId, selectedCurriculum.id),
+					eq(curriculumSubject.yearLevel, data.yearLevel),
+					eq(curriculumSubject.semester, data.semester)
+				)
+			)
+			.all()
+			.map((entry) => [entry.subjectId, entry])
+	);
+
+	// Preserve published names and codes for curriculum subjects; all subjects allow custom units.
+	const subjects: EnrollmentSubjectValues[] = data.subjects.map((entry) => {
+		const match = matchingSubjects.get(entry.id);
+		const catalogSubject = catalog.get(entry.id)!;
+
+		return {
+			subjectId: entry.id,
+			curriculumSubjectId: match?.id ?? null,
+			source: match ? SubjectSource.CURRICULUM : SubjectSource.EXTRA,
+			subjectCode: match?.subjectCode ?? catalogSubject.code,
+			subjectName: match?.subjectName ?? catalogSubject.name,
+			units: entry.units
+		};
+	});
+
+	return { ...context, subjects };
+}
