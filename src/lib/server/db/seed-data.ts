@@ -1,4 +1,6 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { Role } from '#lib/Roles.js';
+import { eq } from 'drizzle-orm';
 import * as schema from '../../schema.ts';
 
 const programs = [
@@ -124,7 +126,7 @@ export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 				.returning()
 				.all().length,
 			curricula: 0,
-			applicants: 0
+			students: 0
 		};
 		const catalogPrograms = new Map(
 			tx
@@ -173,31 +175,27 @@ export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 					.run();
 			}
 		}
-		created.applicants = tx
-			.insert(schema.applicant)
-			.values(
-				names.map((name, index) => {
-					const template = curricula[index % curricula.length];
-					const complete = index % 4 === 0;
-					return {
-						applicationId: `SEED-2026-${String(index + 1).padStart(6, '0')}`,
-						name,
-						programCode: template.programCode,
-						yearLevel: (index % template.yearLevels) + 1,
-						dateApplied: new Date(`2026-06-${String(index + 1).padStart(2, '0')}T09:00:00+08:00`),
-						email: `applicant.seed.${index + 1}@example.com`,
-						contactNumber: `0917${String(1000000 + index)}`,
-						address: 'City of Malolos, Bulacan',
-						hasBirthCertificate: index % 4 !== 2,
-						hasForm138: index % 4 !== 2,
-						hasGoodMoral: complete || index % 4 === 3,
-						hasPicture: complete
-					};
+		for (const [index, name] of names.entries()) {
+			const email = 'student.seed.' + (index + 1) + '@example.com';
+			const id = 'seed-student-user-' + (index + 1);
+			tx.insert(schema.user)
+				.values({ id, name, email, role: Role.STUDENT })
+				.onConflictDoNothing()
+				.run();
+			const existing = tx.select().from(schema.user).where(eq(schema.user.email, email)).get();
+			if (!existing || existing.role !== Role.STUDENT) continue;
+			created.students += tx
+				.insert(schema.studentData)
+				.values({
+					studentId: 'SEED-2026-' + String(index + 1).padStart(6, '0'),
+					userId: existing.id,
+					contactNumber: '0917' + String(1000000 + index),
+					address: 'City of Malolos, Bulacan'
 				})
-			)
-			.onConflictDoNothing({ target: schema.applicant.applicationId })
-			.returning()
-			.all().length;
+				.onConflictDoNothing()
+				.returning()
+				.all().length;
+		}
 		return created;
 	});
 }

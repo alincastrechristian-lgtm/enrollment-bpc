@@ -12,7 +12,7 @@ import {
 	type AnySQLiteColumn
 } from 'drizzle-orm/sqlite-core';
 import { createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import type z from 'zod';
+import z from 'zod';
 import { EmailApiType } from './email';
 
 const uuid = () =>
@@ -131,60 +131,8 @@ export const curriculumSubjectRelations = relations(curriculumSubject, ({ one })
 	})
 }));
 
-export const applicant = sqliteTable(
-	'applicant',
-	{
-		id: text('id')
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		userId: text('user_id')
-			.unique()
-			.references(() => user.id, { onDelete: 'set null' }),
-
-		applicationId: text('application_id').notNull().unique(),
-
-		name: text('name').notNull(),
-		programCode: text('program_code')
-			.notNull()
-			.references(() => program.code, { onUpdate: 'cascade', onDelete: 'restrict' }),
-		yearLevel: integer('year_level').notNull(),
-		dateApplied: integer('date_applied', { mode: 'timestamp_ms' }).notNull(),
-		email: text('email').notNull(),
-		contactNumber: text('contact_number').notNull(),
-		address: text('address').notNull(),
-
-		hasBirthCertificate: integer('has_birth_certificate', { mode: 'boolean' })
-			.default(false)
-			.notNull(),
-		hasForm138: integer('has_form_138', { mode: 'boolean' }).default(false).notNull(),
-		hasGoodMoral: integer('has_good_moral', { mode: 'boolean' }).default(false).notNull(),
-		hasPicture: integer('has_picture', { mode: 'boolean' }).default(false).notNull(),
-
-		createdAt: integer('created_at', { mode: 'timestamp_ms' })
-			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-			.notNull(),
-		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
-			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-			.$onUpdate(() => /* @__PURE__ */ new Date())
-			.notNull()
-	},
-	(table) => [check('year_level_range', sql`${table.yearLevel} > 0`)]
-);
-
-export const applicantRelations = relations(applicant, ({ one }) => ({
-	user: one(user, {
-		fields: [applicant.userId],
-		references: [user.id]
-	}),
-	program: one(program, {
-		fields: [applicant.programCode],
-		references: [program.code]
-	}),
-	studentData: one(studentData)
-}));
-
-export const applicantSequence = sqliteTable(
-	'applicant_sequence',
+export const studentSequence = sqliteTable(
+	'student_sequence',
 	{
 		year: integer('year').notNull(),
 		month: integer('month').notNull(),
@@ -192,8 +140,8 @@ export const applicantSequence = sqliteTable(
 	},
 	(table) => [
 		primaryKey({ columns: [table.year, table.month] }),
-		check('applicant_sequence_month_range', sql`${table.month} BETWEEN 1 AND 12`),
-		check('applicant_sequence_number_range', sql`${table.lastNumber} BETWEEN 0 AND 999999`)
+		check('student_sequence_month_range', sql`${table.month} BETWEEN 1 AND 12`),
+		check('student_sequence_number_range', sql`${table.lastNumber} BETWEEN 0 AND 999999`)
 	]
 );
 
@@ -203,11 +151,8 @@ export const studentData = sqliteTable('student', {
 		.notNull()
 		.unique()
 		.references(() => user.id, { onDelete: 'restrict' }),
-	applicantId: text('applicant_id')
-		.unique()
-		.references(() => applicant.id, {
-			onDelete: 'restrict'
-		}),
+	address: text('address').notNull().default(''),
+	contactNumber: text('contact_number').notNull().default(''),
 	currentEnrollmentId: text('enrollment_id')
 		.unique()
 		// AnySQLiteColumn prevents circular reference which typescript cannot resolve.
@@ -223,10 +168,6 @@ export const studentDataRelations = relations(studentData, ({ one, many }) => ({
 	user: one(user, {
 		fields: [studentData.userId],
 		references: [user.id]
-	}),
-	applicant: one(applicant, {
-		fields: [studentData.applicantId],
-		references: [applicant.id]
 	}),
 	currentEnrollment: one(enrollment, {
 		fields: [studentData.currentEnrollmentId],
@@ -477,7 +418,6 @@ export const userRelations = relations(user, ({ one, many }) => ({
 	sessions: many(session),
 	accounts: many(account),
 	twoFactors: many(twoFactor),
-	applicant: one(applicant),
 	studentData: one(studentData)
 }));
 
@@ -502,18 +442,6 @@ export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
 	})
 }));
 
-export const applicantSchema = createSelectSchema(applicant);
-export type Applicant = z.infer<typeof applicantSchema>;
-
-export const filterApplicantSchema = createUpdateSchema(applicant).omit({
-	id: true,
-	userId: true,
-	applicationId: true,
-	updatedAt: true,
-	createdAt: true
-});
-export type FilterApplicant = z.infer<typeof filterApplicantSchema>;
-
 export const subjectSchema = createSelectSchema(subject);
 export type Subject = z.infer<typeof subjectSchema>;
 
@@ -536,6 +464,38 @@ export const filterUserSchema = createUpdateSchema(user).pick({
 	email: true,
 	setupComplete: true
 });
+
+export const studentEnrollmentFilterSchema = z.object({
+	programCode: z.string().optional().meta({
+		title: 'Program code',
+		filterControl: 'searchable-select',
+		filterGroup: 'Current enrollment'
+	}),
+	yearLevel: z.number().int().positive().optional().meta({
+		filterControl: 'select',
+		filterGroup: 'Current enrollment'
+	}),
+	semester: z.number().int().positive().optional().meta({
+		filterControl: 'select',
+		filterGroup: 'Current enrollment'
+	}),
+	section: z.enum(['A', 'B', 'C', 'D']).optional().meta({ filterGroup: 'Current enrollment' })
+});
+
+export const filterStudentSchema = filterUserSchema
+	.extend(studentEnrollmentFilterSchema.shape)
+	.extend({
+		name: filterUserSchema.shape.name.meta({ filterGroup: 'Student details' }),
+		email: filterUserSchema.shape.email.meta({ filterGroup: 'Student details' }),
+		setupComplete: filterUserSchema.shape.setupComplete.meta({
+			title: 'Account setup complete',
+			filterGroup: 'Account status'
+		}),
+		hasCurrentEnrollment: z.enum(['Yes', 'No']).optional().meta({
+			title: 'Has current enrollment',
+			filterGroup: 'Current enrollment'
+		})
+	});
 
 export const curriculumSchema = createSelectSchema(curriculum);
 export type Curriculum = z.infer<typeof curriculumSchema>;

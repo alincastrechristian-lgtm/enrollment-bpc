@@ -30,9 +30,6 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			export async function createCurriculum(data){if(window.failSave)throw new HandledHttpError({status:409,message:'Save failed'});window.creations.push(data);return {id:'created'};}
 			export async function updateCurriculum(data){if(window.failSave)throw new HandledHttpError({status:409,message:'Save failed'});window.updates.push(data);return {id:data.id};}
 			export async function deleteCurriculum(id){window.deletions.push(id);}`,
-		'applicant-actions.js': `window.applicantCreations=[];window.applicantUpdates=[];
-			export async function createApplicant(data){window.applicantCreations.push(data);}
-			export async function updateApplicant(data){window.applicantUpdates.push(data);}`,
 		'catalog-actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.programCreations=[];window.subjectCreations=[];window.newPrograms=[];window.newSubjects=[];window.catalogUpdates=[];window.catalogDeletions=[];window.failCatalogSave=false;
 			function create(kind,data){if(window.failCatalogSave)throw new HandledHttpError({status:409,message:'Duplicate code'});window[kind+'Creations'].push(data);const record={...data,id:kind+'-'+window[kind+'Creations'].length,name:data.name.trim(),code:data.code.trim()};window[kind==='program'?'newPrograms':'newSubjects'].push(record);return record;}
 			export async function createProgram(data){return create('program',data);}
@@ -48,7 +45,6 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			export async function showYesNo(props){if(props?.title==='Change active curriculum?'){window.programWarnings.push(props);if(window.deferProgramChange)return new Promise(resolve=>window.resolveProgramChange=resolve);return window.confirmDelete;}if(props?.title==='Activate curriculum?'){window.activationQuestions.push(props);if(window.deferActivation)return new Promise(resolve=>window.resolveActivation=resolve);return window.confirmActivation;}if(props?.title==='Save curriculum?'){window.saveQuestions.push(props);if(window.deferSave)return new Promise(resolve=>window.resolveSave=resolve);return window.confirmSave;}return window.confirmDelete;}`,
 		'Harness.svelte': `<script>
 			import Editor from '${path.resolve('src/routes/user/curriculum/CurriculumEditor.svelte').replaceAll('\\', '/')}';
-			import ApplicantDialog from '${path.resolve('src/routes/user/applicants/ApplicantDialog.svelte').replaceAll('\\', '/')}';
 			import Programs from '${path.resolve('src/routes/user/programs/+page.svelte').replaceAll('\\', '/')}';
 			import Subjects from '${path.resolve('src/routes/user/subjects/+page.svelte').replaceAll('\\', '/')}';
 			import List from '${path.resolve('src/routes/user/curriculum/+page.svelte').replaceAll('\\', '/')}';
@@ -62,14 +58,10 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			const curriculum={id:'c',name:'2026 Curriculum',programName:'Information Systems',programCode:'BSIS',yearLevels:4,semesters:2,publishedAt:null,isActive:true};
 			const entries=[{id:'entry-1',curriculumId:'c',subjectId:'s1',subjectName:'Original Introduction',subjectCode:'IS101',yearLevel:1,semester:1,units:3}];
 			const multiEntries=[...entries,{...entries[0],id:'entry-2',subjectId:'s2',subjectName:'Programming',subjectCode:'IS102',yearLevel:2,semester:2,units:4}];
-			let applicantDialog=$state();
-			const applicantPrograms=[{id:'p',code:'BSIS',name:'Information Systems',isActive:true},{id:'act',code:'ACT',name:'Computer Technology',isActive:true}];
-			const applicant={id:'a',applicationId:'2026-1',name:'Existing Applicant',programCode:'BSIS',yearLevel:1,dateApplied:new Date(),email:'existing@example.com',contactNumber:'09123456789',address:'Bulacan',hasBirthCertificate:false,hasForm138:false,hasGoodMoral:false,hasPicture:false};
 			const programCurricula=[{id:'c',programCode:'BSIS',name:'2026 Curriculum',publishedAt:new Date(),status:'active'},{id:'replacement',programCode:'BSIS',name:'Replacement Curriculum',publishedAt:null,status:'draft'},{id:'foreign',programCode:'ACT',name:'Foreign Curriculum',publishedAt:null,status:'draft'}];
 		</script>
 		{#key mode}
-			{#if mode.startsWith('applicant-')}<button onclick={()=>applicantDialog.openApplicant(mode==='applicant-edit'?applicant:null)}>Open applicant</button><ApplicantDialog bind:this={applicantDialog} programs={mode==='applicant-empty'?[]:applicantPrograms} />
-			{:else if mode==='new'}<Editor {programs} {subjects} />
+			{#if mode==='new'}<Editor {programs} {subjects} />
 			{:else if mode.startsWith('catalog-subject')}<Subjects data={{records:subjects.map(record=>({...record,description:'Existing description'})),total:1,search:'',status:'all',filters:{},canManage:!mode.endsWith('registrar')}} />
 			{:else if mode.startsWith('catalog-program')}<Programs data={{records:programs.map(record=>({...record,description:'Existing description',activeCurriculumId:mode.startsWith('catalog-program-linked')&&record.id==='p'?'c':null,activeCurriculum:mode.startsWith('catalog-program-linked')&&record.id==='p'?curriculum:null})),curricula:programCurricula,total:1,search:'',status:'all',filters:{},canManage:!mode.endsWith('registrar')}} />
 			{:else if mode==='edit'}<Editor {programs} {subjects} {curriculum} {entries} />
@@ -102,10 +94,6 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 						replacement: path.join(root, 'catalog-actions.js')
 					},
 					{ find: '#lib/actions/curriculum.remote.js', replacement: path.join(root, 'actions.js') },
-					{
-						find: '#lib/actions/applicant.remote.js',
-						replacement: path.join(root, 'applicant-actions.js')
-					},
 					{
 						find: '#lib/components/Popup/Popup.svelte.js',
 						replacement: path.join(root, 'popup.js')
@@ -588,60 +576,6 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await expect(page.getByRole('tabpanel')).toHaveAccessibleName('Year 2 2nd Semester');
 		await page.getByRole('button', { name: 'All subjects', exact: true }).click();
 		await expect(page.getByRole('table')).toHaveCount(2);
-		// Applicants reuse the picker inside a modal, without admin-only program creation.
-		await page.evaluate(() => window.show('applicant-new'));
-		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
-		const applicantForm = page.getByRole('dialog', { name: 'New Applicant', exact: true });
-		await applicantForm.getByLabel('Full name', { exact: true }).fill('New Applicant');
-		await expect(applicantForm.getByLabel('Application ID', { exact: true })).toHaveAttribute(
-			'readonly',
-			''
-		);
-		await applicantForm.getByLabel('Email address', { exact: true }).fill('new@example.com');
-		await applicantForm.getByLabel('Contact number', { exact: true }).fill('09123456789');
-		await applicantForm.getByLabel('Address', { exact: true }).fill('Bulacan');
-		await applicantForm.getByRole('button', { name: 'Create Applicant', exact: true }).click();
-		await expect(
-			page.getByRole('searchbox', { name: 'Search programs', exact: true })
-		).toBeFocused();
-		assert.equal(await page.evaluate(() => window.applicantCreations.length), 0);
-		await expect(page.getByRole('button', { name: 'New Program', exact: true })).toHaveCount(0);
-		await page.getByRole('searchbox', { name: 'Search programs', exact: true }).fill('information');
-		await expect(page.getByRole('button', { name: /^BSIS / })).toBeVisible();
-		await expect(page.getByRole('button', { name: /^ACT / })).toHaveCount(0);
-		await page
-			.getByRole('searchbox', { name: 'Search programs', exact: true })
-			.fill('no matching program');
-		await expect(page.getByText('No matches found.')).toBeVisible();
-		await page.getByRole('searchbox', { name: 'Search programs', exact: true }).fill('bsis');
-		await page.getByRole('searchbox', { name: 'Search programs', exact: true }).press('Enter');
-		await expect(applicantForm.getByRole('button', { name: 'Program', exact: true })).toContainText(
-			'BSIS'
-		);
-		await applicantForm.getByRole('button', { name: 'Create Applicant', exact: true }).click();
-		await expect(applicantForm).toBeHidden();
-		assert.equal(await page.evaluate(() => window.applicantCreations[0].programCode), 'BSIS');
-		await page.evaluate(() => window.show('applicant-edit'));
-		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
-		const editApplicant = page.getByRole('dialog', { name: 'Edit Applicant', exact: true });
-		await expect(editApplicant.getByRole('button', { name: 'Program', exact: true })).toContainText(
-			'BSIS'
-		);
-		await editApplicant.getByRole('button', { name: 'Program', exact: true }).click();
-		await page.getByRole('searchbox', { name: 'Search programs', exact: true }).fill('computer');
-		await page.getByRole('button', { name: /^ACT / }).click();
-		await editApplicant.getByRole('button', { name: 'Save changes', exact: true }).click();
-		await expect(editApplicant).toBeHidden();
-		assert.equal(await page.evaluate(() => window.applicantUpdates[0].programCode), 'ACT');
-		assert.equal(await page.evaluate(() => window.applicantUpdates[0].id), 'a');
-		await page.evaluate(() => window.show('applicant-empty'));
-		await page.getByRole('button', { name: 'Open applicant', exact: true }).click();
-		await expect(
-			page.getByText('No programs available. Add a program in the program catalog first.')
-		).toBeVisible();
-		await page.getByRole('button', { name: 'Program', exact: true }).click();
-		await expect(page.getByText('No matches found.')).toBeVisible();
-		await expect(page.getByRole('button', { name: 'New Program', exact: true })).toHaveCount(0);
 		// Activation requires confirmation and updates the list and view after refresh.
 		await page.evaluate(() => {
 			window.show('activation-view');

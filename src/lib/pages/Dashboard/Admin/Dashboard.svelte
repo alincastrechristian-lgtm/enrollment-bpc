@@ -1,8 +1,8 @@
 <script lang="ts">
 	const stats = [
 		{ label: 'TOTAL STUDENTS', value: 428, color: 'bg-secondary' },
-		{ label: 'APPLICANTS', value: 36, color: 'bg-primary' },
-		{ label: 'PENDING REQUIREMENTS', value: 18, color: 'bg-warning' },
+		{ label: 'NOT ENROLLED', value: 36, color: 'bg-primary' },
+		{ label: 'SETUP REQUIRED', value: 18, color: 'bg-warning' },
 		{ label: 'ENROLLED', value: 372, color: 'bg-primary' }
 	];
 
@@ -35,8 +35,8 @@
 				</div>
 				<div class="space-y-4 text-sm font-bold tracking-wide">
 					<p class="text-primary">ENROLLED</p>
-					<p class="text-warning">PENDING</p>
-					<p class="text-error">REJECTED</p>
+					<p class="text-warning">NOT ENROLLED</p>
+					<p class="text-error">WITHDRAWN</p>
 				</div>
 			</div>
 		</article>
@@ -49,8 +49,9 @@
 						<span class="text-sm font-medium text-base-content/70">{row.id}</span>
 						<span
 							class="badge h-8 rounded-md border-none px-6 font-bold text-base-content badge-info"
-							>{row.program}</span
 						>
+							{row.program}
+						</span>
 					</li>
 				{/each}
 			</ul>

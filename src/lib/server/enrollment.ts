@@ -1,6 +1,7 @@
-import { hasAllApplicantDocuments } from '#lib/applicants.js';
+import { Role } from '#lib/Roles.js';
 import {
-	applicant,
+	user,
+	enrollment,
 	curriculum,
 	curriculumSubject,
 	enrollmentSubject,
@@ -15,7 +16,10 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const enrollStudentSchema = z.object({
-	applicantId: z.string().trim().min(1, 'Applicant ID is required'),
+	userId: z.string().trim().min(1, 'Student account is required'),
+	programCode: z.string().trim().min(1, 'Program is required'),
+	curriculumId: z.string().trim().min(1, 'Curriculum is required'),
+	currentEnrollmentId: z.string().nullable(),
 	section: z.string().trim().min(1, 'Section is required'),
 	schoolYearStart: z.number().int().positive('School year start must be a positive integer'),
 	semester: z.number().int().positive('Semester must be a positive integer'),
@@ -40,30 +44,19 @@ type EnrollmentSubjectValues = Omit<
 // Share eligibility and curriculum checks between enrollment pages and the command.
 export function getEnrollmentContext(
 	database: typeof db | Transaction,
-	applicantId: string,
-	linkedUserId?: string
+	userId: string,
+	programCode: string
 ) {
-	// During commit, allow the account linked by this request; reject any competing account.
-	const record = database.select().from(applicant).where(eq(applicant.id, applicantId)).get();
-	if (!record) error(404, 'Applicant not found.');
-	if (record.userId && record.userId !== linkedUserId)
-		error(409, 'Applicant already has a student account.');
-	if (!hasAllApplicantDocuments(record)) {
-		error(400, 'All applicant documents must be received before creating a student account.');
-	}
-
-	if (
-		database
-			.select({ id: studentData.studentId })
-			.from(studentData)
-			.where(eq(studentData.applicantId, record.id))
-			.get()
-	) {
-		error(409, 'Applicant already has a student record.');
-	}
+	const record = database
+		.select({ student: studentData, user: { id: user.id, name: user.name, email: user.email } })
+		.from(studentData)
+		.innerJoin(user, eq(user.id, studentData.userId))
+		.where(and(eq(user.id, userId), eq(user.role, Role.STUDENT)))
+		.get();
+	if (!record) error(404, 'Student not found.');
 
 	// Enrollment uses the program's selected, published curriculum.
-	const owner = database.select().from(program).where(eq(program.code, record.programCode)).get();
+	const owner = database.select().from(program).where(eq(program.code, programCode)).get();
 	if (!owner) error(404, 'Program not found.');
 	if (!owner.isActive) error(400, 'The program must be active before enrolling students.');
 	if (!owner.activeCurriculumId)
@@ -84,17 +77,43 @@ export function getEnrollmentContext(
 		error(409, 'The active curriculum is unavailable. Refresh and try again.');
 	}
 
-	return { applicant: record, curriculum: selectedCurriculum, program: owner };
+	return { ...record, curriculum: selectedCurriculum, program: owner };
 }
 
-// Validate before auth creates an account, and again inside the commit transaction.
-export function getEnrollmentPlan(
-	database: typeof db | Transaction,
-	data: EnrollStudentInput,
-	linkedUserId?: string
-) {
-	const context = getEnrollmentContext(database, data.applicantId, linkedUserId);
+// Validate enrollment ownership, term, curriculum, and subject selection inside the transaction.
+export function getEnrollmentPlan(database: typeof db | Transaction, data: EnrollStudentInput) {
+	const context = getEnrollmentContext(database, data.userId, data.programCode);
 	const selectedCurriculum = context.curriculum;
+	if (selectedCurriculum.id !== data.curriculumId)
+		error(409, 'Active curriculum changed. Refresh and try again.');
+	if (context.student.currentEnrollmentId !== data.currentEnrollmentId)
+		error(409, 'Current enrollment changed. Refresh and try again.');
+	const duplicate = database
+		.select({ id: enrollment.id })
+		.from(enrollment)
+		.where(
+			and(
+				eq(enrollment.studentId, context.student.studentId),
+				eq(enrollment.schoolYearStart, data.schoolYearStart),
+				eq(enrollment.semester, data.semester)
+			)
+		)
+		.get();
+	if (duplicate)
+		error(409, 'This student already has an enrollment for that school year and semester.');
+	if (context.student.currentEnrollmentId) {
+		const current = database
+			.select()
+			.from(enrollment)
+			.where(eq(enrollment.id, context.student.currentEnrollmentId))
+			.get();
+		if (
+			current &&
+			(data.schoolYearStart < current.schoolYearStart ||
+				(data.schoolYearStart === current.schoolYearStart && data.semester <= current.semester))
+		)
+			error(400, 'Select a term after the current enrollment.');
+	}
 	if (
 		data.yearLevel > selectedCurriculum.yearLevels ||
 		data.semester > selectedCurriculum.semesters
@@ -102,7 +121,7 @@ export function getEnrollmentPlan(
 		error(400, 'Year level and semester must be within the active curriculum limits.');
 	}
 
-	// Validate subject selection before auth creates an account.
+	// Validate the complete subject selection before writing enrollment records.
 	const ids = data.subjects.map((entry) => entry.id);
 	if (new Set(ids).size !== ids.length)
 		error(400, 'A subject can only appear once in an enrollment.');

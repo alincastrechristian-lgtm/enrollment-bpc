@@ -1,5 +1,5 @@
 import { Role } from '#lib/Roles.js';
-import { applicant, curriculum, program, programSchema } from '#lib/schema.js';
+import { curriculum, program, programSchema } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
 import { setProgramCurriculum } from '#lib/server/curriculum.js';
 import { command, getRequestEvent } from '$app/server';
@@ -76,15 +76,6 @@ export const deleteProgram = command(z.string(), async (programId) => {
 
 	if (programInUse) {
 		error(400, 'Cannot delete program because it is in use by a curriculum.');
-	}
-	if (
-		db
-			.select({ id: applicant.id })
-			.from(applicant)
-			.where(eq(applicant.programCode, selectedProgram.code))
-			.get()
-	) {
-		error(400, 'Cannot delete program because it is in use by an applicant.');
 	}
 
 	const result = await db.delete(program).where(eq(program.id, programId));

@@ -28,7 +28,8 @@ const schema = loadModule('src/lib/schema.ts', {
 	'./email': email
 });
 const { seedAcademicData } = loadModule('src/lib/server/db/seed-data.ts', {
-	'../../schema.ts': schema
+	'../../schema.ts': schema,
+	'#lib/Roles.js': { Role }
 });
 
 function fixture(t) {
@@ -45,7 +46,7 @@ function academicRows(db) {
 		schema.subject,
 		schema.curriculum,
 		schema.curriculumSubject,
-		schema.applicant
+		schema.studentData
 	].map((table) => db.select().from(table).all());
 }
 
@@ -73,13 +74,13 @@ test('seeded migration preserves existing settings, retries safely, and can roll
 	});
 });
 
-test('seed creates linked catalog data, valid draft curricula and applicants without students', (t) => {
+test('seed creates linked catalog data, valid draft curricula and students without enrollments', (t) => {
 	const { db, sqlite } = fixture(t);
 	assert.deepEqual(seedAcademicData(db), {
 		programs: 3,
 		subjects: 20,
 		curricula: 3,
-		applicants: 20
+		students: 20
 	});
 	const curricula = db.select().from(schema.curriculum).all();
 	const entries = db.select().from(schema.curriculumSubject).all();
@@ -91,19 +92,17 @@ test('seed creates linked catalog data, valid draft curricula and applicants wit
 		assert.ok(entry.semester >= 1 && entry.semester <= curriculum.semesters);
 		assert.ok(entry.units > 0);
 	}
-	const applicants = db.select().from(schema.applicant).all();
-	const programs = db.select().from(schema.program).all();
+	const students = db.select().from(schema.studentData).all();
+	assert.equal(students.length, 20);
 	assert.ok(
-		applicants.every(
-			(record) => !record.userId && programs.some((program) => program.code === record.programCode)
+		students.every(
+			(record) => record.address && record.contactNumber && !record.currentEnrollmentId
 		)
 	);
-	assert.ok(applicants.some((record) => record.hasPicture));
-	assert.ok(applicants.some((record) => !record.hasBirthCertificate));
-	assert.equal(db.select().from(schema.user).all().length, 0);
-	assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM student').get().count, 0);
+	assert.equal(db.select().from(schema.user).all().length, 20);
+	assert.equal(sqlite.prepare('SELECT count(*) n FROM enrollment').get().n, 0);
 	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
-	assert.deepEqual(seedAcademicData(db), { programs: 0, subjects: 0, curricula: 0, applicants: 0 });
+	assert.deepEqual(seedAcademicData(db), { programs: 0, subjects: 0, curricula: 0, students: 0 });
 });
 
 test('seed reuses existing catalog IDs and preserves edited and published records on reruns', (t) => {
@@ -118,7 +117,7 @@ test('seed reuses existing catalog IDs and preserves edited and published record
 		programs: 2,
 		subjects: 19,
 		curricula: 3,
-		applicants: 20
+		students: 20
 	});
 	assert.ok(
 		db
@@ -135,17 +134,17 @@ test('seed reuses existing catalog IDs and preserves edited and published record
 			.some((row) => row.subjectId === 'existing-subject' && row.subjectName === 'Custom subject')
 	);
 	sqlite.exec(
-		"UPDATE curriculum SET published_at = 1234; DELETE FROM curriculum_subject WHERE subject_id = 'existing-subject'; UPDATE applicant SET name = 'Edited applicant', has_picture = 1;"
+		"UPDATE curriculum SET published_at = 1234; DELETE FROM curriculum_subject WHERE subject_id = 'existing-subject'; UPDATE student SET address = 'Edited address';"
 	);
 	const before = academicRows(db);
-	assert.deepEqual(seedAcademicData(db), { programs: 0, subjects: 0, curricula: 0, applicants: 0 });
+	assert.deepEqual(seedAcademicData(db), { programs: 0, subjects: 0, curricula: 0, students: 0 });
 	assert.deepEqual(academicRows(db), before);
 });
 
-test('seed rolls back academic inserts when an applicant insert fails', (t) => {
+test('seed rolls back academic inserts when a student insert fails', (t) => {
 	const { db, sqlite } = fixture(t);
 	sqlite.exec(
-		"CREATE TRIGGER reject_seed BEFORE INSERT ON applicant BEGIN SELECT RAISE(ABORT, 'test failure'); END;"
+		"CREATE TRIGGER reject_seed BEFORE INSERT ON student BEGIN SELECT RAISE(ABORT, 'test failure'); END;"
 	);
 	assert.throws(() => seedAcademicData(db), /test failure/);
 	assert.ok(academicRows(db).every((rows) => rows.length === 0));
@@ -175,14 +174,14 @@ test('seed CLI creates the configured admin and skips all changes once seeded', 
 				{ env, encoding: 'utf8', timeout: 30000 }
 			);
 			if (run === 0) {
-				assert.match(output, /No students created/);
+				assert.match(output, /No enrollments created/);
 				sqlite = new Database(filename);
 				assert.equal(
 					sqlite.prepare('SELECT seeded FROM system_settings WHERE id = 1').get().seeded,
 					1
 				);
 				sqlite.exec(
-					"DELETE FROM applicant; UPDATE user SET name = 'Edited admin', role = 'student', setup_complete = 0;"
+					"DELETE FROM student; DELETE FROM user WHERE id LIKE 'seed-student-user-%'; UPDATE user SET name = 'Edited admin', role = 'student', setup_complete = 0;"
 				);
 				sqlite.close();
 				sqlite = undefined;
@@ -198,7 +197,11 @@ test('seed CLI creates the configured admin and skips all changes once seeded', 
 		]);
 		assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM student').get().count, 0);
 		assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM account').get().count, 1);
-		assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM applicant').get().count, 0);
+		assert.equal(
+			sqlite.prepare("SELECT count(*) AS count FROM sqlite_master WHERE name='applicant'").get()
+				.count,
+			0
+		);
 		assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
 	} finally {
 		sqlite?.close();

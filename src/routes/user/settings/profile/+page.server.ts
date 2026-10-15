@@ -21,11 +21,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			updatedAt: true
 		},
 		with: {
-			applicant: { columns: { contactNumber: true, address: true } },
 			studentData: {
-				columns: { studentId: true },
+				columns: { studentId: true, address: true, contactNumber: true },
 				with: {
-					applicant: { columns: { contactNumber: true, address: true } },
 					currentEnrollment: {
 						columns: {
 							yearLevel: true,
@@ -46,8 +44,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	});
 	if (!account) error(404, 'Your profile could not be found.');
-	const { applicant, studentData, ...details } = account;
-	const contact = studentData?.applicant ?? applicant;
+	const { studentData, ...details } = account;
+	const contact = studentData;
 	return {
 		profile: {
 			...details,

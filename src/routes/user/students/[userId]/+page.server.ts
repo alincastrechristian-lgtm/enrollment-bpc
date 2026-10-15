@@ -11,10 +11,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const student = await db.query.user.findFirst({
 		where: and(eq(user.id, params.userId), eq(user.role, Role.STUDENT)),
 		with: {
-			applicant: true,
 			studentData: {
 				with: {
-					applicant: true,
 					enrollments: {
 						orderBy: (enrollment, { desc }) => [
 							desc(enrollment.schoolYearStart),

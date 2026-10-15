@@ -7,6 +7,9 @@ export type FilterField = {
 	label: string;
 	type: 'text' | 'number' | 'date' | 'boolean' | 'enum';
 	options?: string[];
+	select?: boolean;
+	searchable?: boolean;
+	group?: string;
 	min?: number;
 	max?: number;
 	step?: number | 'any';
@@ -22,24 +25,31 @@ export function filterFields(schema: FilterSchema): FilterField[] {
 		) {
 			base = base.unwrap() as z.ZodType;
 		}
+		const metadata = { ...base.meta(), ...field.meta() };
 		const label =
 			field.meta()?.title ??
 			base.meta()?.title ??
 			key.replace(/([a-z\d])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase());
-		if (base instanceof z.ZodString) return { key, label, type: 'text' };
-		if (base instanceof z.ZodBoolean) return { key, label, type: 'boolean' };
-		if (base instanceof z.ZodDate) return { key, label, type: 'date' };
+		const common = {
+			key,
+			label,
+			select: metadata.filterControl === 'select' || metadata.filterControl === 'searchable-select',
+			searchable: metadata.filterControl === 'searchable-select',
+			group: typeof metadata.filterGroup === 'string' ? metadata.filterGroup : undefined
+		};
+		if (base instanceof z.ZodString) return { ...common, type: 'text' };
+		if (base instanceof z.ZodBoolean) return { ...common, type: 'boolean' };
+		if (base instanceof z.ZodDate) return { ...common, type: 'date' };
 		if (base instanceof z.ZodNumber)
 			return {
-				key,
-				label,
+				...common,
 				type: 'number',
 				min: base.minValue ?? undefined,
 				max: base.maxValue ?? undefined,
 				step: base.isInt ? 1 : 'any'
 			};
 		if (base instanceof z.ZodEnum)
-			return { key, label, type: 'enum', options: base.options.map(String) };
+			return { ...common, type: 'enum', options: base.options.map(String) };
 		throw new Error(`Unsupported filter field: ${key}`);
 	});
 }
@@ -62,7 +72,7 @@ export function readFilterValues(schema: FilterSchema, parameters: URLSearchPara
 }
 
 export function filterKeys(field: FilterField): string[] {
-	return field.type === 'number' || field.type === 'date'
+	return !field.select && (field.type === 'number' || field.type === 'date')
 		? [`${field.key}.min`, `${field.key}.max`]
 		: [field.key];
 }

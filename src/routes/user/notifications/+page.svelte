@@ -9,29 +9,29 @@
 			recipient: 'john@email.com',
 			subject: 'BPC Enrollment Requirements - Incomplete',
 			preview:
-				"Your application is currently incomplete. Please submit the missing Form 138 / Report Card to the Registrar's Office.",
+				"Your enrollment is currently incomplete. Please contact the Registrar's Office to review your enrollment.",
 			date: 'Today, 9:42 AM'
 		},
 		{
 			id: 2,
 			recipient: 'maria@email.com',
-			subject: 'Application Received',
-			preview: 'Your application has been successfully received and is currently being reviewed.',
+			subject: 'Enrollment Received',
+			preview: 'Your enrollment has been successfully received and is currently being reviewed.',
 			date: 'Yesterday, 3:18 PM'
 		},
 		{
 			id: 3,
 			recipient: 'juan@email.com',
-			subject: 'Application Approved',
+			subject: 'Enrollment Approved',
 			preview:
-				'Congratulations! Your application has been approved. Please proceed to the next step.',
+				'Congratulations! Your enrollment has been approved. Please proceed to the next step.',
 			date: 'Sep 26, 2026'
 		},
 		{
 			id: 4,
 			recipient: 'ana@email.com',
-			subject: 'Missing Document',
-			preview: 'Please submit your Good Moral Certificate to complete your application.',
+			subject: 'Account Setup Required',
+			preview: 'Complete account setup to access your enrollment information.',
 			date: 'Sep 25, 2026'
 		}
 	];
@@ -179,7 +179,7 @@
 
 					<div>
 						<h3 class="font-bold text-base-content">New Notification</h3>
-						<p class="text-xs text-base-content/50">Compose an email to an applicant.</p>
+						<p class="text-xs text-base-content/50">Compose an email to an student.</p>
 					</div>
 				</div>
 
@@ -211,7 +211,7 @@
 							id="recipient"
 							name="recipient"
 							type="email"
-							placeholder="applicant@email.com"
+							placeholder="student@email.com"
 							required
 							class="input-bordered input w-full border-base-300 bg-base-200/50 text-sm focus:border-primary focus:outline-none"
 						/>
@@ -243,8 +243,7 @@
 							rows="7"
 							placeholder="Write your message..."
 							required
-							class="textarea-bordered textarea w-full resize-y border-base-300 bg-base-200/50 text-sm leading-relaxed focus:border-primary focus:outline-none"
-						></textarea>
+							class="textarea-bordered textarea w-full resize-y border-base-300 bg-base-200/50 text-sm leading-relaxed focus:border-primary focus:outline-none"></textarea>
 					</div>
 				</div>
 

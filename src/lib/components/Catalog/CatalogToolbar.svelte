@@ -20,6 +20,7 @@
 		filterLabel = 'Status filter',
 		statusOptions,
 		filterSchema,
+		filterOptions,
 		filters = {},
 		children
 	}: {
@@ -30,6 +31,7 @@
 		filterLabel?: string;
 		statusOptions?: { value: string; label: string }[];
 		filterSchema?: FilterSchema;
+		filterOptions?: Record<string, string[]>;
 		filters?: FilterValues;
 		children?: Snippet;
 	} = $props();
@@ -99,7 +101,11 @@
 		if (statusOptions && selectedStatus !== 'all') url.searchParams.set('status', selectedStatus);
 		else url.searchParams.delete('status');
 		for (const { key, type } of fields) {
-			if (type === 'number' || type === 'date') url.searchParams.delete(`filter.${key}`);
+			if (type === 'number' || type === 'date') {
+				url.searchParams.delete(`filter.${key}`);
+				url.searchParams.delete(`filter.${key}.min`);
+				url.searchParams.delete(`filter.${key}.max`);
+			}
 		}
 		for (const key of keys) {
 			const value = selectedFilters[key]?.trim();
@@ -161,17 +167,7 @@
 		/>
 	</label>
 	<div class="flex flex-wrap items-center gap-2 lg:shrink-0">
-		<Filter
-			schema={filterSchema}
-			bind:values={selectedFilters}
-			onchange={schedule}
-			extraCount={statusOptions && selectedStatus !== 'all' ? 1 : 0}
-			onclear={() => {
-				selectedFilters = {};
-				selectedStatus = 'all';
-				schedule();
-			}}
-		>
+		{#snippet statusFilter()}
 			{#if statusOptions}
 				<div
 					class={`min-w-0 space-y-2 rounded-xl border p-3.5 transition-colors ${selectedStatus !== 'all' ? 'border-primary/25 bg-primary/5' : 'border-base-300/80 bg-base-200/30'}`}
@@ -193,7 +189,20 @@
 					</select>
 				</div>
 			{/if}
-		</Filter>
+		{/snippet}
+		<Filter
+			schema={filterSchema}
+			options={filterOptions}
+			bind:values={selectedFilters}
+			onchange={schedule}
+			children={statusOptions ? statusFilter : undefined}
+			extraCount={statusOptions && selectedStatus !== 'all' ? 1 : 0}
+			onclear={() => {
+				selectedFilters = {};
+				selectedStatus = 'all';
+				schedule();
+			}}
+		/>
 		{@render children?.()}
 	</div>
 </form>

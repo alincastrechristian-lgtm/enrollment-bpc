@@ -29,7 +29,7 @@ async function main() {
 		db.insert(schema.systemSettings).values({ id: 1 }).onConflictDoNothing().run();
 		const created = seedAcademicData(db);
 		console.log(
-			`Added ${created.programs} programs, ${created.subjects} subjects, ${created.curricula} curricula, and ${created.applicants} applicants. No students created.`
+			`Added ${created.programs} programs, ${created.subjects} subjects, ${created.curricula} curricula, and ${created.students} students. No enrollments created.`
 		);
 		if (
 			!db

@@ -188,8 +188,7 @@
 						</div>
 
 						<p class="pt-4 text-sm text-base-content/50">
-							Incoming first-year applicants: submit requirements physically to the Registrar's
-							Office.
+							For account creation and enrollment assistance, contact the Registrar's Office.
 						</p>
 					</form>
 				</section>

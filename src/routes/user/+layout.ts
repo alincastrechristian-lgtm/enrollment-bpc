@@ -6,26 +6,18 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'DASHBOARD',
 		pageDescription: 'View an overview of your enrollment system.'
 	},
-	'/user/applicants': {
-		pageTitle: 'APPLICANTS',
-		pageDescription: 'Manage and review all incoming applicant records.'
-	},
 	'/user/registrars': {
 		pageTitle: 'REGISTRARS',
 		pageDescription: 'Manage and maintain registrar accounts and access.'
 	},
-	'/user/applicants/*': {
-		pageTitle: 'APPLICANT DETAILS',
-		pageDescription: 'View and manage applicant details.'
-	},
-	'/user/applicants/[applicantId]/enroll': {
-		pageTitle: 'ENROLL STUDENT',
-		pageDescription:
-			'Review applicant details, set enrollment information, and customize subjects and units.'
-	},
 	'/user/students': {
 		pageTitle: 'STUDENTS',
-		pageDescription: 'View and manage enrolled student records.'
+		pageDescription: 'Create student accounts and manage enrollment records.'
+	},
+	'/user/students/[userId]/enroll': {
+		pageTitle: 'ENROLL STUDENT',
+		pageDescription:
+			'Choose a program, review enrollment information, and customize subjects and units.'
 	},
 	'/user/students/[userId]': {
 		pageTitle: 'STUDENT DETAILS',
@@ -61,7 +53,7 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	},
 	'/user/requirements': {
 		pageTitle: 'REQUIREMENTS',
-		pageDescription: 'Review applicant and enrollment requirements.'
+		pageDescription: 'Review enrollment information.'
 	},
 	'/user/notifications': {
 		pageTitle: 'NOTIFICATIONS',
@@ -90,12 +82,13 @@ export const load: LayoutLoad = ({ url, route, params }) => {
 	const meta =
 		routeMeta[route.id ?? ''] ??
 		routeMeta[path] ??
-		(path.startsWith('/user/applicants/') ? routeMeta['/user/applicants/*'] : undefined) ??
 		(path.startsWith('/user/curriculum/') ? routeMeta['/user/curriculum/*'] : undefined) ??
 		{};
 	return {
 		backHref:
-			route.id === '/user/students/[userId]/enrollments/[enrollmentId]' && params.userId
+			(route.id === '/user/students/[userId]/enrollments/[enrollmentId]' ||
+				route.id === '/user/students/[userId]/enroll') &&
+			params.userId
 				? resolve('/user/students/[userId]', { userId: params.userId })
 				: undefined,
 		pageTitle: meta.pageTitle,

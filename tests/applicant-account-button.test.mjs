@@ -29,7 +29,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.accountCalls=[];window.mailCalls=[];window.questions=[];window.messages=[];window.confirm=true;
 			export async function enrollStudent(data){window.accountCalls.push(data);if(window.duplicateEmail)throw new HandledHttpError({status:409,message:'A student account already exists with this email.'});if(window.failAccount)throw new HandledHttpError({status:409,message:'Enrollment changed'});if(window.deferAccount)await new Promise(resolve=>window.finishAccount=resolve);return {success:true,userId:'u',studentId:'MA-202610-000001',enrollmentId:'current',invitationSent:window.invitationSent!==false};}
 			export async function resendMagicLink(data){window.mailCalls.push(data);if(window.failMail)throw new Error('Mail failed');}
-			export async function createRegistrar(){throw new HandledHttpError({status:409,message:window.existingRole==='registrar'?'A registrar account already exists with this email.':'A student account already exists with this email.'});}export async function deleteApplicant(){};export async function createApplicant(){};export async function updateApplicant(){}`,
+			export async function createStudent(data){(window.createdStudents??=[]).push(data);return {userId:'u',invitationSent:true};}export async function createRegistrar(){throw new HandledHttpError({status:409,message:window.existingRole==='registrar'?'A registrar account already exists with this email.':'A student account already exists with this email.'});}export async function deleteApplicant(){};export async function createApplicant(){};export async function updateApplicant(){}`,
 		'popup.js': `export async function showYesNo(props){window.questions.push(props);return window.confirm;}
 			export function showLoading(){};export function showError(props){window.messages.push({type:'error',...(typeof props==='string'?{message:props}:props)});}export function showSuccess(message){window.messages.push({type:'success',message});}`,
 		'grades.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.gradeCalls=[];window.finalizeCalls=[];
@@ -39,16 +39,14 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			import Topbar from '${sourcePath('src/lib/components/Topbar/Topbar.svelte')}';
 			import {load as loadMetadata} from '${sourcePath('src/routes/user/+layout.ts')}';
 			import {page} from './state.svelte.js';
-			import Editor from '${sourcePath('src/routes/user/applicants/EnrollmentEditor.svelte')}';
+			import Editor from '${sourcePath('src/routes/user/students/EnrollmentEditor.svelte')}';
 			import Student from '${sourcePath('src/routes/user/students/[userId]/+page.svelte')}';
 			import MyEnrollment from '${sourcePath('src/routes/user/enrollment/+page.svelte')}';
 			import EnrollmentDetails from '${sourcePath('src/routes/user/students/EnrollmentDetails.svelte')}';
 			import Registrars from '${sourcePath('src/routes/user/registrars/+page.svelte')}';
 			import Students from '${sourcePath('src/routes/user/students/+page.svelte')}';
-			import Applicant from '${sourcePath('src/routes/user/applicants/[applicantId]/+page.svelte')}';
-			import Applicants from '${sourcePath('src/routes/user/applicants/+page.svelte')}';
 			let mode=$state('enroll');let revision=$state(0);window.show=(value)=>mode=value;
-			const routeId=$derived(mode.startsWith('my-enrollment')?'/user/enrollment':mode.startsWith('grade-')?'/user/students/[userId]/enrollments/[enrollmentId]':mode==='enroll'?'/user/applicants/[applicantId]/enroll':mode==='student'||mode==='empty-student'?'/user/students/[userId]':mode==='list'?'/user/students':mode==='applicant'||mode==='linked-applicant'||mode==='incomplete'?'/user/applicants/[applicantId]':'/user/applicants');
+			const routeId=$derived(mode.startsWith('my-enrollment')?'/user/enrollment':mode.startsWith('grade-')?'/user/students/[userId]/enrollments/[enrollmentId]':mode==='enroll'?'/user/students/[userId]/enroll':mode==='student'||mode==='empty-student'?'/user/students/[userId]':mode==='list'?'/user/students':mode==='applicant'||mode==='linked-applicant'||mode==='incomplete'?'/user/applicants/[applicantId]':'/user/applicants');
 			const routeUrl=$derived(new URL('/portal'+routeId.replace('[applicantId]','a').replace('[userId]','u').replace('[enrollmentId]',mode.startsWith('grade-past')?'old':'current'),window.location.href));
 			const metadata=$derived(loadMetadata({url:routeUrl,route:{id:routeId},params:{userId:'u'}}));
 			$effect(()=>{page.url=routeUrl;});
@@ -60,11 +58,11 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			const subjects=[{id:'s1',code:'LIVE101',name:'Changed Introduction',isActive:true},{id:'s2',code:'LIVE102',name:'Other term',isActive:true},{id:'s3',code:'LIVE201',name:'Databases',isActive:true},{id:'s4',code:'EXTRA',name:'Extra subject',isActive:true}];
 			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'enrolled',finalizedGrades:false,enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
 			const historical={...current,curriculumId:'old-curriculum',curriculum:{...curriculum,id:'old-curriculum',programCode:'BSIT',program:{...program,id:'it',code:'BSIT',name:'Information Technology'}},id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,grade:null}]};
-			const student={id:'u',name:applicant.name,email:applicant.email,image:null,emailVerified:false,setupComplete:false,banned:false,banReason:null,createdAt:new Date(),updatedAt:new Date(),applicant,studentData:{studentId:'MA-202610-000001',applicant,applicantId:'a',currentEnrollmentId:'current',currentEnrollment:current,enrollments:[current,historical]}};
+			const student={id:'u',name:applicant.name,email:applicant.email,image:null,emailVerified:false,setupComplete:false,banned:false,banReason:null,createdAt:new Date(),updatedAt:new Date(),applicant,studentData:{studentId:'MA-202610-000001',contactNumber:applicant.contactNumber,address:applicant.address,currentEnrollmentId:'current',currentEnrollment:current,enrollments:[current,historical]}};
 		</script>
 		<Topbar pageTitle={metadata.pageTitle} pageDescription={metadata.pageDescription} backHref={metadata.backHref} />
 		{#key mode+revision}
-			{#if mode==='enroll'}<Editor data={{applicant,program,curriculum,entries,subjects,schoolYearStart:2026}} />
+			{#if mode==='enroll'}<Editor data={{student:{...applicant,studentId:applicant.applicationId,userId:'u',currentEnrollmentId:null,semester:1},program,curriculum,entries,subjects,schoolYearStart:2026}} />
 			{:else if mode==='student'}<Student data={{student}} />
 			{:else if mode==='my-enrollment'}<MyEnrollment data={{record:{studentId:student.studentData.studentId,currentEnrollmentId:'current',enrollments:[{...current,finalizedGrades:true},historical]}}} />
 			{:else if mode==='my-enrollment-empty'}<MyEnrollment data={{record:null}} />
@@ -78,10 +76,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			{:else if mode==='empty-student'}<Student data={{student:{...student,applicant:null,studentData:null}}} />
 			{:else if mode==='registrars'}<Registrars data={{users:[],total:0,search:'',status:'all',filters:{}}} />
 			{:else if mode==='list'}<Students data={{users:[student],total:1,search:'',status:'all',filters:{}}} />
-			{:else if mode==='applicant'}<Applicant data={{applicant,programs:[program]}} />
-			{:else if mode==='linked-applicant'}<Applicant data={{applicant:{...applicant,userId:'u'},programs:[program]}} />
-			{:else if mode==='incomplete'}<Applicant data={{applicant:{...applicant,hasPicture:false},programs:[program]}} />
-			{:else}<Applicants data={{applicants:[applicant],programs:[program],total:1,search:'',status:'all',filters:{}}} />{/if}
+			{:else}<p>Unused view</p>{/if}
 		{/key}`
 	};
 	let server, browser;
@@ -119,7 +114,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('heading', { name: 'ENROLL STUDENT', exact: true })).toBeVisible();
 		await expect(
 			page.getByText(
-				'Review applicant details, set enrollment information, and customize subjects and units.',
+				'Choose a program, review enrollment information, and customize subjects and units.',
 				{ exact: true }
 			)
 		).toBeVisible();
@@ -173,7 +168,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await page.getByLabel('Units for subject 2', { exact: true }).fill('1.25');
 		await page.evaluate(() => (window.confirm = false));
 		assert.equal(
-			await page.evaluate(() => window.attemptNavigation('/portal/user/applicants/a')),
+			await page.evaluate(() => window.attemptNavigation('/portal/user/students/u')),
 			false
 		);
 		await page.waitForTimeout(50);
@@ -205,7 +200,10 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('button', { name: 'Enrolling...', exact: true })).toBeDisabled();
 		await expect.poll(() => page.evaluate(() => window.accountCalls.length)).toBe(1);
 		assert.deepEqual(await page.evaluate(() => window.accountCalls[0]), {
-			applicantId: 'a',
+			userId: 'u',
+			programCode: 'BSIS',
+			curriculumId: 'c',
+			currentEnrollmentId: null,
 			section: 'B',
 			schoolYearStart: 2025,
 			yearLevel: 2,
@@ -224,9 +222,9 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			})
 		).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Back to students', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('link', { name: 'View application', exact: true })).toHaveAttribute(
+		await expect(page.getByRole('link', { name: 'Enroll student', exact: true })).toHaveAttribute(
 			'href',
-			'/portal/user/applicants/a'
+			'/portal/user/students/u/enroll'
 		);
 		assert.deepEqual(await page.evaluate(() => window.navigation), ['/portal/user/students/u']);
 		assert.equal(
@@ -544,23 +542,6 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			'href',
 			'/portal/user/students/u'
 		);
-		await page.evaluate(() => window.show('applicant'));
-		await expect(page.getByRole('link', { name: 'View student', exact: true })).toHaveCount(0);
-		await page.getByRole('button', { name: 'Actions for Test Student', exact: true }).click();
-		await expect(page.getByRole('link', { name: 'Enroll Student', exact: true })).toHaveAttribute(
-			'href',
-			'/portal/user/applicants/a/enroll'
-		);
-		await page.evaluate(() => window.show('linked-applicant'));
-		await expect(page.getByRole('link', { name: 'View student', exact: true })).toHaveAttribute(
-			'href',
-			'/portal/user/students/u'
-		);
-		await page.getByRole('button', { name: 'Actions for Test Student', exact: true }).click();
-		await expect(page.getByRole('link', { name: 'Enroll Student', exact: true })).toHaveCount(0);
-		await page.evaluate(() => window.show('incomplete'));
-		await page.getByRole('button', { name: 'Actions for Test Student', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Enroll Student', exact: true })).toBeDisabled();
 		await page.evaluate(() => window.show('registrars'));
 		await page.getByRole('button', { name: 'New Registrar', exact: true }).click();
 		const newRegistrarDialog = page.getByRole('dialog');
@@ -578,6 +559,32 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			);
 			await expect(newRegistrarDialog).toHaveJSProperty('open', true);
 		}
+		// Personal details are saved before optional enrollment.
+		await page.evaluate(() => window.show('list'));
+		await page.getByRole('button', { name: 'Create student', exact: true }).click();
+		let createForm = page.getByRole('dialog', { name: 'Create student', exact: true });
+		await createForm.getByLabel('Full name', { exact: true }).fill('New Student');
+		await createForm.getByLabel('Email', { exact: true }).fill('new@example.com');
+		await createForm.getByLabel('Contact number', { exact: true }).fill('09171234567');
+		await createForm.getByLabel('Address', { exact: true }).fill('Bulacan');
+		await expect(createForm.getByRole('combobox')).toHaveCount(0);
+		await expect(createForm.getByText('Birth certificate', { exact: true })).toHaveCount(0);
+		await createForm.getByRole('button', { name: 'Create & enroll', exact: true }).click();
+		await expect
+			.poll(() => page.evaluate(() => window.navigation.at(-1)))
+			.toBe('/portal/user/students/u/enroll');
+		await page.getByRole('button', { name: 'Create student', exact: true }).click();
+		createForm = page.getByRole('dialog', { name: 'Create student', exact: true });
+		await createForm.getByLabel('Full name', { exact: true }).fill('Later Student');
+		await createForm.getByLabel('Email', { exact: true }).fill('later@example.com');
+		await createForm.getByLabel('Contact number', { exact: true }).fill('09171234567');
+		await createForm.getByLabel('Address', { exact: true }).fill('Bulacan');
+		await createForm.getByRole('radio', { name: /^Enroll later/ }).check();
+		await createForm.getByRole('button', { name: 'Create student', exact: true }).click();
+		await expect
+			.poll(() => page.evaluate(() => window.navigation.at(-1)))
+			.toBe('/portal/user/students/u');
+		assert.equal(await page.evaluate(() => window.createdStudents.length), 2);
 		assert.deepEqual(errors, []);
 	} finally {
 		await browser?.close();

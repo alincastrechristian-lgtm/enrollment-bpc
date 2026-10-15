@@ -98,7 +98,7 @@ function fixture(
 		'#lib/errors.js': errorHelpers,
 		'#lib/server/auth.js': { auth, validateUser },
 		'../server/db': { db },
-		'#lib/applicants.js': loadModule('src/lib/applicants.ts'),
+		'#lib/students.js': loadModule('src/lib/students.ts'),
 		'@sveltejs/kit': { error, isHttpError: (cause) => Number.isInteger(cause?.status) },
 		'$app/server': {
 			command: (validation, handler) => async (input) => handler(validation.parse(input)),
@@ -112,23 +112,15 @@ function fixture(
 		}
 	};
 	const enrollment = loadModule('src/lib/server/enrollment.ts', dependencies);
-	dependencies['#lib/server/enrollment.js'] = {
-		...enrollment,
-		getEnrollmentPlan: () => ({
-			applicant: { id: 'a', name: 'New Student', email: 'taken@example.com' },
-			curriculum: { id: 'c' }
-		})
-	};
+	dependencies['#lib/server/enrollment.js'] = enrollment;
 	return { ...loadModule('src/lib/actions/user.remote.ts', dependencies), state, db };
 }
 const registrarInput = { name: 'New Registrar', email: 'TAKEN@example.com' };
 const studentInput = {
-	applicantId: 'a',
-	section: 'A',
-	schoolYearStart: 2026,
-	semester: 1,
-	yearLevel: 1,
-	subjects: [{ id: 's', units: 3 }]
+	name: 'New Student',
+	email: 'taken@example.com',
+	address: 'Bulacan',
+	contactNumber: '0917'
 };
 
 for (const [role, label] of [
@@ -149,7 +141,7 @@ for (const [role, label] of [
 for (const role of [Role.STUDENT, Role.REGISTRAR]) {
 	test(`enrollment identifies an existing ${role} account before any enrollment writes`, async (t) => {
 		const f = fixture(t, { existingRole: role, callerRole: Role.REGISTRAR });
-		await assert.rejects(f.enrollStudent(studentInput), {
+		await assert.rejects(f.createStudent(studentInput), {
 			status: 409,
 			message: `A ${role} account already exists with this email.`
 		});

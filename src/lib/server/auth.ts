@@ -20,7 +20,7 @@ export const auth = betterAuth({
 	database: drizzleAdapter(db, { provider: 'sqlite' }),
 	emailAndPassword: {
 		enabled: true,
-		disableSignUp: process.env.NODE_ENV === 'production',
+		disableSignUp: true,
 		revokeSessionsOnPasswordReset: true,
 		resetPasswordTokenExpiresIn: RESET_PASSWORD_EXPIRY_SECONDS,
 		sendResetPassword: async ({ user, url }) => {

@@ -48,9 +48,7 @@ function fixture(t) {
 		('other', 'Other User', 'other@example.com', 'registrar', 0, 0, 1000, 2000);
 		INSERT INTO program (id, code, name) VALUES ('p', 'BSIS', 'Information Systems');
 		INSERT INTO curriculum (id, program_code, name) VALUES ('c', 'BSIS', 'Curriculum');
-		INSERT INTO applicant (id, user_id, application_id, name, program_code, year_level, date_applied, email, contact_number, address)
-		VALUES ('a', 'u', 'APP-001', 'Maria Cruz', 'BSIS', 1, 1000, 'old@example.com', '09123456789', 'Malolos, Bulacan');
-		INSERT INTO student (id, user_id, applicant_id) VALUES ('MA-001', 'u', 'a');
+		INSERT INTO student (id, user_id, address,contact_number) VALUES ('MA-001', 'u', 'Malolos, Bulacan','09123456789');
 		INSERT INTO enrollment (id, student_id, curriculum_id, section, school_year_start, semester, year_level, status)
 		VALUES ('e', 'MA-001', 'c', 'A', 2026, 1, 2, 'enrolled');
 		UPDATE student SET enrollment_id = 'e' WHERE user_id = 'u';

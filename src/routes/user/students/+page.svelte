@@ -5,10 +5,20 @@
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { resolve } from '$app/paths';
-	import { filterUserSchema } from '#lib/schema.js';
-	import { Eye, MailCheck, Pencil, Settings, Trash2 } from '@lucide/svelte';
+	import { filterStudentSchema } from '#lib/schema.js';
+	import {
+		Eye,
+		GraduationCap,
+		MailCheck,
+		Pencil,
+		Settings,
+		Trash2,
+		UserPlus
+	} from '@lucide/svelte';
 	import { resendMagicLink } from '#lib/actions/user.remote.js';
 
+	import StudentDialog from './StudentDialog.svelte';
+	let studentDialog = $state<StudentDialog>();
 	let { data } = $props();
 
 	const students = $derived(data.users);
@@ -43,9 +53,18 @@
 			search={data.search}
 			placeholder="Search by name, student number or email..."
 			searchLabel="Search students"
-			filterSchema={filterUserSchema}
+			filterSchema={filterStudentSchema}
+			filterOptions={data.filterOptions}
 			filters={data.filters}
-		></CatalogToolbar>
+		>
+			<button
+				type="button"
+				class="btn gap-2 btn-primary btn-sm"
+				onclick={() => studentDialog?.open()}
+			>
+				<UserPlus class="size-4" aria-hidden="true" />Create student
+			</button>
+		</CatalogToolbar>
 	{/snippet}
 
 	{#snippet header()}
@@ -92,13 +111,13 @@
 			<!-- Program -->
 			<td>
 				<span class="font-semibold text-base-content/70">
-					{student.applicant?.programCode || 'N/A'}
+					{student.studentData?.currentEnrollment?.curriculum?.programCode ?? 'Not enrolled'}
 				</span>
 			</td>
 
 			<!-- Year Level -->
 			<td class="text-sm font-medium text-base-content/60">
-				{student.studentData?.currentEnrollment?.yearLevel ?? student.applicant?.yearLevel ?? 'N/A'}
+				{student.studentData?.currentEnrollment?.yearLevel ?? 'N/A'}
 			</td>
 
 			<!-- Section -->
@@ -135,6 +154,13 @@
 								</a>
 							</li>
 
+							{#if student.studentData}
+								<li>
+									<a href={resolve('/user/students/[userId]/enroll', { userId: student.id })}>
+										<GraduationCap class="size-4" aria-hidden="true" />Enroll student
+									</a>
+								</li>
+							{/if}
 							<li>
 								<button type="button" disabled title="Editing is not available yet">
 									<Pencil class="h-4 w-4" />
@@ -164,3 +190,5 @@
 		</tr>
 	{/each}
 </CatalogPage>
+
+<StudentDialog bind:this={studentDialog} />

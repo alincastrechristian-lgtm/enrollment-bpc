@@ -11,7 +11,6 @@ import {
 	Mail,
 	Settings,
 	SquareChartGantt,
-	SquareUserRound,
 	UserRound,
 	Users,
 	UserShield
@@ -31,7 +30,6 @@ const staff = [Role.ADMIN, Role.REGISTRAR];
 const items: SidebarItem[] = [
 	{ label: 'Dashboard', href: resolve('/user/dashboard'), icon: Gauge },
 	{ label: 'Registrars', href: resolve('/user/registrars'), icon: UserShield, roles: [Role.ADMIN] },
-	{ label: 'Applicants', href: resolve('/user/applicants'), icon: SquareUserRound, roles: staff },
 	{ label: 'Students', href: resolve('/user/students'), icon: Users, roles: staff },
 	{
 		label: 'Enrollment',

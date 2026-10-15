@@ -4,14 +4,14 @@
 	import { resendMagicLink } from '#lib/actions/user.remote.js';
 	import { showError, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { resolve } from '$app/paths';
-	import { Eye, FileCheck, GraduationCap, MailCheck, User } from '@lucide/svelte';
+	import { Eye, GraduationCap, MailCheck } from '@lucide/svelte';
 	import { semesterLabel } from '../../curriculum/SubjectLayout.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const student = $derived(data.student);
 	const record = $derived(student.studentData);
-	const profile = $derived(record?.applicant ?? student.applicant);
+
 	const enrollments = $derived(record?.enrollments ?? []);
 	const current = $derived(
 		enrollments.find((entry) => entry.id === record?.currentEnrollmentId) ?? null
@@ -25,17 +25,10 @@
 		value ? formatter.format(value) : 'Not recorded';
 	const details = $derived([
 		['Email', student.email],
-		['Contact number', profile?.contactNumber ?? 'Not recorded'],
-		['Address', profile?.address ?? 'Not recorded'],
-		['Application ID', profile?.applicationId ?? 'Not recorded'],
-		['Program', current?.curriculum.program?.name ?? profile?.programCode ?? 'Not recorded'],
-		['Date applied', date(profile?.dateApplied)]
-	]);
-	const documents = $derived([
-		{ label: 'Birth certificate', received: profile?.hasBirthCertificate },
-		{ label: 'Form 138', received: profile?.hasForm138 },
-		{ label: 'Good moral certificate', received: profile?.hasGoodMoral },
-		{ label: 'Picture', received: profile?.hasPicture }
+		['Contact number', record?.contactNumber ?? 'Not recorded'],
+		['Address', record?.address ?? 'Not recorded'],
+		['Program', current?.curriculum.program?.name ?? 'Not enrolled'],
+		['Student since', date(record?.createdAt)]
 	]);
 	async function resend() {
 		if (resending) return;
@@ -78,12 +71,12 @@
 				</div>
 			</div>
 			<div class="flex flex-wrap gap-2 sm:shrink-0">
-				{#if profile}
+				{#if record}
 					<a
-						class="btn border-base-300 btn-outline btn-sm"
-						href={resolve('/user/applicants/[applicantId]', { applicantId: profile.id })}
+						class="btn btn-primary btn-sm"
+						href={resolve('/user/students/[userId]/enroll', { userId: student.id })}
 					>
-						<User class="size-4" aria-hidden="true" />View application
+						<GraduationCap class="size-4" aria-hidden="true" />Enroll student
 					</a>
 				{/if}
 				{#if !student.setupComplete}
@@ -186,28 +179,6 @@
 					</div>
 				</dl>
 			</section>
-			{#if profile}
-				<section
-					class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm"
-					aria-labelledby="documents-heading"
-				>
-					<h2 id="documents-heading" class="mb-4 flex items-center gap-2 font-bold">
-						<FileCheck class="size-5 text-primary" aria-hidden="true" />Admission documents
-					</h2>
-					<ul class="space-y-3 text-sm">
-						{#each documents as document (document.label)}
-							<li class="flex items-center justify-between gap-3">
-								<span>{document.label}</span>
-								<span
-									class={`badge badge-sm ${document.received ? 'badge-success' : 'badge-warning'}`}
-								>
-									{document.received ? 'Received' : 'Missing'}
-								</span>
-							</li>
-						{/each}
-					</ul>
-				</section>
-			{/if}
 		</aside>
 	</div>
 	{#key student.id}

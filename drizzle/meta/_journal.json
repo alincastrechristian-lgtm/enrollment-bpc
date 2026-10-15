@@ -162,6 +162,13 @@
       "when": 1792091409048,
       "tag": "0022_remove_pending_enrollment",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1792095309005,
+      "tag": "0023_student_first",
+      "breakpoints": true
     }
   ]
 }

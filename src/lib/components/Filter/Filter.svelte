@@ -10,6 +10,7 @@
 		X
 	} from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
+	import SearchableSelect from '../Dropdown/SearchableSelect.svelte';
 	import { filterFields, filterKeys, type FilterSchema, type FilterValues } from './fields.js';
 
 	let {
@@ -18,6 +19,7 @@
 		onchange,
 		onclear,
 		children,
+		options = {},
 		extraCount = 0
 	}: {
 		schema?: FilterSchema;
@@ -25,6 +27,7 @@
 		onchange: () => void;
 		onclear: () => void;
 		children?: Snippet;
+		options?: Record<string, string[]>;
 		extraCount?: number;
 	} = $props();
 	const id = $props.id();
@@ -34,25 +37,27 @@
 			extraCount
 	);
 
-	const groups = $derived(
-		[
-			{
-				label: 'Details',
-				icon: TextSearch,
-				fields: fields.filter((field) => field.type === 'text' || field.type === 'enum')
-			},
-			{
-				label: 'Ranges',
-				icon: CalendarDays,
-				fields: fields.filter((field) => field.type === 'date' || field.type === 'number')
-			},
-			{
-				label: 'Options',
-				icon: ListFilter,
-				fields: fields.filter((field) => field.type === 'boolean')
-			}
-		].filter((group) => group.fields.length || (group.label === 'Details' && children))
-	);
+	const groups = $derived.by(() => {
+		const grouped = new Map<string, typeof fields>();
+		if (children) grouped.set('Details', []);
+		for (const field of fields) {
+			const label =
+				field.group ??
+				(field.type === 'boolean'
+					? 'Options'
+					: filterKeys(field).length === 2
+						? 'Ranges'
+						: 'Details');
+			const group = grouped.get(label) ?? [];
+			group.push(field);
+			grouped.set(label, group);
+		}
+		return Array.from(grouped, ([label, fields]) => ({
+			label,
+			icon: label === 'Ranges' ? CalendarDays : label === 'Details' ? TextSearch : ListFilter,
+			fields
+		}));
+	});
 
 	function change(key: string, value: string) {
 		values = { ...values, [key]: value };
@@ -67,10 +72,13 @@
 	style={`anchor-name: --filters-${id}`}
 >
 	<SlidersHorizontal class="size-4" aria-hidden="true" />Filters
-	{#if count}<span
+	{#if count}
+		<span
 			class="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-content"
-			>{count}</span
-		>{/if}
+		>
+			{count}
+		</span>
+	{/if}
 	<ChevronDown class="size-3.5 opacity-60" aria-hidden="true" />
 </button>
 <div
@@ -90,10 +98,13 @@
 		<div class="min-w-0 flex-1">
 			<div class="flex flex-wrap items-center gap-2">
 				<h3 id={`filters-title-${id}`} class="text-sm font-bold">Filter records</h3>
-				{#if count}<span
+				{#if count}
+					<span
 						class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
-						>{count} selected</span
-					>{/if}
+					>
+						{count} selected
+					</span>
+				{/if}
 			</div>
 			<p class="mt-1 text-xs text-base-content/55">Results match all selected filters.</p>
 		</div>
@@ -102,8 +113,10 @@
 			class="btn btn-square shrink-0 rounded-lg btn-ghost text-base-content/50 btn-sm"
 			aria-label="Close filters"
 			popovertarget={`filters-${id}`}
-			popovertargetaction="hide"><X class="size-4" aria-hidden="true" /></button
+			popovertargetaction="hide"
 		>
+			<X class="size-4" aria-hidden="true" />
+		</button>
 	</div>
 	<div class="max-h-[55dvh] space-y-5 overflow-y-auto overscroll-contain p-5">
 		{#each groups as group (group.label)}
@@ -119,18 +132,21 @@
 					<div class="h-px flex-1 bg-base-300/70"></div>
 				</div>
 				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-					{#if group.label === 'Details' && children}{@render children()}{/if}
+					{#if group.label === 'Details' && children}
+						{@render children()}
+					{/if}
 					{#each group.fields as field (field.key)}
 						{@const active = filterKeys(field).some((key) => values[key]?.trim())}
-						{#if field.type === 'number' || field.type === 'date'}
+						{#if filterKeys(field).length === 2}
 							<fieldset
 								class={`min-w-0 rounded-xl border p-3.5 transition-colors sm:col-span-2 ${active ? 'border-primary/25 bg-primary/5' : 'border-base-300/80 bg-base-200/30'}`}
 							>
 								<legend class="flex items-center gap-2 px-1 text-xs font-semibold">
-									{#if field.type === 'date'}<CalendarDays
-											class="size-3.5 text-base-content/45"
-											aria-hidden="true"
-										/>{:else}<Hash class="size-3.5 text-base-content/45" aria-hidden="true" />{/if}
+									{#if field.type === 'date'}
+										<CalendarDays class="size-3.5 text-base-content/45" aria-hidden="true" />
+									{:else}
+										<Hash class="size-3.5 text-base-content/45" aria-hidden="true" />
+									{/if}
 									{field.label}
 								</legend>
 								<div class="grid grid-cols-2 gap-3">
@@ -147,8 +163,10 @@
 										<div class="min-w-0 space-y-1.5">
 											<label
 												for={`filter-${id}-${key}`}
-												class="block text-[11px] text-base-content/55">{label}</label
+												class="block text-[11px] text-base-content/55"
 											>
+												{label}
+											</label>
 											<input
 												id={`filter-${id}-${key}`}
 												name={`filter.${key}`}
@@ -174,12 +192,29 @@
 									for={`filter-${id}-${field.key}`}
 									class="flex items-center justify-between gap-2 text-xs font-semibold"
 								>
-									{field.label}{#if active}<span
+									{field.label}{#if active}
+										<span
 											class="size-1.5 shrink-0 rounded-full bg-primary"
 											aria-hidden="true"
-										></span>{/if}
+										></span>
+									{/if}
 								</label>
-								{#if field.type === 'boolean' || field.type === 'enum'}
+								{#if field.searchable}
+									<SearchableSelect
+										id={`filter-${id}-${field.key}`}
+										label={field.label}
+										bind:value={() => values[field.key] ?? '', (value) => change(field.key, value)}
+										options={[
+											{ value: '', label: 'Any' },
+											...(field.options ?? options[field.key] ?? []).map((value) => ({
+												value,
+												label: value
+											}))
+										]}
+										placeholder="Any"
+										searchLabel={`Search ${field.label.toLowerCase()}`}
+									/>
+								{:else if field.select || field.type === 'boolean' || field.type === 'enum'}
 									<select
 										id={`filter-${id}-${field.key}`}
 										name={`filter.${field.key}`}
@@ -188,12 +223,14 @@
 										onchange={(event) => change(field.key, event.currentTarget.value)}
 									>
 										<option value="">Any</option>
-										{#if field.type === 'boolean'}<option value="true">Yes</option><option
-												value="false">No</option
-											>
-										{:else}{#each field.options ?? [] as option (option)}<option value={option}
-													>{option}</option
-												>{/each}{/if}
+										{#if field.type === 'boolean'}
+											<option value="true">Yes</option>
+											<option value="false">No</option>
+										{:else}
+											{#each field.options ?? options[field.key] ?? [] as option (option)}
+												<option value={option}>{option}</option>
+											{/each}
+										{/if}
 									</select>
 								{:else}
 									<input
@@ -225,15 +262,17 @@
 			<RotateCcw class="size-3.5" aria-hidden="true" />Clear filters
 		</button>
 		<div class="flex items-center gap-3">
-			<span class="hidden text-[11px] text-base-content/50 sm:inline"
-				>Changes apply automatically</span
-			>
+			<span class="hidden text-[11px] text-base-content/50 sm:inline">
+				Changes apply automatically
+			</span>
 			<button
 				type="button"
 				class="btn rounded-lg btn-primary btn-sm"
 				popovertarget={`filters-${id}`}
-				popovertargetaction="hide">Done</button
+				popovertargetaction="hide"
 			>
+				Done
+			</button>
 		</div>
 	</div>
 </div>

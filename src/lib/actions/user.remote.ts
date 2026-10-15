@@ -1,11 +1,12 @@
 import { Role } from '#lib/Roles.js';
-import { applicant, enrollment, enrollmentSubject, studentData, user } from '#lib/schema.js';
+import { createStudentSchema } from '#lib/students.js';
+import { enrollment, enrollmentSubject, studentData, studentSequence, user } from '#lib/schema.js';
 import { auth, validateUser } from '#lib/server/auth.js';
 import { enrollStudentSchema, getEnrollmentPlan } from '#lib/server/enrollment.js';
 import { command, getRequestEvent } from '$app/server';
 import { error, isHttpError } from '@sveltejs/kit';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { prettifyError, z } from 'zod';
+import { eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '../server/db';
 
 async function sendPasswordResetLink(email: string, headers: Headers) {
@@ -117,65 +118,88 @@ export const createRegistrar = command(
 	}
 );
 
-export const enrollStudent = command(enrollStudentSchema, async (data) => {
+export const createStudent = command(createStudentSchema, async (data) => {
 	const { locals, request } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
-
-	// Use stored applicant identity and reject invalid enrollment details before creating an account.
-	const initial = getEnrollmentPlan(db, data);
-	const details = createUserSchema.safeParse({
-		name: initial.applicant.name,
-		email: initial.applicant.email
-	});
-	if (!details.success) error(400, prettifyError(details.error));
-
-	// Auth is asynchronous, so it must run outside better-sqlite3's synchronous transaction.
-	const createdUser = await createUser(details.data, Role.STUDENT, request.headers);
-	let enrolled: { studentId: string; enrollmentId: string };
-
+	const createdUser = await createUser(
+		{ name: data.name, email: data.email },
+		Role.STUDENT,
+		request.headers
+	);
+	let studentId: string;
 	try {
-		// Applicant link, student record, enrollment, and subject records commit together.
-		enrolled = db.transaction((tx) => {
-			// Link only if applicant details and documents still match the initial check.
-			const original = initial.applicant;
-			const linked = tx
-				.update(applicant)
-				.set({ userId: createdUser.id })
-				.where(
-					and(
-						eq(applicant.id, original.id),
-						isNull(applicant.userId),
-						eq(applicant.name, original.name),
-						eq(applicant.email, original.email),
-						eq(applicant.applicationId, original.applicationId),
-						eq(applicant.programCode, original.programCode),
-						eq(applicant.yearLevel, original.yearLevel),
-						eq(applicant.hasBirthCertificate, true),
-						eq(applicant.hasForm138, true),
-						eq(applicant.hasGoodMoral, true),
-						eq(applicant.hasPicture, true)
-					)
-				)
-				.run();
-			if (!linked.changes)
-				error(409, 'Applicant changed during enrollment. Refresh and try again.');
-
-			// Curriculum and subject state may have changed while awaiting account creation.
-			const plan = getEnrollmentPlan(tx, data, createdUser.id);
-			if (plan.curriculum.id !== initial.curriculum.id) {
-				error(409, 'Active curriculum changed during enrollment. Refresh and try again.');
-			}
-
-			// The applicant's application number becomes the student number.
-			const studentId = original.applicationId;
+		studentId = db.transaction((tx) => {
+			const parts = new Intl.DateTimeFormat('en-US', {
+				timeZone: 'Asia/Manila',
+				year: 'numeric',
+				month: '2-digit'
+			}).formatToParts(new Date());
+			const year = Number(parts.find((part) => part.type === 'year')!.value);
+			const month = Number(parts.find((part) => part.type === 'month')!.value);
+			const sequence = tx
+				.insert(studentSequence)
+				.values({ year, month, lastNumber: 1 })
+				.onConflictDoUpdate({
+					target: [studentSequence.year, studentSequence.month],
+					set: { lastNumber: sql`${studentSequence.lastNumber} + 1` },
+					setWhere: sql`${studentSequence.lastNumber} < 999999`
+				})
+				.returning({ lastNumber: studentSequence.lastNumber })
+				.get();
+			if (!sequence) error(409, 'Monthly student number limit reached.');
+			const id =
+				'MA-' +
+				year +
+				String(month).padStart(2, '0') +
+				'-' +
+				String(sequence.lastNumber).padStart(6, '0');
 			tx.insert(studentData)
-				.values({ studentId, userId: createdUser.id, applicantId: original.id })
+				.values({
+					studentId: id,
+					userId: createdUser.id,
+					address: data.address,
+					contactNumber: data.contactNumber
+				})
 				.run();
+			return id;
+		});
+	} catch (cause) {
+		try {
+			db.delete(user).where(eq(user.id, createdUser.id)).run();
+		} catch (cleanupError) {
+			console.error('Student account cleanup failed:', cleanupError);
+			error(500, 'Student creation failed. Contact an administrator before trying again.');
+		}
+		if (isHttpError(cause)) throw cause;
+		console.error('Student creation failed:', cause);
+		error(500, 'Failed to create student. Please try again.');
+	}
+	// The student exists even if email delivery fails; staff can resend the setup link.
+	let invitationSent = true;
+	try {
+		await sendPasswordResetLink(createdUser.email, request.headers);
+	} catch {
+		invitationSent = false;
+	}
+	return {
+		success: true,
+		userId: createdUser.id,
+		email: createdUser.email,
+		studentId,
+		invitationSent
+	};
+});
 
+export const enrollStudent = command(enrollStudentSchema, async (data) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	try {
+		return db.transaction((tx) => {
+			const plan = getEnrollmentPlan(tx, data);
 			const result = tx
 				.insert(enrollment)
 				.values({
-					studentId,
+					studentId: plan.student.studentId,
 					curriculumId: plan.curriculum.id,
 					section: data.section,
 					schoolYearStart: data.schoolYearStart,
@@ -187,7 +211,6 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 				.returning({ id: enrollment.id })
 				.get();
 			if (!result) error(500, 'Failed to create enrollment.');
-
 			tx.insert(enrollmentSubject)
 				.values(
 					plan.subjects.map((entry) => ({
@@ -197,46 +220,20 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 					}))
 				)
 				.run();
-
-			// Assign the current enrollment only after its record and subjects exist.
 			tx.update(studentData)
 				.set({ currentEnrollmentId: result.id })
-				.where(eq(studentData.studentId, studentId))
+				.where(eq(studentData.studentId, plan.student.studentId))
 				.run();
-
-			return { studentId, enrollmentId: result.id };
+			return {
+				success: true,
+				userId: plan.user.id,
+				studentId: plan.student.studentId,
+				enrollmentId: result.id
+			};
 		});
 	} catch (cause) {
-		try {
-			// Transaction rolled back all links; compensate only this request's auth account.
-			db.delete(user).where(eq(user.id, createdUser.id)).run();
-		} catch (cleanupError) {
-			console.error('Enrollment account cleanup failed:', createdUser.id, cleanupError);
-			error(
-				500,
-				'Enrollment failed and the new account could not be removed. Contact an administrator.'
-			);
-		}
-
-		// Keep expected validation/conflict responses; report unexpected database failures as 500.
 		if (isHttpError(cause)) throw cause;
-		console.error('Failed to enroll student:', cause);
+		console.error('Enrollment failed:', cause);
 		error(500, 'Failed to enroll student. Please try again.');
 	}
-
-	// Send only after commit. Email failure keeps enrollment intact so invitation can be resent.
-	let invitationSent = true;
-	try {
-		await sendPasswordResetLink(createdUser.email, request.headers);
-	} catch {
-		invitationSent = false;
-	}
-
-	return {
-		success: true,
-		invitationSent,
-		userId: createdUser.id,
-		email: createdUser.email,
-		...enrolled
-	};
 });

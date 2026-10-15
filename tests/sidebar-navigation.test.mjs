@@ -29,7 +29,6 @@ for (const [role, expected] of [
 		[
 			'Dashboard',
 			'Registrars',
-			'Applicants',
 			'Students',
 			'Subjects',
 			'Programs',
@@ -43,7 +42,6 @@ for (const [role, expected] of [
 		'registrar',
 		[
 			'Dashboard',
-			'Applicants',
 			'Students',
 			'Subjects',
 			'Programs',

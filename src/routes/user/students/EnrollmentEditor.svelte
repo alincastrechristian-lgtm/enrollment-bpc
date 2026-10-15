@@ -8,14 +8,19 @@
 	import { BookOpen, GraduationCap, Plus, Trash2, UserPlus } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { levelOptions, semesterLabel } from '../curriculum/SubjectLayout.svelte';
-	import type { PageData } from './[applicantId]/enroll/$types';
+	import type { PageData } from './[userId]/enroll/$types';
 
-	let { data }: { data: PageData } = $props();
+	let {
+		data
+	}: { data: NonNullable<PageData['plan']> & Pick<PageData, 'student' | 'schoolYearStart'> } =
+		$props();
 	type SubjectRow = { key: string; subjectId: string; units: number | undefined };
 	let yearLevel = $state(
-		untrack(() => Math.min(data.applicant.yearLevel, data.curriculum.yearLevels))
+		untrack(() => Math.min(data.student.yearLevel ?? 1, data.curriculum.yearLevels))
 	);
-	let semester = $state(1);
+	let semester = $state(
+		untrack(() => Math.min(data.student.semester ?? 1, data.curriculum.semesters))
+	);
 	let schoolYearStart = $state<number | undefined>(untrack(() => data.schoolYearStart));
 	let section = $state('');
 
@@ -108,14 +113,17 @@
 			if (
 				!(await showYesNo({
 					title: 'Enroll student?',
-					message: `Enroll ${data.applicant.name} for ${schoolYearStart}–${Number(schoolYearStart) + 1}, year ${yearLevel}, ${semesterLabel(semester)}, section ${section.trim()}, with ${rows.length} subjects?`,
+					message: `Enroll ${data.student.name} for ${schoolYearStart}–${Number(schoolYearStart) + 1}, year ${yearLevel}, ${semesterLabel(semester)}, section ${section.trim()}, with ${rows.length} subjects?`,
 					yesText: 'Enroll Student',
 					noText: 'Cancel'
 				}))
 			)
 				return;
 			const result = await enrollStudent({
-				applicantId: data.applicant.id,
+				userId: data.student.userId,
+				programCode: data.program.code,
+				curriculumId: data.curriculum.id,
+				currentEnrollmentId: data.student.currentEnrollmentId,
 				section: section.trim(),
 				schoolYearStart: Number(schoolYearStart),
 				yearLevel,
@@ -128,11 +136,7 @@
 			await goto(resolve('/user/students/[userId]', { userId: result.userId }), {
 				refreshAll: true
 			});
-			if (result.invitationSent) showSuccess('Student enrolled successfully');
-			else
-				showError(
-					'Student enrolled, but account setup email failed. Resend it from the student page.'
-				);
+			showSuccess('Student enrolled successfully');
 		} catch (cause) {
 			message = saved
 				? 'Student enrolled. Open the student record below to continue.'
@@ -143,8 +147,6 @@
 		}
 	}
 </script>
-
-<svelte:head><title>Enroll {data.applicant.name} | BPC Enrollment System</title></svelte:head>
 
 <form class="mx-auto max-w-7xl space-y-6" onsubmit={save}>
 	{#if message}
@@ -164,12 +166,12 @@
 		<div class="min-w-0 space-y-6">
 			<section
 				class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-				aria-labelledby="applicant-heading"
+				aria-labelledby="student-heading"
 			>
 				<div class="h-1.5 bg-primary" aria-hidden="true"></div>
 				<div class="p-5 sm:p-6">
 					<header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-						<h2 id="applicant-heading" class="font-bold">Applicant information</h2>
+						<h2 id="student-heading" class="font-bold">Student information</h2>
 						<button
 							type="submit"
 							class="btn btn-primary btn-sm"
@@ -184,7 +186,7 @@
 						</button>
 					</header>
 					<dl class="grid gap-4 text-sm sm:grid-cols-2">
-						{#each [['Full name', data.applicant.name], ['Application ID', data.applicant.applicationId], ['Program', `${data.program.code} — ${data.program.name}`], ['Email', data.applicant.email], ['Contact number', data.applicant.contactNumber], ['Address', data.applicant.address]] as [label, value] (label)}
+						{#each [['Full name', data.student.name], ['Student number', data.student.studentId], ['Program', `${data.program.code} — ${data.program.name}`], ['Email', data.student.email], ['Contact number', data.student.contactNumber], ['Address', data.student.address]] as [label, value] (label)}
 							<div>
 								<dt class="text-xs text-base-content/50">{label}</dt>
 								<dd class="mt-1 font-semibold wrap-break-word">{value}</dd>
@@ -388,7 +390,7 @@
 				View curriculum
 			</a>
 			<p class="border-t border-base-300 pt-4 text-xs text-base-content/60">
-				An account setup link will be sent to {data.applicant.email} after enrollment.
+				An account setup link will be sent to {data.student.email} after enrollment.
 			</p>
 		</aside>
 	</div>
