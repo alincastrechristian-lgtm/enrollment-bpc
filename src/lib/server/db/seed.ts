@@ -16,6 +16,16 @@ async function main() {
 	const db = drizzle(sqlite, { schema });
 	const adminEmail = (process.env.INITIAL_ADMIN_EMAIL || 'admin@admin.com').trim().toLowerCase();
 	try {
+		const settings = db
+			.select({ seeded: schema.systemSettings.seeded })
+			.from(schema.systemSettings)
+			.where(eq(schema.systemSettings.id, 1))
+			.get();
+		if (settings?.seeded) {
+			console.log('Database already seeded; skipping.');
+			return;
+		}
+
 		db.insert(schema.systemSettings).values({ id: 1 }).onConflictDoNothing().run();
 		const created = seedAcademicData(db);
 		console.log(
@@ -58,6 +68,11 @@ async function main() {
 			.set({ role: Role.ADMIN, setupComplete: true })
 			.where(eq(schema.user.email, adminEmail))
 			.execute();
+
+		db.update(schema.systemSettings)
+			.set({ seeded: true })
+			.where(eq(schema.systemSettings.id, 1))
+			.run();
 
 		console.log('Seeding complete!');
 	} finally {

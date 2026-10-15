@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
+import { migrationConfigThrough } from './migration-config.mjs';
 
 const require = createRequire(import.meta.url);
 function loadModule(filename, dependencies = {}) {
@@ -21,7 +22,11 @@ function loadModule(filename, dependencies = {}) {
 	return exports;
 }
 const { Role } = loadModule('src/lib/Roles.ts');
-const schema = loadModule('src/lib/schema.ts', { '#lib/Roles.js': { Role } });
+const email = loadModule('src/lib/email.ts');
+const schema = loadModule('src/lib/schema.ts', {
+	'#lib/Roles.js': { Role },
+	'./email': email
+});
 const { seedAcademicData } = loadModule('src/lib/server/db/seed-data.ts', {
 	'../../schema.ts': schema
 });
@@ -43,6 +48,29 @@ function academicRows(db) {
 		schema.applicant
 	].map((table) => db.select().from(table).all());
 }
+
+test('seeded migration preserves existing settings, retries safely, and can roll back', (t) => {
+	const sqlite = new Database(':memory:');
+	t.after(() => sqlite.close());
+	migrate(drizzle(sqlite), migrationConfigThrough(t, 19));
+	sqlite.exec("INSERT INTO system_settings (id, sender_name) VALUES (1, 'Existing school')");
+	const before = sqlite.prepare('SELECT * FROM system_settings WHERE id = 1').get();
+	migrate(drizzle(sqlite), { migrationsFolder: 'drizzle' });
+	assert.deepEqual(sqlite.prepare('SELECT * FROM system_settings WHERE id = 1').get(), {
+		...before,
+		seeded: 0
+	});
+	sqlite.exec('UPDATE system_settings SET seeded = 1 WHERE id = 1');
+	migrate(drizzle(sqlite), { migrationsFolder: 'drizzle' });
+	assert.equal(sqlite.prepare('SELECT seeded FROM system_settings WHERE id = 1').get().seeded, 1);
+	sqlite.exec(readFileSync('drizzle/rollback/0020_seeded_flag.sql', 'utf8'));
+	assert.deepEqual(sqlite.prepare('SELECT * FROM system_settings WHERE id = 1').get(), before);
+	migrate(drizzle(sqlite), { migrationsFolder: 'drizzle' });
+	assert.deepEqual(sqlite.prepare('SELECT * FROM system_settings WHERE id = 1').get(), {
+		...before,
+		seeded: 0
+	});
+});
 
 test('seed creates linked catalog data, valid draft curricula and applicants without students', (t) => {
 	const { db, sqlite } = fixture(t);
@@ -122,7 +150,7 @@ test('seed rolls back academic inserts when an applicant insert fails', (t) => {
 	assert.ok(academicRows(db).every((rows) => rows.length === 0));
 });
 
-test('seed CLI creates the configured admin only and can run twice', () => {
+test('seed CLI creates the configured admin and skips all changes once seeded', () => {
 	const directory = mkdtempSync(path.join(tmpdir(), 'enrollment-seed-test-'));
 	const filename = path.join(directory, 'seed.sqlite');
 	let sqlite;
@@ -145,18 +173,31 @@ test('seed CLI creates the configured admin only and can run twice', () => {
 				[require.resolve('tsx/cli'), path.resolve('src/lib/server/db/seed.ts')],
 				{ env, encoding: 'utf8', timeout: 30000 }
 			);
-			assert.match(output, /No students created/);
-			if (run === 1)
-				assert.match(output, /Added 0 programs, 0 subjects, 0 curricula, and 0 applicants/);
+			if (run === 0) {
+				assert.match(output, /No students created/);
+				sqlite = new Database(filename);
+				assert.equal(
+					sqlite.prepare('SELECT seeded FROM system_settings WHERE id = 1').get().seeded,
+					1
+				);
+				sqlite.exec(
+					"DELETE FROM applicant; UPDATE user SET name = 'Edited admin', role = 'student', setup_complete = 0;"
+				);
+				sqlite.close();
+				sqlite = undefined;
+			} else {
+				assert.match(output, /Database already seeded; skipping/);
+				assert.doesNotMatch(output, /Added|Seeding complete/);
+			}
 		}
 		sqlite = new Database(filename, { readonly: true });
-		const users = sqlite.prepare('SELECT email, role, setup_complete FROM user').all();
+		const users = sqlite.prepare('SELECT email, name, role, setup_complete FROM user').all();
 		assert.deepEqual(users, [
-			{ email: 'seed.admin@example.com', role: 'admin', setup_complete: 1 }
+			{ email: 'seed.admin@example.com', name: 'Edited admin', role: 'student', setup_complete: 0 }
 		]);
 		assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM student').get().count, 0);
 		assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM account').get().count, 1);
-		assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM applicant').get().count, 20);
+		assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM applicant').get().count, 0);
 		assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
 	} finally {
 		sqlite?.close();

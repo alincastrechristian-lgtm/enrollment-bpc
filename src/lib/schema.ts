@@ -21,6 +21,7 @@ const uuid = () =>
 		.$defaultFn(() => crypto.randomUUID());
 
 export const systemSettings = sqliteTable('system_settings', {
+	seeded: integer('seeded', { mode: 'boolean' }).default(false).notNull(),
 	id: integer('id').primaryKey().default(1),
 	smtpHost: text('smtp_host').default('smtp.gmail.com'),
 	smtpPort: integer('smtp_port').default(465),

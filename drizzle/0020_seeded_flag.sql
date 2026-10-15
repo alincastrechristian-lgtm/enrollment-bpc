@@ -1,0 +1,1 @@
+ALTER TABLE `system_settings` ADD `seeded` integer DEFAULT false NOT NULL;
