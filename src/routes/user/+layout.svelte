@@ -20,6 +20,7 @@
 				drawerToggleId={drawerId}
 				pageTitle={data.pageTitle}
 				pageDescription={data.pageDescription}
+				backHref={data.backHref}
 			/>
 			<main class="flex-1 px-4 py-6 md:px-6 lg:px-8">
 				{@render children()}

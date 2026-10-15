@@ -15,12 +15,7 @@
 		page.url.pathname.split('/').filter((segment) => segment !== '').length <= 2
 	);
 
-	const pagePath = $derived(
-		page.url.pathname
-			.split('/')
-			.filter((segment) => segment !== '')
-			.map((segment) => segment.toUpperCase())
-	);
+	const pagePath = $derived(page.url.pathname.split('/').filter((segment) => segment !== ''));
 
 	const previousPath = $derived(
 		page.url.pathname
@@ -33,11 +28,13 @@
 	let {
 		drawerToggleId = 'user-sidebar-drawer',
 		pageTitle = defaultPageTitle,
-		pageDescription
+		pageDescription,
+		backHref
 	}: {
 		drawerToggleId?: string;
 		pageTitle?: string;
 		pageDescription?: string;
+		backHref?: string;
 	} = $props();
 </script>
 
@@ -101,7 +98,7 @@
 
 			<p class="mt-1 text-xs font-medium tracking-wide text-base-content/50">
 				{#each pagePath as segment, index (index)}
-					{#if index === 0 || index === pagePath.length - 1}
+					{#if index === 0 || index === pagePath.length - 1 || (backHref && index === pagePath.length - 2)}
 						{segment.toUpperCase()}
 					{:else}
 						<a
@@ -127,7 +124,7 @@
 			<button
 				type="button"
 				class="btn gap-2 btn-ghost text-base-content/60 btn-sm hover:bg-base-300/60 hover:text-base-content"
-				onclick={() => previousPath && goto('/' + previousPath)}
+				onclick={() => (backHref || previousPath) && goto(backHref ?? '/' + previousPath)}
 			>
 				<ArrowLeft size={17} strokeWidth={2} />
 				Back

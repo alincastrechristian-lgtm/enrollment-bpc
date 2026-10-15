@@ -1,4 +1,5 @@
 import type { LayoutLoad } from './$types';
+import { resolve } from '$app/paths';
 
 const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }> = {
 	'/user/dashboard': {
@@ -29,6 +30,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	'/user/students/[userId]': {
 		pageTitle: 'STUDENT DETAILS',
 		pageDescription: 'Review student information, account status, and enrollment history.'
+	},
+	'/user/students/[userId]/enrollments/[enrollmentId]': {
+		pageTitle: 'ENROLLMENT DETAILS',
+		pageDescription: 'Review enrollment subjects and grades.'
 	},
 	'/user/enrollment': {
 		pageTitle: 'ENROLLMENT',
@@ -76,7 +81,7 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	}
 };
 
-export const load: LayoutLoad = ({ url, route }) => {
+export const load: LayoutLoad = ({ url, route, params }) => {
 	const path = url.pathname.replace(/\/$/, '') || '/user/dashboard';
 	const meta =
 		routeMeta[route.id ?? ''] ??
@@ -85,6 +90,10 @@ export const load: LayoutLoad = ({ url, route }) => {
 		(path.startsWith('/user/curriculum/') ? routeMeta['/user/curriculum/*'] : undefined) ??
 		{};
 	return {
+		backHref:
+			route.id === '/user/students/[userId]/enrollments/[enrollmentId]' && params.userId
+				? resolve('/user/students/[userId]', { userId: params.userId })
+				: undefined,
 		pageTitle: meta.pageTitle,
 		pageDescription: meta.pageDescription
 	};

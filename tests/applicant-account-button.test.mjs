@@ -32,19 +32,22 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			export async function deleteApplicant(){};export async function createApplicant(){};export async function updateApplicant(){}`,
 		'popup.js': `export async function showYesNo(props){window.questions.push(props);return window.confirm;}
 			export function showLoading(){};export function showError(message){window.messages.push({type:'error',message});}export function showSuccess(message){window.messages.push({type:'success',message});}`,
+		'grades.js': `window.gradeCalls=[];
+			export async function updateEnrollmentGrades(data){window.gradeCalls.push(data);if(window.failGrades)throw new Error('Grades have changed since this page was loaded. Refresh before saving again.');if(window.deferGrades)await new Promise(resolve=>window.finishGrades=resolve);return {success:true,grades:data.grades.map(({id,grade})=>({id,grade}))};}`,
 		'Harness.svelte': `<script>
 			import Topbar from '${sourcePath('src/lib/components/Topbar/Topbar.svelte')}';
 			import {load as loadMetadata} from '${sourcePath('src/routes/user/+layout.ts')}';
 			import {page} from './state.svelte.js';
 			import Editor from '${sourcePath('src/routes/user/applicants/EnrollmentEditor.svelte')}';
 			import Student from '${sourcePath('src/routes/user/students/[userId]/+page.svelte')}';
+			import EnrollmentDetails from '${sourcePath('src/routes/user/students/EnrollmentDetails.svelte')}';
 			import Students from '${sourcePath('src/routes/user/students/+page.svelte')}';
 			import Applicant from '${sourcePath('src/routes/user/applicants/[applicantId]/+page.svelte')}';
 			import Applicants from '${sourcePath('src/routes/user/applicants/+page.svelte')}';
 			let mode=$state('enroll');let revision=$state(0);window.show=(value)=>mode=value;
-			const routeId=$derived(mode==='enroll'?'/user/applicants/[applicantId]/enroll':mode==='student'||mode==='empty-student'?'/user/students/[userId]':mode==='list'?'/user/students':mode==='applicant'||mode==='linked-applicant'||mode==='incomplete'?'/user/applicants/[applicantId]':'/user/applicants');
-			const routeUrl=$derived(new URL('/portal'+routeId.replace('[applicantId]','a').replace('[userId]','u'),window.location.href));
-			const metadata=$derived(loadMetadata({url:routeUrl,route:{id:routeId}}));
+			const routeId=$derived(mode.startsWith('grade-')?'/user/students/[userId]/enrollments/[enrollmentId]':mode==='enroll'?'/user/applicants/[applicantId]/enroll':mode==='student'||mode==='empty-student'?'/user/students/[userId]':mode==='list'?'/user/students':mode==='applicant'||mode==='linked-applicant'||mode==='incomplete'?'/user/applicants/[applicantId]':'/user/applicants');
+			const routeUrl=$derived(new URL('/portal'+routeId.replace('[applicantId]','a').replace('[userId]','u').replace('[enrollmentId]',mode.startsWith('grade-past')?'old':'current'),window.location.href));
+			const metadata=$derived(loadMetadata({url:routeUrl,route:{id:routeId},params:{userId:'u'}}));
 			$effect(()=>{page.url=routeUrl;});
 			window.reset=()=>{window.accountCalls=[];window.questions=[];window.navigation=[];window.messages=[];window.confirm=true;window.failAccount=false;window.deferAccount=false;window.invitationSent=true;window.failNavigation=false;mode='enroll';revision++;};
 			const program={id:'p',code:'BSIS',name:'Information Systems',isActive:true};
@@ -56,10 +59,13 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			const historical={...current,curriculumId:'old-curriculum',curriculum:{...curriculum,id:'old-curriculum',programCode:'BSIT',program:{...program,id:'it',code:'BSIT',name:'Information Technology'}},id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,grade:null}]};
 			const student={id:'u',name:applicant.name,email:applicant.email,image:null,emailVerified:false,setupComplete:false,banned:false,banReason:null,createdAt:new Date(),updatedAt:new Date(),applicant,studentData:{studentId:'MA-202610-000001',applicant,applicantId:'a',currentEnrollmentId:'current',currentEnrollment:current,enrollments:[current,historical]}};
 		</script>
-		<Topbar pageTitle={metadata.pageTitle} pageDescription={metadata.pageDescription} />
+		<Topbar pageTitle={metadata.pageTitle} pageDescription={metadata.pageDescription} backHref={metadata.backHref} />
 		{#key mode+revision}
 			{#if mode==='enroll'}<Editor data={{applicant,program,curriculum,entries,subjects,schoolYearStart:2026}} />
 			{:else if mode==='student'}<Student data={{student}} />
+			{:else if mode==='grade-current'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId},enrollment:current,isCurrent:true,canEdit:true}} />
+			{:else if mode==='grade-past-admin'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId},enrollment:historical,isCurrent:false,canEdit:true}} />
+			{:else if mode==='grade-past'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId},enrollment:historical,isCurrent:false,canEdit:false}} />
 			{:else if mode==='empty-student'}<Student data={{student:{...student,applicant:null,studentData:null}}} />
 			{:else if mode==='list'}<Students data={{users:[student],total:1,search:'',status:'all',filters:{}}} />
 			{:else if mode==='applicant'}<Applicant data={{applicant,programs:[program]}} />
@@ -83,6 +89,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 					{ find: '$app/paths', replacement: path.join(root, 'paths.js') },
 					{ find: '#lib/auth-client.js', replacement: path.join(root, 'auth-client.js') },
 					{ find: '#lib/actions/user.remote.js', replacement: path.join(root, 'actions.js') },
+					{ find: '#lib/actions/grades.remote.js', replacement: path.join(root, 'grades.js') },
 					{ find: '#lib/actions/applicant.remote.js', replacement: path.join(root, 'actions.js') },
 					{
 						find: '#lib/components/Popup/Popup.svelte.js',
@@ -257,6 +264,113 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
 		await history.getByRole('button', { name: 'Clear filters', exact: true }).click();
 		await expect(history.getByRole('article')).toHaveCount(2);
+		await expect(
+			history
+				.getByRole('article', { name: '2025–2026 · 1st Semester', exact: true })
+				.getByRole('link', { name: 'View', exact: true })
+		).toHaveAttribute('href', '/portal/user/students/u/enrollments/current');
+		await expect(
+			currentSummary.getByRole('link', { name: 'View', exact: true })
+		).toHaveAttribute('href', '/portal/user/students/u/enrollments/current');
+		await expect(
+			history
+				.getByRole('article', { name: '2024–2025 · 2nd Semester', exact: true })
+				.getByRole('link', { name: 'View', exact: true })
+		).toHaveAttribute('href', '/portal/user/students/u/enrollments/old');
+		await page.evaluate(() => window.show('grade-current'));
+		await expect(page.getByRole('link', { name: 'ENROLLMENTS', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('link', { name: 'U', exact: true })).toHaveAttribute(
+			'href',
+			'/portal/user/students/u'
+		);
+		await expect(
+			page.getByRole('heading', { name: 'ENROLLMENT DETAILS', exact: true })
+		).toBeVisible();
+		await expect(page.getByRole('spinbutton')).toHaveCount(0);
+		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
+		const firstGrade = page.getByLabel('Grade for SNAP201', { exact: true });
+		const secondGrade = page.getByLabel('Grade for LIVE101', { exact: true });
+		await expect(page.getByRole('button', { name: 'Save grades', exact: true })).toBeDisabled();
+		await firstGrade.fill('5.5');
+		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
+		assert.equal(await firstGrade.evaluate((input) => input.validity.valid), false);
+		assert.deepEqual(await page.evaluate(() => window.gradeCalls), []);
+		await firstGrade.fill('2.25');
+		await page.evaluate(() => (window.confirm = false));
+		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(firstGrade).toHaveValue('2.25');
+		await page.getByRole('button', { name: 'Back', exact: true }).click();
+		await expect(firstGrade).toBeVisible();
+		await page.evaluate(() => (window.confirm = true));
+		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(page.getByRole('spinbutton')).toHaveCount(0);
+		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
+		await expect(firstGrade).toHaveValue('');
+		await firstGrade.fill('2.25');
+		await secondGrade.fill('');
+		await page.evaluate(() => (window.failGrades = true));
+		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
+		await expect(page.getByRole('alert')).toContainText('Grades have changed');
+		await expect(firstGrade).toHaveValue('2.25');
+		await page.evaluate(() => {
+			window.failGrades = false;
+			window.deferGrades = true;
+		});
+		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Saving...', exact: true })).toBeDisabled();
+		await expect(firstGrade).toBeDisabled();
+		await page
+			.locator('form')
+			.evaluate((form) =>
+				form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+			);
+		assert.equal(await page.evaluate(() => window.gradeCalls.length), 2);
+		assert.deepEqual(await page.evaluate(() => window.gradeCalls[1]), {
+			userId: 'u',
+			enrollmentId: 'current',
+			grades: [
+				{ id: 'es1', grade: 2.25, originalGrade: null },
+				{ id: 'es2', grade: null, originalGrade: 1.25 }
+			]
+		});
+		await page.evaluate(() => window.finishGrades());
+		await expect(page.getByRole('status')).toHaveText('Grades saved successfully.');
+		await expect(page.getByRole('cell', { name: '2.25', exact: true })).toBeVisible();
+		await expect(page.getByRole('cell', { name: 'No grade', exact: true })).toBeVisible();
+		await page.setViewportSize({ width: 1360, height: 960 });
+		await page.screenshot({
+			path: path.resolve('.tmp/enrollment-grades-desktop.png'),
+			fullPage: true
+		});
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Save grades', exact: true })).toBeDisabled();
+		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+		await page.screenshot({
+			path: path.resolve('.tmp/enrollment-grades-mobile.png'),
+			fullPage: true
+		});
+		await page.getByRole('button', { name: 'Back', exact: true }).click();
+		await expect(page.getByRole('heading', { name: 'STUDENT DETAILS', exact: true })).toBeVisible();
+		assert.equal(await page.evaluate(() => window.navigation.at(-1)), '/portal/user/students/u');
+		await page.evaluate(() => window.show('grade-past'));
+		await expect(page.getByText('This enrollment is read-only.', { exact: false })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('spinbutton')).toHaveCount(0);
+		await page.evaluate(() => {
+			window.show('grade-past-admin');
+			window.deferGrades = false;
+		});
+		await expect(page.getByText('Historical enrollment', { exact: true })).toBeVisible();
+		await expect(page.getByText('Current enrollment', { exact: true })).toHaveCount(0);
+		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
+		await page.getByLabel('Grade for OLD101', { exact: true }).fill('1.75');
+		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
+		await expect(page.getByRole('status')).toHaveText('Grades saved successfully.');
+		await expect(page.getByRole('cell', { name: '1.75', exact: true })).toBeVisible();
+		await expect(page.getByText('Historical enrollment', { exact: true })).toBeVisible();
+		assert.equal(await page.evaluate(() => window.gradeCalls.at(-1).enrollmentId), 'old');
+		await page.getByRole('button', { name: 'Back', exact: true }).click();
 		await page.getByRole('button', { name: 'Resend setup link', exact: true }).click();
 		assert.deepEqual(await page.evaluate(() => window.mailCalls), [
 			{ email: 'stored@example.com' }

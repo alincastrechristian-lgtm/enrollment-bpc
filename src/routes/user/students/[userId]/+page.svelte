@@ -2,7 +2,15 @@
 	import { resendMagicLink } from '#lib/actions/user.remote.js';
 	import { showError, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { resolve } from '$app/paths';
-	import { BookOpen, FileCheck, GraduationCap, MailCheck, RotateCcw, User } from '@lucide/svelte';
+	import {
+		BookOpen,
+		Eye,
+		FileCheck,
+		GraduationCap,
+		MailCheck,
+		RotateCcw,
+		User
+	} from '@lucide/svelte';
 	import { semesterLabel } from '../../curriculum/SubjectLayout.svelte';
 	import type { PageProps } from './$types';
 
@@ -163,9 +171,22 @@
 				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
 				aria-labelledby="current-enrollment-heading"
 			>
-				<h2 id="current-enrollment-heading" class="mb-5 flex items-center gap-2 font-bold">
-					<GraduationCap class="size-5 text-primary" aria-hidden="true" />Current enrollment
-				</h2>
+				<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+					<h2 id="current-enrollment-heading" class="flex items-center gap-2 font-bold">
+						<GraduationCap class="size-5 text-primary" aria-hidden="true" />Current enrollment
+					</h2>
+					{#if current}
+						<a
+							class="btn border-base-300 btn-outline btn-sm"
+							href={resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
+								userId: student.id,
+								enrollmentId: current.id
+							})}
+						>
+							<Eye class="size-4" aria-hidden="true" />View
+						</a>
+					{/if}
+				</div>
 				{#if current}
 					<dl class="grid gap-4 text-sm sm:grid-cols-3">
 						{#each [['School year', `${current.schoolYearStart}–${current.schoolYearStart + 1}`], ['Year level', `Year ${current.yearLevel}`], ['Semester', semesterLabel(current.semester)], ['Section', current.section], ['Status', current.status], ['Curriculum', current.curriculum.name]] as [label, value] (label)}
@@ -338,11 +359,20 @@
 							)} units
 						</p>
 					</div>
-					<div class="flex gap-2">
+					<div class="flex flex-wrap items-center gap-2">
 						{#if entry.id === record?.currentEnrollmentId}
 							<span class="badge badge-primary">Current</span>
 						{/if}
 						<span class="badge badge-outline capitalize">{entry.status}</span>
+						<a
+							class="btn border-base-300 btn-outline btn-sm"
+							href={resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
+								userId: student.id,
+								enrollmentId: entry.id
+							})}
+						>
+							<Eye class="size-4" aria-hidden="true" />View
+						</a>
 					</div>
 				</div>
 				{#if entry.subjects.length}

@@ -18,7 +18,10 @@ function loadTypeScript(filename, dependencies = {}, sourceOverride) {
 	return exports;
 }
 const { Role } = loadTypeScript('src/lib/Roles.ts');
-const schema = loadTypeScript('src/lib/schema.ts', { '#lib/Roles.js': { Role } });
+const schema = loadTypeScript('src/lib/schema.ts', {
+	'#lib/Roles.js': { Role },
+	'./email': loadTypeScript('src/lib/email.ts')
+});
 const documents = loadTypeScript('src/lib/applicants.ts');
 const authSource = readFileSync(new URL('../src/lib/server/auth.ts', import.meta.url), 'utf8');
 const validateUserSource = ts
@@ -174,6 +177,15 @@ function fixture(t, role = Role.REGISTRAR) {
 		dependencies
 	);
 	const commands = loadTypeScript('src/lib/actions/user.remote.ts', dependencies);
+	dependencies['#lib/server/student-enrollment.js'] = loadTypeScript(
+		'src/lib/server/student-enrollment.ts',
+		dependencies
+	);
+	const gradeCommands = loadTypeScript('src/lib/actions/grades.remote.ts', dependencies);
+	const loadEnrollmentDetails = loadTypeScript(
+		'src/routes/user/students/[userId]/enrollments/[enrollmentId]/+page.server.ts',
+		dependencies
+	).load;
 	const loadEnrollmentPage = loadTypeScript(
 		'src/routes/user/applicants/[applicantId]/enroll/+page.server.ts',
 		dependencies
@@ -195,6 +207,12 @@ function fixture(t, role = Role.REGISTRAR) {
 
 	return {
 		...commands,
+		...gradeCommands,
+		loadEnrollmentDetails: (userId, enrollmentId) =>
+			loadEnrollmentDetails({
+				...dependencies['$app/server'].getRequestEvent(),
+				params: { userId, enrollmentId }
+			}),
 		loadEnrollmentPage: (applicantId = input.applicantId) =>
 			loadEnrollmentPage({
 				...dependencies['$app/server'].getRequestEvent(),
@@ -647,5 +665,198 @@ for (const role of [Role.STUDENT, null]) {
 		const f = fixture(t, role);
 		assert.throws(() => f.loadEnrollmentPage(), { status: role ? 403 : 401 });
 		await assert.rejects(f.loadStudentPage('operator'), { status: role ? 403 : 401 });
+	});
+}
+
+async function gradeFixture(t, role = Role.REGISTRAR) {
+	const f = fixture(t, role);
+	const result = await f.enrollStudent(input);
+	f.db
+		.insert(schema.enrollment)
+		.values({
+			id: 'past',
+			studentId: result.studentId,
+			curriculumId: 'active',
+			section: 'A',
+			schoolYearStart: 2024,
+			semester: 2,
+			yearLevel: 1,
+			status: 'withdrawn'
+		})
+		.run();
+	f.db
+		.insert(schema.enrollmentSubject)
+		.values({
+			id: 'past-subject',
+			enrollmentId: 'past',
+			subjectId: 's1',
+			source: 'extra',
+			subjectCode: 'PAST101',
+			subjectName: 'Historical subject',
+			units: 3,
+			grade: 2.5,
+			addedBy: 'operator'
+		})
+		.run();
+	const subjects = f.db
+		.select()
+		.from(schema.enrollmentSubject)
+		.all()
+		.filter((row) => row.enrollmentId === result.enrollmentId);
+	const payload = {
+		userId: result.userId,
+		enrollmentId: result.enrollmentId,
+		grades: subjects
+			.slice(0, 2)
+			.map((subject, index) => ({ id: subject.id, grade: index ? 5 : 1, originalGrade: null }))
+	};
+	return { ...f, result, subjects, payload };
+}
+
+for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+	test(`${role} edits current grades; historical grades are editable only by admins`, async (t) => {
+		const f = await gradeFixture(t, role);
+		assert.equal(
+			(await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId)).canEdit,
+			true
+		);
+		const past = await f.loadEnrollmentDetails(f.result.userId, 'past');
+		assert.equal(past.isCurrent, false);
+		assert.equal(past.canEdit, role === Role.ADMIN);
+		assert.equal(past.enrollment.subjects[0].grade, 2.5);
+		const result = await f.updateEnrollmentGrades(f.payload);
+		assert.equal(result.success, true);
+		const changed = {
+			...f.payload,
+			grades: f.payload.grades.map((row, index) => ({
+				...row,
+				originalGrade: row.grade,
+				grade: index ? null : 1.25
+			}))
+		};
+		await f.updateEnrollmentGrades(changed);
+		const saved = await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId);
+		for (const row of changed.grades)
+			assert.equal(
+				saved.enrollment.subjects.find((subject) => subject.id === row.id).grade,
+				row.grade
+			);
+		assert.equal(
+			(await f.loadEnrollmentDetails(f.result.userId, 'past')).enrollment.subjects[0].grade,
+			2.5
+		);
+		const historicalUpdate = {
+			...f.payload,
+			enrollmentId: 'past',
+			grades: [{ id: 'past-subject', grade: 1, originalGrade: 2.5 }]
+		};
+		if (role === Role.ADMIN) {
+			await f.updateEnrollmentGrades(historicalUpdate);
+			assert.equal(
+				(await f.loadEnrollmentDetails(f.result.userId, 'past')).enrollment.subjects[0].grade,
+				1
+			);
+			await assert.rejects(f.updateEnrollmentGrades(historicalUpdate), { status: 409 });
+			await f.updateEnrollmentGrades({
+				...historicalUpdate,
+				grades: [{ id: 'past-subject', grade: null, originalGrade: 1 }]
+			});
+			assert.equal(
+				(await f.loadEnrollmentDetails(f.result.userId, 'past')).enrollment.subjects[0].grade,
+				null
+			);
+		} else {
+			await assert.rejects(f.updateEnrollmentGrades(historicalUpdate), { status: 409 });
+			assert.equal(
+				(await f.loadEnrollmentDetails(f.result.userId, 'past')).enrollment.subjects[0].grade,
+				2.5
+			);
+		}
+	});
+}
+
+test('grade writes validate input and subject ownership without partial changes', async (t) => {
+	const f = await gradeFixture(t);
+	for (const grade of [0, 5.01, -1, Infinity, NaN, '1', undefined]) {
+		await assert.rejects(
+			f.updateEnrollmentGrades({ ...f.payload, grades: [{ ...f.payload.grades[0], grade }] })
+		);
+	}
+	await assert.rejects(f.updateEnrollmentGrades({ ...f.payload, grades: [] }));
+	await assert.rejects(
+		f.updateEnrollmentGrades({ ...f.payload, grades: [f.payload.grades[0], f.payload.grades[0]] }),
+		{ status: 400 }
+	);
+	for (const id of ['past-subject', 'missing']) {
+		await assert.rejects(
+			f.updateEnrollmentGrades({
+				...f.payload,
+				grades: [f.payload.grades[0], { id, grade: 1, originalGrade: null }]
+			}),
+			{ status: 400 }
+		);
+	}
+	await assert.rejects(f.updateEnrollmentGrades({ ...f.payload, userId: 'operator' }), {
+		status: 404
+	});
+	await assert.rejects(f.loadEnrollmentDetails('operator', f.result.enrollmentId), { status: 404 });
+	await assert.rejects(f.loadEnrollmentDetails(f.result.userId, 'missing'), { status: 404 });
+	assert.ok(
+		f.db
+			.select()
+			.from(schema.enrollmentSubject)
+			.all()
+			.filter((row) => row.enrollmentId === f.result.enrollmentId)
+			.every((row) => row.grade === null)
+	);
+	assert.equal(
+		(await f.loadEnrollmentDetails(f.result.userId, 'past')).enrollment.subjects[0].grade,
+		2.5
+	);
+});
+
+test('stale grade conflicts roll back every change and current enrollment is rechecked on save', async (t) => {
+	const f = await gradeFixture(t);
+	const { eq } = require('drizzle-orm');
+	f.db
+		.update(schema.enrollmentSubject)
+		.set({ grade: 2 })
+		.where(eq(schema.enrollmentSubject.id, f.payload.grades[1].id))
+		.run();
+	await assert.rejects(f.updateEnrollmentGrades(f.payload), { status: 409 });
+	let saved = await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId);
+	assert.equal(
+		saved.enrollment.subjects.find((subject) => subject.id === f.payload.grades[0].id).grade,
+		null
+	);
+	assert.equal(
+		saved.enrollment.subjects.find((subject) => subject.id === f.payload.grades[1].id).grade,
+		2
+	);
+	f.db.update(schema.studentData).set({ currentEnrollmentId: 'past' }).run();
+	await assert.rejects(f.updateEnrollmentGrades({ ...f.payload, grades: [f.payload.grades[0]] }), {
+		status: 409
+	});
+	saved = await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId);
+	assert.equal(saved.canEdit, false);
+	assert.equal(
+		saved.enrollment.subjects.find((subject) => subject.id === f.payload.grades[0].id).grade,
+		null
+	);
+	assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+});
+
+for (const role of [Role.STUDENT, null]) {
+	test(`grade view and command reject ${role ?? 'anonymous'}`, async (t) => {
+		const f = fixture(t, role);
+		await assert.rejects(f.loadEnrollmentDetails('u', 'e'), { status: role ? 403 : 401 });
+		await assert.rejects(
+			f.updateEnrollmentGrades({
+				userId: 'u',
+				enrollmentId: 'e',
+				grades: [{ id: 'subject', grade: 1, originalGrade: null }]
+			}),
+			{ status: role ? 403 : 401 }
+		);
 	});
 }
