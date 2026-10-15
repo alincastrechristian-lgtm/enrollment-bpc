@@ -9,6 +9,7 @@
 </script>
 
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { createProgram, updateProgram } from '#lib/actions/program.remote.js';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import {
@@ -69,8 +70,10 @@
 				activeCurriculumId !== (selectedProgram.activeCurriculumId ?? '');
 			if (selectionChanged) {
 				const chosen = programCurricula.find((record) => record.id === activeCurriculumId);
-				if (activeCurriculumId && !chosen)
-					throw new Error('Select a curriculum belonging to this program.');
+				if (activeCurriculumId && !chosen) {
+					showError('Select a curriculum belonging to this program.');
+					return;
+				}
 				if (
 					!(await showYesNo({
 						title: 'Change active curriculum?',
@@ -103,9 +106,7 @@
 			showError(
 				saved
 					? 'Program saved, but the page could not refresh. Reload to see the latest catalog.'
-					: err instanceof Error
-						? err.message
-						: 'Failed to save program'
+					: getErrorMessage(err, 'Failed to save program')
 			);
 		} finally {
 			busy = false;

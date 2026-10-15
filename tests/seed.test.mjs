@@ -55,17 +55,18 @@ test('seeded migration preserves existing settings, retries safely, and can roll
 	migrate(drizzle(sqlite), migrationConfigThrough(t, 19));
 	sqlite.exec("INSERT INTO system_settings (id, sender_name) VALUES (1, 'Existing school')");
 	const before = sqlite.prepare('SELECT * FROM system_settings WHERE id = 1').get();
-	migrate(drizzle(sqlite), { migrationsFolder: 'drizzle' });
+	const config = migrationConfigThrough(t, 20);
+	migrate(drizzle(sqlite), config);
 	assert.deepEqual(sqlite.prepare('SELECT * FROM system_settings WHERE id = 1').get(), {
 		...before,
 		seeded: 0
 	});
 	sqlite.exec('UPDATE system_settings SET seeded = 1 WHERE id = 1');
-	migrate(drizzle(sqlite), { migrationsFolder: 'drizzle' });
+	migrate(drizzle(sqlite), config);
 	assert.equal(sqlite.prepare('SELECT seeded FROM system_settings WHERE id = 1').get().seeded, 1);
 	sqlite.exec(readFileSync('drizzle/rollback/0020_seeded_flag.sql', 'utf8'));
 	assert.deepEqual(sqlite.prepare('SELECT * FROM system_settings WHERE id = 1').get(), before);
-	migrate(drizzle(sqlite), { migrationsFolder: 'drizzle' });
+	migrate(drizzle(sqlite), config);
 	assert.deepEqual(sqlite.prepare('SELECT * FROM system_settings WHERE id = 1').get(), {
 		...before,
 		seeded: 0

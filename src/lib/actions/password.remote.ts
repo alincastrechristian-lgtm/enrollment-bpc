@@ -1,4 +1,5 @@
 import { user } from '#lib/schema.js';
+import { getAuthErrorMessage } from '#lib/errors.js';
 import { auth, validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { command, getRequestEvent } from '$app/server';
@@ -31,7 +32,10 @@ export const resetPasswordAndSignIn = command(
 			await auth.api.resetPassword({ body: { token, newPassword }, headers: request.headers });
 		} catch (err) {
 			if (isAPIError(err) && err.statusCode >= 400 && err.statusCode < 500) {
-				error(err.statusCode, err.message);
+				error(
+					err.statusCode,
+					getAuthErrorMessage(err.body, 'Failed to reset password. Please try again.')
+				);
 			}
 			throw err;
 		}
@@ -74,7 +78,10 @@ export const completeFirstLogin = command(async () => {
 		await db.update(user).set({ emailVerified: true }).where(eq(user.id, locals.user.id));
 	} catch (err) {
 		if (isAPIError(err) && err.statusCode >= 400 && err.statusCode < 500) {
-			error(err.statusCode, err.message);
+			error(
+				err.statusCode,
+				getAuthErrorMessage(err.body, 'Failed to complete account setup. Please try again.')
+			);
 		}
 		throw err;
 	}

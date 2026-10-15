@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { updateSystemSettings } from '#lib/actions/settings.remote.js';
 	import { EmailApiType } from '#lib/email.js';
 	import {
@@ -70,7 +71,7 @@
 			feedback = 'Email settings saved successfully.';
 			showSuccess(feedback);
 		} catch (error) {
-			showError(error instanceof Error ? error.message : 'Failed to save email settings');
+			showError(getErrorMessage(error, 'Failed to save email settings'));
 		} finally {
 			busy = false;
 		}

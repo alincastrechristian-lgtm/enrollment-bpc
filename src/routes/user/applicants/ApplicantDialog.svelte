@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { createApplicant, updateApplicant } from '#lib/actions/applicant.remote.js';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
@@ -86,7 +87,7 @@
 			await refreshAll();
 			showSuccess(editing ? 'Applicant updated successfully' : 'Applicant created successfully');
 		} catch (error) {
-			showError(error instanceof Error ? error.message : 'Failed to save applicant');
+			showError(getErrorMessage(error, 'Failed to save applicant'));
 		} finally {
 			busy = false;
 		}

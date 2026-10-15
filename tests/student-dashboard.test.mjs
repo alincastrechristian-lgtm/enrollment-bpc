@@ -52,7 +52,7 @@ function fixture(t, finalized = true) {
 		INSERT INTO curriculum (id, program_code, name) VALUES ('c', 'BSIS', 'Curriculum');
 		INSERT INTO enrollment (id, student_id, curriculum_id, section, school_year_start, semester, year_level, status, finalized_grades) VALUES
 		('current', 'MA-001', 'c', 'B', 2026, 1, 2, 'enrolled', ${Number(finalized)}),
-		('newer', 'MA-001', 'c', 'C', 2027, 1, 3, 'pending', 0),
+		('newer', 'MA-001', 'c', 'C', 2027, 1, 3, 'enrolled', 0),
 		('private', 'MA-002', 'c', 'Z', 2026, 1, 1, 'enrolled', 1);
 		UPDATE student SET enrollment_id = 'current' WHERE user_id = 'u';
 		UPDATE student SET enrollment_id = 'private' WHERE user_id = 'other';
@@ -179,13 +179,13 @@ test('missing student records and current links render empty data without select
 	}
 });
 
-test('all-passing grades and pending enrollment status do not produce false concern alerts', async (t) => {
+test('all-passing grades and withdrawn enrollment status do not produce false concern alerts', async (t) => {
 	const f = fixture(t);
 	f.sqlite.exec(
-		"UPDATE enrollment_subject SET grade = 3 WHERE enrollment_id = 'current'; UPDATE enrollment SET status = 'pending' WHERE id = 'current'"
+		"UPDATE enrollment_subject SET grade = 3 WHERE enrollment_id = 'current'; UPDATE enrollment SET status = 'withdrawn' WHERE id = 'current'"
 	);
 	const { studentDashboard: data } = await f.load();
-	assert.equal(data.enrollment.status, 'pending');
+	assert.equal(data.enrollment.status, 'withdrawn');
 	assert.equal(data.passedCount, 6);
 	assert.equal(data.attentionCount, 0);
 	assert.deepEqual(

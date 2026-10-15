@@ -13,6 +13,9 @@ test('page-load errors keep statuses, use shared boundaries, and offer working r
 	const files = {
 		'package.json': JSON.stringify({ type: 'module', imports: { '#lib/*': './src/lib/*' } }),
 		'src/lib/components/ErrorPage.svelte': boundary('src/lib/components/ErrorPage.svelte'),
+		'src/lib/errors.ts': boundary('src/lib/errors.ts'),
+		'src/hooks.server.js': "export {getPublicError as handleError} from '#lib/errors.js';",
+		'src/hooks.client.ts': boundary('src/hooks.client.ts'),
 		'src/app.html':
 			'<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1">%sveltekit.head%</head><body><div>%sveltekit.body%</div></body></html>',
 		'src/error.html': boundary('src/error.html'),
@@ -21,9 +24,9 @@ test('page-load errors keep statuses, use shared boundaries, and offer working r
 		'src/routes/user/+error.svelte': boundary('src/routes/user/+error.svelte'),
 		'src/routes/+layout.svelte':
 			'<script>import "../style.css";let {children,data}=$props();</script><div data-theme={data.theme}>{@render children()}</div>',
-		'src/routes/+layout.server.js': `import {error} from '@sveltejs/kit';export const load=({url})=>{if(url.searchParams.has('root-error'))error(503,'Service temporarily unavailable');return {theme:url.searchParams.get('theme')||'light'};};`,
+		'src/routes/+layout.server.js': `import {error} from '@sveltejs/kit';export const load=({url})=>{if(url.searchParams.has('root-error'))error(503,'SECRET provider credentials');return {theme:url.searchParams.get('theme')||'light'};};`,
 		'src/routes/+page.svelte':
-			'<h1>Sign in</h1><a href="/portal/user/failure/404">Open unavailable enrollment</a>',
+			'<script>import {onMount} from "svelte";onMount(()=>{window.pageReady=true;});</script><h1>Sign in</h1><a href="/portal/user/failure/404">Open unavailable enrollment</a>',
 		'src/routes/user/+layout.svelte':
 			'<script>let {children}=$props();</script><aside aria-label="Portal sidebar">Portal navigation</aside><main>{@render children()}</main>',
 		'src/routes/user/+layout.server.js': `import {error} from '@sveltejs/kit';export const load=({url})=>{if(url.searchParams.has('layout-error'))error(403,'Forbidden');};`,
@@ -51,6 +54,8 @@ test('page-load errors keep statuses, use shared boundaries, and offer working r
 		const url = (route) => `${origin}/portal${route}`;
 		browser = await chromium.launch({ headless: true, channel: 'msedge' });
 		const page = await browser.newPage({ viewport: { width: 1360, height: 960 } });
+		// Cold SSR compilation of the icon package can exceed Playwright's 30s default.
+		page.setDefaultNavigationTimeout(60_000);
 		const clientErrors = [];
 		page.on('pageerror', (error) => clientErrors.push(error.message));
 		for (const [status, title] of [
@@ -88,6 +93,7 @@ test('page-load errors keep statuses, use shared boundaries, and offer working r
 
 		// Verify hydration and client navigation update the same boundary.
 		await page.goto(url('/'));
+		await expect.poll(() => page.evaluate(() => window.pageReady)).toBe(true);
 		await page.evaluate(() => (window.clientNavigationMarker = true));
 		await page.getByRole('link', { name: 'Open unavailable enrollment' }).click();
 		await expect(page.getByRole('heading', { name: 'Page unavailable' })).toBeVisible();
@@ -124,8 +130,9 @@ test('page-load errors keep statuses, use shared boundaries, and offer working r
 		assert.equal((await fallback.goto(url('/?root-error=1'))).status(), 503);
 		await expect(fallback.getByRole('heading', { name: 'Unable to load this page' })).toBeVisible();
 		await expect(
-			fallback.getByText('Service temporarily unavailable', { exact: true })
+			fallback.getByText('Something went wrong. Please try again.', { exact: true })
 		).toBeVisible();
+		assert.ok(!(await fallback.content()).includes('SECRET'));
 		await expect(fallback.getByRole('link', { name: 'Try again' })).toBeVisible();
 		assert.ok(await fallback.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 		assert.deepEqual(clientErrors, []);

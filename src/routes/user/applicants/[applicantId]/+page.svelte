@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { deleteApplicant } from '#lib/actions/applicant.remote.js';
 	import { resolve } from '$app/paths';
 	import { canCreateStudentAccount } from '#lib/applicants.js';
@@ -53,7 +54,7 @@
 			await goto('/user/applicants', { refreshAll: true });
 			showSuccess('Applicant deleted successfully');
 		} catch (err) {
-			showError(err instanceof Error ? err.message : 'Failed to delete applicant');
+			showError(getErrorMessage(err, 'Failed to delete applicant'));
 		} finally {
 			busy = false;
 		}

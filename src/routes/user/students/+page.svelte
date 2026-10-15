@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
@@ -23,7 +24,7 @@
 				showSuccess('Verification email sent successfully');
 			})
 			.catch((error) => {
-				showError(error?.message ?? 'Failed to send verification email');
+				showError(getErrorMessage(error, 'Failed to send verification email'));
 			})
 			.finally(() => {
 				resending = false;

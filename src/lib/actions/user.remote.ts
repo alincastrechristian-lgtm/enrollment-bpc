@@ -4,7 +4,7 @@ import { auth, validateUser } from '#lib/server/auth.js';
 import { enrollStudentSchema, getEnrollmentPlan } from '#lib/server/enrollment.js';
 import { command, getRequestEvent } from '$app/server';
 import { error, isHttpError } from '@sveltejs/kit';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { prettifyError, z } from 'zod';
 import { db } from '../server/db';
 
@@ -18,7 +18,8 @@ async function sendPasswordResetLink(email: string, headers: Headers) {
 			headers: headers
 		});
 	} catch (err) {
-		error(400, err instanceof Error ? err.message : 'Failed to send account setup email.');
+		console.error('Account setup email failed:', err);
+		error(502, 'Failed to send account setup email. Please try again.');
 	}
 }
 
@@ -60,8 +61,27 @@ export type CreateUserResult = {
 	email: string;
 };
 
+function rejectExistingEmail(email: string) {
+	const existing = db
+		.select({ role: user.role })
+		.from(user)
+		.where(sql`lower(${user.email}) = ${email}`)
+		.get();
+	if (!existing) return;
+	const message =
+		existing.role === Role.STUDENT
+			? 'A student account already exists with this email.'
+			: existing.role === Role.REGISTRAR
+				? 'A registrar account already exists with this email.'
+				: existing.role === Role.ADMIN
+					? 'An administrator account already exists with this email.'
+					: 'An account already exists with this email.';
+	error(409, message);
+}
+
 // Auth is asynchronous; callers handle database writes and invitations separately.
 async function createUser(data: CreateUserSchema, role: Role, headers: Headers) {
+	rejectExistingEmail(data.email);
 	try {
 		const result = await auth.api.createUser({
 			body: {
@@ -72,7 +92,10 @@ async function createUser(data: CreateUserSchema, role: Role, headers: Headers) 
 		});
 		return result.user;
 	} catch (cause) {
-		error(400, cause instanceof Error ? cause.message : 'Email already exists or is invalid.');
+		// A competing request may have registered the email after the first check.
+		rejectExistingEmail(data.email);
+		console.error('Account creation failed:', cause);
+		error(500, 'Failed to create account. Please try again.');
 	}
 }
 
@@ -158,7 +181,7 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 					schoolYearStart: data.schoolYearStart,
 					semester: data.semester,
 					yearLevel: data.yearLevel,
-					status: 'pending',
+					status: 'enrolled',
 					enrolledAt: new Date()
 				})
 				.returning({ id: enrollment.id })

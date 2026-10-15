@@ -187,7 +187,9 @@
 					{#if entry.id === currentEnrollmentId}
 						<span class="badge badge-primary">Current</span>
 					{/if}
-					<span class="badge badge-outline capitalize">{entry.status}</span>
+					{#if entry.status !== 'enrolled'}
+						<span class="badge badge-outline capitalize">{entry.status}</span>
+					{/if}
 					{#if entry.finalizedGrades}
 						<span class="badge badge-success">Grades finalized</span>
 					{/if}

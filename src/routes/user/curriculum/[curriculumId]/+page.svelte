@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { deleteCurriculum } from '#lib/actions/curriculum.remote.js';
 	import {
 		showError,
@@ -33,7 +34,7 @@
 		try {
 			await confirmCurriculumStateChange(data.curriculum, action);
 		} catch (cause) {
-			showError(cause instanceof Error ? cause.message : 'Failed to change curriculum state');
+			showError(getErrorMessage(cause, 'Failed to change curriculum state'));
 		} finally {
 			busy = false;
 		}
@@ -44,7 +45,7 @@
 		try {
 			await confirmCurriculumActivation(data.curriculum);
 		} catch (cause) {
-			showError(cause instanceof Error ? cause.message : 'Failed to activate curriculum');
+			showError(getErrorMessage(cause, 'Failed to activate curriculum'));
 		} finally {
 			busy = false;
 		}
@@ -103,7 +104,7 @@
 			await goto(resolve('/user/curriculum'), { refreshAll: true });
 			showSuccess('Curriculum deleted successfully');
 		} catch (cause) {
-			showError(cause instanceof Error ? cause.message : 'Failed to delete curriculum');
+			showError(getErrorMessage(cause, 'Failed to delete curriculum'));
 		} finally {
 			busy = false;
 		}
@@ -118,8 +119,9 @@
 			<div class="flex items-center gap-4">
 				<span
 					class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary"
-					><Layers class="size-7" aria-hidden="true" /></span
 				>
+					<Layers class="size-7" aria-hidden="true" />
+				</span>
 				<div class="min-w-0">
 					<h1 class="text-2xl font-bold tracking-tight wrap-break-word">{data.curriculum.name}</h1>
 					<p class="mt-1 text-sm text-base-content/60">
@@ -130,57 +132,77 @@
 						<span class="badge badge-ghost text-xs">{data.curriculum.semesters} semesters</span>
 						<span
 							class={`badge border-none text-xs font-semibold ${data.curriculum.status === 'active' ? 'badge-success' : data.curriculum.status === 'draft' ? 'badge-warning' : 'badge-ghost'}`}
-							>{data.curriculum.status === 'active'
+						>
+							{data.curriculum.status === 'active'
 								? 'Active'
 								: data.curriculum.status === 'draft'
 									? 'Draft'
 									: data.curriculum.status === 'inactive'
 										? 'Inactive'
-										: 'Archived'}</span
-						>
+										: 'Archived'}
+						</span>
 					</div>
 				</div>
 			</div>
-			{#if data.canManage}<div class="flex flex-wrap gap-2">
-					{#if data.curriculum.status !== 'active'}<button
+			{#if data.canManage}
+				<div class="flex flex-wrap gap-2">
+					{#if data.curriculum.status !== 'active'}
+						<button
 							type="button"
 							disabled={busy || !data.entries.length}
 							class="btn btn-primary btn-sm"
-							onclick={activate}><CircleCheck class="size-4" aria-hidden="true" />Activate</button
-						>{/if}
-					{#if data.curriculum.status === 'draft'}<a
+							onclick={activate}
+						>
+							<CircleCheck class="size-4" aria-hidden="true" />Activate
+						</button>
+					{/if}
+					{#if data.curriculum.status === 'draft'}
+						<a
 							href={resolve('/user/curriculum/[curriculumId]/edit', {
 								curriculumId: data.curriculum.id
 							})}
 							class="btn gap-2 btn-primary btn-sm"
-							><Pencil class="size-4" aria-hidden="true" />Edit curriculum</a
-						>{/if}<button
+						>
+							<Pencil class="size-4" aria-hidden="true" />Edit curriculum
+						</a>
+					{/if}
+					<button
 						type="button"
 						disabled={busy || data.curriculum.status === 'active'}
 						class="btn gap-2 btn-ghost text-error btn-sm"
-						onclick={remove}><Trash2 class="size-4" aria-hidden="true" />Delete</button
+						onclick={remove}
 					>
+						<Trash2 class="size-4" aria-hidden="true" />Delete
+					</button>
 					<Dropdown id="curriculum-state-actions" label="Curriculum actions" disabled={busy}>
-						{#snippet trigger()}<Settings class="size-4" aria-hidden="true" />{/snippet}
+						{#snippet trigger()}
+							<Settings class="size-4" aria-hidden="true" />
+						{/snippet}
 						<ul class="menu w-full p-0">
-							{#if data.curriculum.status === 'active'}<li>
-									<button type="button" disabled={busy} onclick={() => changeState('deactivate')}
-										><CircleMinus class="size-4" aria-hidden="true" />Deactivate</button
-									>
-								</li>{/if}
-							{#if data.curriculum.status === 'archived'}<li>
-									<button type="button" disabled={busy} onclick={() => changeState('restore')}
-										><ArchiveRestore class="size-4" aria-hidden="true" />Unarchive</button
-									>
+							{#if data.curriculum.status === 'active'}
+								<li>
+									<button type="button" disabled={busy} onclick={() => changeState('deactivate')}>
+										<CircleMinus class="size-4" aria-hidden="true" />Deactivate
+									</button>
 								</li>
-							{:else}<li>
-									<button type="button" disabled={busy} onclick={() => changeState('archive')}
-										><Archive class="size-4" aria-hidden="true" />Archive</button
-									>
-								</li>{/if}
+							{/if}
+							{#if data.curriculum.status === 'archived'}
+								<li>
+									<button type="button" disabled={busy} onclick={() => changeState('restore')}>
+										<ArchiveRestore class="size-4" aria-hidden="true" />Unarchive
+									</button>
+								</li>
+							{:else}
+								<li>
+									<button type="button" disabled={busy} onclick={() => changeState('archive')}>
+										<Archive class="size-4" aria-hidden="true" />Archive
+									</button>
+								</li>
+							{/if}
 						</ul>
 					</Dropdown>
-				</div>{/if}
+				</div>
+			{/if}
 		</div>
 		<div class="grid grid-cols-3 divide-x divide-base-300 border-t border-base-300 bg-base-200/40">
 			<div class="p-4 sm:px-6">
@@ -197,7 +219,8 @@
 			</div>
 		</div>
 	</article>
-	{#if data.curriculum.publishedAt}<div
+	{#if data.curriculum.publishedAt}
+		<div
 			class="flex items-start gap-3 rounded-xl border border-base-300 bg-base-100 p-4 text-sm text-base-content/60"
 		>
 			<LockKeyhole class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -205,11 +228,12 @@
 				Published on {dateFormatter.format(data.curriculum.publishedAt)}. This curriculum is
 				read-only.
 			</p>
-		</div>{:else if data.curriculum.status === 'archived'}<div
-			class="rounded-xl border border-base-300 bg-base-100 p-4 text-sm text-base-content/60"
-		>
+		</div>
+	{:else if data.curriculum.status === 'archived'}
+		<div class="rounded-xl border border-base-300 bg-base-100 p-4 text-sm text-base-content/60">
 			This draft is archived. Unarchive it to edit.
-		</div>{/if}
+		</div>
+	{/if}
 	<section
 		class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
 		aria-label="Curriculum subjects"
@@ -238,25 +262,27 @@
 						</div>
 						<div class="overflow-x-auto">
 							<table class="table w-full">
-								<thead
-									><tr class="bg-base-200 text-xs text-base-content/55"
-										><th class="py-3 pl-5">Code</th><th>Subject</th><th class="pr-5 text-right"
-											>Units</th
-										></tr
-									></thead
-								><tbody
-									>{#each group.entries as entry (entry.id)}<tr
-											class="border-b border-base-200 last:border-0"
-											><td class="py-4 pl-5 font-mono text-xs font-semibold">{entry.subjectCode}</td
-											><td class="text-sm font-semibold">{entry.subjectName}</td><td
-												class="pr-5 text-right font-semibold">{entry.units}</td
-											></tr
-										>{/each}</tbody
-								>
+								<thead>
+									<tr class="bg-base-200 text-xs text-base-content/55">
+										<th class="py-3 pl-5">Code</th>
+										<th>Subject</th>
+										<th class="pr-5 text-right">Units</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each group.entries as entry (entry.id)}
+										<tr class="border-b border-base-200 last:border-0">
+											<td class="py-4 pl-5 font-mono text-xs font-semibold">{entry.subjectCode}</td>
+											<td class="text-sm font-semibold">{entry.subjectName}</td>
+											<td class="pr-5 text-right font-semibold">{entry.units}</td>
+										</tr>
+									{/each}
+								</tbody>
 							</table>
 						</div>
 					</article>
-				{:else}<div class="rounded-2xl border border-base-300 bg-base-100 py-12 text-center">
+				{:else}
+					<div class="rounded-2xl border border-base-300 bg-base-100 py-12 text-center">
 						<BookOpen class="mx-auto mb-3 size-8 text-base-content/25" aria-hidden="true" />
 						<h2 class="font-semibold">
 							{subjectLayout === 'tabbed'
@@ -268,7 +294,8 @@
 								? 'Edit this draft to add subjects.'
 								: 'No subjects have been added yet.'}
 						</p>
-					</div>{/each}
+					</div>
+				{/each}
 			</div>
 		</SubjectLayout>
 	</section>

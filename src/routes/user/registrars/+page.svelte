@@ -5,6 +5,7 @@
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import { filterUserSchema } from '#lib/schema.js';
+	import { getErrorMessage } from '#lib/errors.js';
 	import { refreshAll } from '$app/navigation';
 	import {
 		Eye,
@@ -18,7 +19,7 @@
 		UserPlus,
 		X
 	} from '@lucide/svelte';
-	import { createRegistrar, resendMagicLink } from '../../../lib/actions/user.remote.js';
+	import { createRegistrar, resendMagicLink } from '#lib/actions/user.remote.js';
 
 	let { data } = $props();
 
@@ -55,7 +56,10 @@
 
 			showSuccess('Registrar invitation created successfully');
 		} catch (error) {
-			showError(error instanceof Error ? error.message : 'Failed to create registrar');
+			showError({
+				title: 'Unable to create registrar',
+				message: getErrorMessage(error, 'Failed to create registrar. Please try again.')
+			});
 		}
 	}
 
@@ -67,7 +71,7 @@
 				showSuccess('Verification email sent successfully');
 			})
 			.catch((error) => {
-				showError(error?.message ?? 'Failed to send verification email');
+				showError(getErrorMessage(error, 'Failed to send verification email'));
 			});
 	}
 </script>
@@ -256,8 +260,10 @@
 					<button
 						type="button"
 						class="btn flex-1 border-base-300 btn-outline"
-						onclick={() => registrarDialog.close()}>Cancel</button
+						onclick={() => registrarDialog.close()}
 					>
+						Cancel
+					</button>
 					<button
 						type="submit"
 						class="btn flex-1 btn-primary"

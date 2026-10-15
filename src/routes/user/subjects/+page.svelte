@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { deleteSubject } from '#lib/actions/subject.remote.js';
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
@@ -43,7 +44,7 @@
 			await refreshAll();
 			showSuccess('Subject deleted successfully');
 		} catch (err) {
-			showError(err instanceof Error ? err.message : 'Failed to delete subject');
+			showError(getErrorMessage(err, 'Failed to delete subject'));
 		} finally {
 			busy = false;
 		}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { createSubject, updateSubject } from '#lib/actions/subject.remote.js';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
@@ -54,9 +55,7 @@
 			showError(
 				saved
 					? 'Subject saved, but the page could not refresh. Reload to see the latest catalog.'
-					: err instanceof Error
-						? err.message
-						: 'Failed to save subject'
+					: getErrorMessage(err, 'Failed to save subject')
 			);
 		} finally {
 			busy = false;

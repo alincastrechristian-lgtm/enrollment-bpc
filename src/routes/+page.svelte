@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
+	import { getAuthErrorMessage, getErrorMessage } from '#lib/errors.js';
 	import { showError } from '#lib/components/Popup/Popup.svelte.js';
 	import { Eye, EyeOff } from '@lucide/svelte';
 
@@ -30,12 +31,11 @@
 					// Redirect to the dashboard or another page after successful login
 					window.location.href = '/user/dashboard';
 				} else {
-					showError(`Login failed: ${result.error?.message || 'Unknown error'}`);
+					showError(getAuthErrorMessage(result.error, 'Unable to sign in. Please try again.'));
 				}
 			})
 			.catch((error) => {
-				console.error('Login error:', error);
-				showError('An error occurred during login. Please try again.');
+				showError(getErrorMessage(error, 'An error occurred during login. Please try again.'));
 			});
 	}
 </script>
@@ -125,8 +125,10 @@
 						<div class="space-y-2">
 							<label
 								class="text-sm font-bold tracking-wide text-base-content/60 uppercase"
-								for="email">Email</label
+								for="email"
 							>
+								Email
+							</label>
 							<input
 								id="email"
 								type="email"
@@ -139,8 +141,10 @@
 						<div class="space-y-2">
 							<label
 								class="text-sm font-bold tracking-wide text-base-content/60 uppercase"
-								for="password">Password</label
+								for="password"
 							>
+								Password
+							</label>
 							<div class="relative">
 								<input
 									id="password"
@@ -178,8 +182,9 @@
 							<a
 								href="/forgot-password"
 								class="text-sm font-semibold text-primary hover:text-primary/80 hover:underline"
-								>Forgot Password?</a
 							>
+								Forgot Password?
+							</a>
 						</div>
 
 						<p class="pt-4 text-sm text-base-content/50">

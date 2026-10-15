@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enrollStudent } from '#lib/actions/user.remote.js';
+	import { getErrorMessage } from '#lib/errors.js';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
 	import { beforeNavigate, goto } from '$app/navigation';
@@ -51,7 +52,7 @@
 			discardAllowed = true;
 			await goto(to.url);
 		} catch (cause) {
-			showError(cause instanceof Error ? cause.message : 'Failed to navigate');
+			showError(getErrorMessage(cause, 'Failed to navigate'));
 		} finally {
 			discardAllowed = false;
 			confirmingDiscard = false;
@@ -135,10 +136,8 @@
 		} catch (cause) {
 			message = saved
 				? 'Student enrolled. Open the student record below to continue.'
-				: cause instanceof Error
-					? cause.message
-					: 'Failed to enroll student';
-			showError(message);
+				: getErrorMessage(cause, 'Failed to enroll student');
+			showError({ title: saved ? 'Student enrolled' : 'Unable to enroll student', message });
 		} finally {
 			busy = false;
 		}

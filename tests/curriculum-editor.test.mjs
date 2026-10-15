@@ -24,17 +24,17 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			window.attemptNavigation=(url)=>{let cancelled=false;for(const hook of hooks)hook({to:{url:new URL(url,window.location.href)},willUnload:false,cancel:()=>cancelled=true});return !cancelled;};
 			export async function goto(url,options){if(window.attemptNavigation(url)){window.navigation.push({url,options});page.url=new URL(url,window.location.href);}}
 			export async function refreshAll(){window.refreshes++;if(window.failRefresh)throw new Error("Refresh failed");window.updateCatalogs?.();window.updateCurriculum?.();}`,
-		'actions.js': `window.creations=[];window.updates=[];window.deletions=[];window.activations=[];window.curriculumEvents=[];window.stateChanges=[];window.failSave=false;
+		'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.creations=[];window.updates=[];window.deletions=[];window.activations=[];window.curriculumEvents=[];window.stateChanges=[];window.failSave=false;
 			export async function activateCurriculum(id){window.activations.push(id);window.curriculumEvents.push('active');return {id};}
 			export async function changeCurriculumState(data){window.stateChanges.push(data);window.curriculumEvents.push(data.action==='archive'?'archived':'inactive');return {id:data.id};}
-			export async function createCurriculum(data){if(window.failSave)throw new Error('Save failed');window.creations.push(data);return {id:'created'};}
-			export async function updateCurriculum(data){if(window.failSave)throw new Error('Save failed');window.updates.push(data);return {id:data.id};}
+			export async function createCurriculum(data){if(window.failSave)throw new HandledHttpError({status:409,message:'Save failed'});window.creations.push(data);return {id:'created'};}
+			export async function updateCurriculum(data){if(window.failSave)throw new HandledHttpError({status:409,message:'Save failed'});window.updates.push(data);return {id:data.id};}
 			export async function deleteCurriculum(id){window.deletions.push(id);}`,
 		'applicant-actions.js': `window.applicantCreations=[];window.applicantUpdates=[];
 			export async function createApplicant(data){window.applicantCreations.push(data);}
 			export async function updateApplicant(data){window.applicantUpdates.push(data);}`,
-		'catalog-actions.js': `window.programCreations=[];window.subjectCreations=[];window.newPrograms=[];window.newSubjects=[];window.catalogUpdates=[];window.catalogDeletions=[];window.failCatalogSave=false;
-			function create(kind,data){if(window.failCatalogSave)throw new Error('Duplicate code');window[kind+'Creations'].push(data);const record={...data,id:kind+'-'+window[kind+'Creations'].length,name:data.name.trim(),code:data.code.trim()};window[kind==='program'?'newPrograms':'newSubjects'].push(record);return record;}
+		'catalog-actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.programCreations=[];window.subjectCreations=[];window.newPrograms=[];window.newSubjects=[];window.catalogUpdates=[];window.catalogDeletions=[];window.failCatalogSave=false;
+			function create(kind,data){if(window.failCatalogSave)throw new HandledHttpError({status:409,message:'Duplicate code'});window[kind+'Creations'].push(data);const record={...data,id:kind+'-'+window[kind+'Creations'].length,name:data.name.trim(),code:data.code.trim()};window[kind==='program'?'newPrograms':'newSubjects'].push(record);return record;}
 			export async function createProgram(data){return create('program',data);}
 			export async function createSubject(data){return create('subject',data);}
 			export async function updateProgram(data){window.catalogUpdates.push({kind:'program',data});}

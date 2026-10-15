@@ -1,5 +1,6 @@
 ﻿<script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
+	import { getAuthErrorMessage, getErrorMessage } from '#lib/errors.js';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { ArrowLeft, Mail, ShieldCheck } from '@lucide/svelte';
 
@@ -15,17 +16,19 @@
 
 		showLoading('Preparing your password reset request...');
 
-		const { error } = await authClient.requestPasswordReset({
-			email,
-			redirectTo: '/reset-password'
-		});
-
-		if (error) {
-			showError(error.message || 'Failed to send password reset email.');
-			return;
+		try {
+			const { error } = await authClient.requestPasswordReset({
+				email,
+				redirectTo: '/reset-password'
+			});
+			if (error) {
+				showError(getAuthErrorMessage(error, 'Failed to send password reset email.'));
+				return;
+			}
+			showSuccess('Success! Check your email for a password reset link.');
+		} catch (cause) {
+			showError(getErrorMessage(cause, 'Failed to send password reset email. Please try again.'));
 		}
-
-		showSuccess('Success! Check your email for a password reset link.');
 	}
 </script>
 

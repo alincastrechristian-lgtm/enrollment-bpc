@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { finalizeEnrollmentGrades, updateEnrollmentGrades } from '#lib/actions/grades.remote.js';
 	import { showYesNo } from '#lib/components/Popup/Popup.svelte.js';
 	import { beforeNavigate, goto } from '$app/navigation';
@@ -57,7 +58,7 @@
 			discardAllowed = true;
 			await goto(to.url);
 		} catch (cause) {
-			message = cause instanceof Error ? cause.message : 'Failed to navigate.';
+			message = getErrorMessage(cause, 'Failed to navigate.');
 		} finally {
 			discardAllowed = false;
 			confirmingDiscard = false;
@@ -106,7 +107,7 @@
 			editing = false;
 			success = 'Grades saved successfully.';
 		} catch (cause) {
-			message = cause instanceof Error ? cause.message : 'Failed to save grades. Please try again.';
+			message = getErrorMessage(cause, 'Failed to save grades. Please try again.');
 		} finally {
 			busy = false;
 		}
@@ -136,8 +137,7 @@
 			finalizedHere = true;
 			success = 'Grades finalized successfully.';
 		} catch (cause) {
-			message =
-				cause instanceof Error ? cause.message : 'Failed to finalize grades. Please try again.';
+			message = getErrorMessage(cause, 'Failed to finalize grades. Please try again.');
 		} finally {
 			busy = false;
 		}

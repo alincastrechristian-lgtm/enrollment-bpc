@@ -26,15 +26,15 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			window.attemptNavigation=(url)=>{let cancelled=false;for(const hook of hooks)hook({to:{url:new URL(url,window.location.href)},willUnload:false,cancel:()=>cancelled=true});return !cancelled;};
 			export async function goto(url){const target=String(url);if(window.failNavigation)throw new Error('Navigation failed');if(window.attemptNavigation(target)){window.navigation.push(target);if(target.endsWith('/students/u'))window.show('student');}}
 			export async function refreshAll(){}`,
-		'actions.js': `window.accountCalls=[];window.mailCalls=[];window.questions=[];window.messages=[];window.confirm=true;
-			export async function enrollStudent(data){window.accountCalls.push(data);if(window.failAccount)throw new Error('Enrollment changed');if(window.deferAccount)await new Promise(resolve=>window.finishAccount=resolve);return {success:true,userId:'u',studentId:'MA-202610-000001',enrollmentId:'current',invitationSent:window.invitationSent!==false};}
+		'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.accountCalls=[];window.mailCalls=[];window.questions=[];window.messages=[];window.confirm=true;
+			export async function enrollStudent(data){window.accountCalls.push(data);if(window.duplicateEmail)throw new HandledHttpError({status:409,message:'A student account already exists with this email.'});if(window.failAccount)throw new HandledHttpError({status:409,message:'Enrollment changed'});if(window.deferAccount)await new Promise(resolve=>window.finishAccount=resolve);return {success:true,userId:'u',studentId:'MA-202610-000001',enrollmentId:'current',invitationSent:window.invitationSent!==false};}
 			export async function resendMagicLink(data){window.mailCalls.push(data);if(window.failMail)throw new Error('Mail failed');}
-			export async function deleteApplicant(){};export async function createApplicant(){};export async function updateApplicant(){}`,
+			export async function createRegistrar(){throw new HandledHttpError({status:409,message:window.existingRole==='registrar'?'A registrar account already exists with this email.':'A student account already exists with this email.'});}export async function deleteApplicant(){};export async function createApplicant(){};export async function updateApplicant(){}`,
 		'popup.js': `export async function showYesNo(props){window.questions.push(props);return window.confirm;}
-			export function showLoading(){};export function showError(message){window.messages.push({type:'error',message});}export function showSuccess(message){window.messages.push({type:'success',message});}`,
-		'grades.js': `window.gradeCalls=[];window.finalizeCalls=[];
-			export async function finalizeEnrollmentGrades(data){window.finalizeCalls.push(data);if(window.failFinalize)throw new Error('Grades or subjects have changed. Reload before finalizing.');if(window.deferFinalize)await new Promise(resolve=>window.finishFinalize=resolve);return {success:true,finalizedGrades:true};}
-			export async function updateEnrollmentGrades(data){window.gradeCalls.push(data);if(window.failGrades)throw new Error('Grades have changed since this page was loaded. Refresh before saving again.');if(window.deferGrades)await new Promise(resolve=>window.finishGrades=resolve);return {success:true,grades:data.grades.map(({id,grade})=>({id,grade}))};}`,
+			export function showLoading(){};export function showError(props){window.messages.push({type:'error',...(typeof props==='string'?{message:props}:props)});}export function showSuccess(message){window.messages.push({type:'success',message});}`,
+		'grades.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.gradeCalls=[];window.finalizeCalls=[];
+			export async function finalizeEnrollmentGrades(data){window.finalizeCalls.push(data);if(window.failFinalize)throw new HandledHttpError({status:409,message:'Grades or subjects have changed. Reload before finalizing.'});if(window.deferFinalize)await new Promise(resolve=>window.finishFinalize=resolve);return {success:true,finalizedGrades:true};}
+			export async function updateEnrollmentGrades(data){window.gradeCalls.push(data);if(window.failGrades)throw new HandledHttpError({status:409,message:'Grades have changed since this page was loaded. Refresh before saving again.'});if(window.deferGrades)await new Promise(resolve=>window.finishGrades=resolve);return {success:true,grades:data.grades.map(({id,grade})=>({id,grade}))};}`,
 		'Harness.svelte': `<script>
 			import Topbar from '${sourcePath('src/lib/components/Topbar/Topbar.svelte')}';
 			import {load as loadMetadata} from '${sourcePath('src/routes/user/+layout.ts')}';
@@ -43,6 +43,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			import Student from '${sourcePath('src/routes/user/students/[userId]/+page.svelte')}';
 			import MyEnrollment from '${sourcePath('src/routes/user/enrollment/+page.svelte')}';
 			import EnrollmentDetails from '${sourcePath('src/routes/user/students/EnrollmentDetails.svelte')}';
+			import Registrars from '${sourcePath('src/routes/user/registrars/+page.svelte')}';
 			import Students from '${sourcePath('src/routes/user/students/+page.svelte')}';
 			import Applicant from '${sourcePath('src/routes/user/applicants/[applicantId]/+page.svelte')}';
 			import Applicants from '${sourcePath('src/routes/user/applicants/+page.svelte')}';
@@ -57,7 +58,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			const curriculum={id:'c',name:'2026 Curriculum',programCode:'BSIS',program,yearLevels:2,semesters:2,publishedAt:new Date(),archivedAt:null,isActive:true};
 			const entries=[{id:'cs1',subjectId:'s1',subjectCode:'SNAP101',subjectName:'Published Introduction',yearLevel:1,semester:1,units:3},{id:'cs2',subjectId:'s2',subjectCode:'SNAP102',subjectName:'Published Programming',yearLevel:1,semester:2,units:4},{id:'cs3',subjectId:'s3',subjectCode:'SNAP201',subjectName:'Published Databases',yearLevel:2,semester:1,units:2}];
 			const subjects=[{id:'s1',code:'LIVE101',name:'Changed Introduction',isActive:true},{id:'s2',code:'LIVE102',name:'Other term',isActive:true},{id:'s3',code:'LIVE201',name:'Databases',isActive:true},{id:'s4',code:'EXTRA',name:'Extra subject',isActive:true}];
-			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'pending',finalizedGrades:false,enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
+			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'enrolled',finalizedGrades:false,enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
 			const historical={...current,curriculumId:'old-curriculum',curriculum:{...curriculum,id:'old-curriculum',programCode:'BSIT',program:{...program,id:'it',code:'BSIT',name:'Information Technology'}},id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,grade:null}]};
 			const student={id:'u',name:applicant.name,email:applicant.email,image:null,emailVerified:false,setupComplete:false,banned:false,banReason:null,createdAt:new Date(),updatedAt:new Date(),applicant,studentData:{studentId:'MA-202610-000001',applicant,applicantId:'a',currentEnrollmentId:'current',currentEnrollment:current,enrollments:[current,historical]}};
 		</script>
@@ -75,6 +76,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			{:else if mode==='grade-past-admin'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:historical,isCurrent:false,gradeLockReason:null,canEdit:true,canEditFinalized:true,canFinalize:true}} />
 			{:else if mode==='grade-past'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:historical,isCurrent:false,gradeLockReason:null,canEdit:false,canEditFinalized:false,canFinalize:false}} />
 			{:else if mode==='empty-student'}<Student data={{student:{...student,applicant:null,studentData:null}}} />
+			{:else if mode==='registrars'}<Registrars data={{users:[],total:0,search:'',status:'all',filters:{}}} />
 			{:else if mode==='list'}<Students data={{users:[student],total:1,search:'',status:'all',filters:{}}} />
 			{:else if mode==='applicant'}<Applicant data={{applicant,programs:[program]}} />
 			{:else if mode==='linked-applicant'}<Applicant data={{applicant:{...applicant,userId:'u'},programs:[program]}} />
@@ -186,6 +188,15 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('alert')).toContainText('Enrollment changed');
 		await page.evaluate(() => {
 			window.failAccount = false;
+			window.duplicateEmail = true;
+		});
+		await page.getByRole('button', { name: 'Enroll Student', exact: true }).click();
+		await expect(page.getByRole('alert')).toContainText(
+			'A student account already exists with this email.'
+		);
+		await page.evaluate(() => {
+			window.failAccount = false;
+			window.duplicateEmail = false;
 			window.deferAccount = true;
 			window.invitationSent = false;
 			window.accountCalls = [];
@@ -235,13 +246,15 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		const history = page.getByRole('region', { name: 'Enrollment history', exact: true });
 		const currentSummary = page.getByRole('region', { name: 'Current enrollment', exact: true });
 		await expect(history.getByRole('article')).toHaveCount(2);
+		await expect(history.getByText('enrolled', { exact: true })).toHaveCount(0);
+		await expect(history.getByText('withdrawn', { exact: true })).toBeVisible();
 		await expect(history.getByLabel('Program', { exact: true }).getByRole('option')).toHaveCount(3);
 		await history.getByLabel('Program', { exact: true }).selectOption('BSIT');
 		await expect(history.getByRole('article')).toHaveCount(1);
 		await expect(history.getByText('Historical subject', { exact: true })).toBeVisible();
 		await history.getByLabel('School year', { exact: true }).selectOption('2025');
 		await expect(history.getByRole('article')).toHaveCount(0);
-		await expect(currentSummary).toContainText('pending');
+		await expect(currentSummary).toContainText('enrolled');
 		await history.getByRole('button', { name: 'Clear filters', exact: true }).click();
 		await expect(history.getByLabel('Program', { exact: true })).toHaveValue('');
 		await expect(history.getByRole('article')).toHaveCount(2);
@@ -252,7 +265,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(history.getByRole('article')).toHaveCount(1);
 		await expect(history.getByText('Historical subject', { exact: true })).toBeVisible();
 		await expect(history.getByRole('status')).toHaveText('Showing 1 of 2 enrollments');
-		await expect(currentSummary).toContainText('pending');
+		await expect(currentSummary).toContainText('enrolled');
 		await history.getByLabel('Semester', { exact: true }).selectOption('1');
 		await expect(history.getByRole('article')).toHaveCount(0);
 		await expect(
@@ -263,7 +276,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await history.getByLabel('Semester', { exact: true }).selectOption('2');
 		await expect(history.getByRole('article')).toHaveCount(1);
 		await expect(history.getByText('Historical subject', { exact: true })).toBeVisible();
-		await history.getByLabel('Enrollment status', { exact: true }).selectOption('pending');
+		await history.getByLabel('Enrollment status', { exact: true }).selectOption('enrolled');
 		await expect(history.getByRole('article')).toHaveCount(0);
 		await history.getByLabel('Semester', { exact: true }).selectOption('');
 		await expect(history.getByRole('article')).toHaveCount(1);
@@ -548,6 +561,23 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await page.evaluate(() => window.show('incomplete'));
 		await page.getByRole('button', { name: 'Actions for Test Student', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Enroll Student', exact: true })).toBeDisabled();
+		await page.evaluate(() => window.show('registrars'));
+		await page.getByRole('button', { name: 'New Registrar', exact: true }).click();
+		const newRegistrarDialog = page.getByRole('dialog');
+		await newRegistrarDialog.getByLabel('Name', { exact: true }).fill('New Registrar');
+		await newRegistrarDialog.getByLabel('Email', { exact: true }).fill('taken@example.com');
+		for (const role of ['student', 'registrar']) {
+			await page.evaluate((role) => (window.existingRole = role), role);
+			await page.getByRole('button', { name: 'Create Registrar', exact: true }).click();
+			await expect
+				.poll(() => page.evaluate(() => window.messages.at(-1)?.message))
+				.toBe(`A ${role} account already exists with this email.`);
+			assert.equal(
+				await page.evaluate(() => window.messages.at(-1).title),
+				'Unable to create registrar'
+			);
+			await expect(newRegistrarDialog).toHaveJSProperty('open', true);
+		}
 		assert.deepEqual(errors, []);
 	} finally {
 		await browser?.close();

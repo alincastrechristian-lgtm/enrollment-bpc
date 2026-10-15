@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import EnrollmentHistory from '#lib/components/EnrollmentHistory.svelte';
 	import { resendMagicLink } from '#lib/actions/user.remote.js';
 	import { showError, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
@@ -43,7 +44,7 @@
 			await resendMagicLink({ email: student.email });
 			showSuccess('Account setup email sent successfully');
 		} catch (cause) {
-			showError(cause instanceof Error ? cause.message : 'Failed to send account setup email');
+			showError(getErrorMessage(cause, 'Failed to send account setup email'));
 		} finally {
 			resending = false;
 		}

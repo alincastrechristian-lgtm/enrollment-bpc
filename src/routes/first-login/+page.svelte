@@ -1,6 +1,6 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { completeFirstLogin, resetPasswordAndSignIn } from '#lib/actions/password.remote.js';
-	import { isHttpError } from '@sveltejs/kit';
 	import { onMount } from 'svelte';
 	import { showError, showLoading } from '#lib/components/Popup/Popup.svelte.js';
 	import { page } from '$app/state';
@@ -78,13 +78,7 @@
 			await completeFirstLogin();
 			window.location.href = '/user/dashboard';
 		} catch (error) {
-			showError(
-				isHttpError(error)
-					? error.body.message
-					: error instanceof Error
-						? error.message
-						: 'Failed to update your account. Please try again.'
-			);
+			showError(getErrorMessage(error, 'Failed to update your account. Please try again.'));
 		} finally {
 			busy = false;
 		}
@@ -196,10 +190,11 @@
 										aria-pressed={showPassword}
 										onclick={() => (showPassword = !showPassword)}
 									>
-										{#if showPassword}<EyeOff class="size-4" aria-hidden="true" />{:else}<Eye
-												class="size-4"
-												aria-hidden="true"
-											/>{/if}
+										{#if showPassword}
+											<EyeOff class="size-4" aria-hidden="true" />
+										{:else}
+											<Eye class="size-4" aria-hidden="true" />
+										{/if}
 									</button>
 								</div>
 								<p id="password-hint" class="flex items-center gap-2 text-xs text-base-content/60">
@@ -212,9 +207,9 @@
 							</div>
 
 							<div class="space-y-2">
-								<label for="confirm-password" class="text-sm font-semibold"
-									>Confirm new password</label
-								>
+								<label for="confirm-password" class="text-sm font-semibold">
+									Confirm new password
+								</label>
 								<div
 									class="input flex h-12 w-full items-center gap-3 border-base-300 bg-base-200"
 									class:input-error={mismatch || (submitted && !passwordsMatch)}
@@ -242,10 +237,11 @@
 										aria-pressed={showConfirmation}
 										onclick={() => (showConfirmation = !showConfirmation)}
 									>
-										{#if showConfirmation}<EyeOff class="size-4" aria-hidden="true" />{:else}<Eye
-												class="size-4"
-												aria-hidden="true"
-											/>{/if}
+										{#if showConfirmation}
+											<EyeOff class="size-4" aria-hidden="true" />
+										{:else}
+											<Eye class="size-4" aria-hidden="true" />
+										{/if}
 									</button>
 								</div>
 								<p
@@ -253,8 +249,13 @@
 									class={`text-xs ${mismatch || (submitted && !passwordsMatch) ? 'text-error' : passwordsMatch ? 'text-primary' : 'text-base-content/60'}`}
 									aria-live="polite"
 								>
-									{#if mismatch || (submitted && !passwordsMatch)}Passwords do not match.{:else if passwordsMatch}Passwords
-										match.{:else}Enter the same password again.{/if}
+									{#if mismatch || (submitted && !passwordsMatch)}
+										Passwords do not match.
+									{:else if passwordsMatch}
+										Passwords match.
+									{:else}
+										Enter the same password again.
+									{/if}
 								</p>
 							</div>
 						</fieldset>

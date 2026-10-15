@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import { deleteProgram } from '#lib/actions/program.remote.js';
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
@@ -43,7 +44,7 @@
 			await refreshAll();
 			showSuccess('Program deleted successfully');
 		} catch (err) {
-			showError(err instanceof Error ? err.message : 'Failed to delete program');
+			showError(getErrorMessage(err, 'Failed to delete program'));
 		} finally {
 			busy = false;
 		}

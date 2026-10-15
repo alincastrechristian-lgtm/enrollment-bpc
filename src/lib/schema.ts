@@ -254,9 +254,9 @@ export const enrollment = sqliteTable(
 		yearLevel: integer('year_level').notNull(),
 
 		status: text('status', {
-			enum: ['pending', 'enrolled', 'cancelled', 'withdrawn']
+			enum: ['enrolled', 'cancelled', 'withdrawn']
 		})
-			.default('pending')
+			.default('enrolled')
 			.notNull(),
 
 		finalizedGrades: integer('finalized_grades', { mode: 'boolean' }).default(false).notNull(),
@@ -273,10 +273,7 @@ export const enrollment = sqliteTable(
 		),
 		index('enrollment_term_idx').on(table.schoolYearStart, table.semester),
 		check('enrollment_year_range', sql`${table.yearLevel} > 0`),
-		check(
-			'enrollment_status_valid',
-			sql`${table.status} IN ('pending', 'enrolled', 'cancelled', 'withdrawn')`
-		)
+		check('enrollment_status_valid', sql`${table.status} IN ('enrolled', 'cancelled', 'withdrawn')`)
 	]
 );
 

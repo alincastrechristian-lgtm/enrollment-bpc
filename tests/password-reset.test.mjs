@@ -5,8 +5,9 @@ import test from 'node:test';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
-import { error } from '@sveltejs/kit';
+import { error, isHttpError } from '@sveltejs/kit';
 import { betterAuth } from 'better-auth/minimal';
+import { APIError } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin } from 'better-auth/plugins/admin';
 import { twoFactor } from 'better-auth/plugins/two-factor';
@@ -28,7 +29,10 @@ function loadTypeScript(file, dependencies = {}) {
 	return exports;
 }
 const { Role } = loadTypeScript('src/lib/Roles.ts');
-const schema = loadTypeScript('src/lib/server/db/schema.ts', { '#lib/Roles.js': { Role } });
+const schema = loadTypeScript('src/lib/schema.ts', {
+	'#lib/Roles.js': { Role },
+	'./email': loadTypeScript('src/lib/email.ts')
+});
 const permissions = loadTypeScript('src/lib/auth-permissions.ts');
 
 function fixture(t) {
@@ -84,7 +88,9 @@ CREATE TABLE two_factor (id TEXT PRIMARY KEY, secret TEXT NOT NULL, backup_codes
 	});
 	function commands(usingAuth = auth) {
 		return loadTypeScript('src/lib/actions/password.remote.ts', {
+			'#lib/schema.js': schema,
 			'#lib/server/auth.js': { auth: usingAuth, validateUser },
+			'#lib/errors.js': loadTypeScript('src/lib/errors.ts', { '@sveltejs/kit': { isHttpError } }),
 			'#lib/server/db/index.js': { db },
 			'@sveltejs/kit': { error },
 			'$app/server': {
@@ -165,6 +171,46 @@ test('regular reset revokes the old session before establishing the new session'
 	);
 	assert.equal((await f.refreshSession()).user.id, 'student');
 	await f.completeFirstLogin();
+});
+
+test('password actions expose known validation codes but hide provider messages', async (t) => {
+	const f = fixture(t);
+	const token = await f.issueToken();
+	for (const [code, message] of [
+		['PASSWORD_TOO_SHORT', 'Use at least 8 characters for your password.'],
+		['UNKNOWN_PROVIDER_FAILURE', 'Failed to reset password. Please try again.']
+	]) {
+		const commands = f.commands({
+			...f.auth,
+			api: {
+				...f.auth.api,
+				resetPassword: async () => {
+					throw new APIError('BAD_REQUEST', { code, message: 'SECRET provider credentials' });
+				}
+			}
+		});
+		await assert.rejects(
+			commands.resetPasswordAndSignIn({ token, newPassword: 'short' }),
+			(cause) => isHttpError(cause) && cause.status === 400 && cause.body.message === message
+		);
+	}
+	await f.resetPasswordAndSignIn({ token, newPassword: 'new-password-123' });
+	await f.refreshSession();
+	const commands = f.commands({
+		...f.auth,
+		api: {
+			...f.auth.api,
+			updateUser: async () => {
+				throw new APIError('BAD_REQUEST', { code: 'UNKNOWN', message: 'SECRET sql query' });
+			}
+		}
+	});
+	await assert.rejects(
+		commands.completeFirstLogin(),
+		(cause) =>
+			isHttpError(cause) &&
+			cause.body.message === 'Failed to complete account setup. Please try again.'
+	);
 });
 
 test('unknown, expired, or invalid-password requests never establish a session', async (t) => {

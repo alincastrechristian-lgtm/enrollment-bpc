@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getErrorMessage } from '#lib/errors.js';
 	import {
 		createCurriculum,
 		updateCurriculum,
@@ -135,7 +136,7 @@
 			discardAllowed = true;
 			await goto(to.url);
 		} catch (cause) {
-			showError(cause instanceof Error ? cause.message : 'Failed to navigate');
+			showError(getErrorMessage(cause, 'Failed to navigate'));
 		} finally {
 			discardAllowed = false;
 			confirmingDiscard = false;
@@ -224,9 +225,7 @@
 		} catch (cause) {
 			error = saved
 				? 'Curriculum saved. Return to the curriculum list to view it.'
-				: cause instanceof Error
-					? cause.message
-					: 'Failed to save curriculum';
+				: getErrorMessage(cause, 'Failed to save curriculum');
 			showError(error);
 		} finally {
 			busy = false;
