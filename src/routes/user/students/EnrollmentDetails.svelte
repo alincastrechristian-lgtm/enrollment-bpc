@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { updateEnrollmentGrades } from '#lib/actions/grades.remote.js';
+	import { finalizeEnrollmentGrades, updateEnrollmentGrades } from '#lib/actions/grades.remote.js';
 	import { showYesNo } from '#lib/components/Popup/Popup.svelte.js';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { BookOpen, LockKeyhole, Pencil, Save } from '@lucide/svelte';
@@ -20,6 +20,24 @@
 	let busy = $state(false);
 	let message = $state('');
 	let success = $state('');
+	let finalizedHere = $state(false);
+	const finalized = $derived(finalizedHere || data.enrollment.finalizedGrades);
+	const canEdit = $derived(data.canEdit && (!finalized || data.canEditFinalized));
+	const canFinalize = $derived(data.canFinalize && !finalized);
+	const incompleteCount = $derived(rows.filter((row) => row.savedGrade === null).length);
+	const savedGradesValid = $derived(
+		rows.length > 0 &&
+			rows.every(
+				(row) =>
+					row.savedGrade === null ||
+					(Number.isFinite(row.savedGrade) && row.savedGrade >= 1 && row.savedGrade <= 5)
+			)
+	);
+	const lockReason = $derived(
+		finalized && !data.canEditFinalized
+			? 'Grades are finalized. Only administrators can edit them.'
+			: data.gradeLockReason
+	);
 	let confirmingDiscard = false;
 	let discardAllowed = false;
 	const dirty = $derived(rows.some((row) => (row.grade ?? null) !== row.savedGrade));
@@ -55,7 +73,7 @@
 
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
-		if (busy || !editing || !data.canEdit || !dirty) return;
+		if (busy || !editing || !canEdit || !dirty) return;
 		message = '';
 		success = '';
 		if (
@@ -64,7 +82,9 @@
 					row.grade != null && (!Number.isFinite(row.grade) || row.grade < 1 || row.grade > 5)
 			)
 		) {
-			message = 'Grades must be between 1 and 5, or blank for no grade.';
+			message = finalized
+				? 'Grades must be between 1 and 5, or blank for INC (Incomplete).'
+				: 'Grades must be between 1 and 5, or blank for no grade.';
 			return;
 		}
 		busy = true;
@@ -91,6 +111,37 @@
 			busy = false;
 		}
 	}
+
+	async function finalize() {
+		if (busy || editing || dirty || !canFinalize || !savedGradesValid) return;
+		message = '';
+		success = '';
+		busy = true;
+		try {
+			if (
+				!(await showYesNo({
+					title: 'Finalize grades?',
+					message: `Finalize all ${rows.length} subject grades for ${data.student.name}?${incompleteCount ? ` ${incompleteCount} ${incompleteCount === 1 ? 'subject has' : 'subjects have'} no grade and will be marked as INC (Incomplete).` : ''} Registrars will no longer be able to edit these grades. Administrators can still make corrections.`,
+					warning: true,
+					yesText: 'Finalize grades',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			await finalizeEnrollmentGrades({
+				userId: data.student.id,
+				enrollmentId: data.enrollment.id,
+				grades: rows.map((row) => ({ id: row.id, grade: row.savedGrade }))
+			});
+			finalizedHere = true;
+			success = 'Grades finalized successfully.';
+		} catch (cause) {
+			message =
+				cause instanceof Error ? cause.message : 'Failed to finalize grades. Please try again.';
+		} finally {
+			busy = false;
+		}
+	}
 </script>
 
 <svelte:head><title>Enrollment · {data.student.name} | BPC Enrollment System</title></svelte:head>
@@ -113,6 +164,9 @@
 					{data.isCurrent ? 'Current enrollment' : 'Historical enrollment'}
 				</span>
 				<span class="badge badge-outline capitalize">{data.enrollment.status}</span>
+				{#if finalized}
+					<span class="badge badge-success">Grades finalized</span>
+				{/if}
 			</div>
 		</div>
 		<dl
@@ -139,12 +193,12 @@
 		</dl>
 	</header>
 
-	{#if !data.canEdit}
+	{#if !canEdit}
 		<p
 			class="flex items-center gap-3 rounded-xl border border-base-300 bg-base-100 p-4 text-sm text-base-content/70"
 		>
 			<LockKeyhole class="size-5 shrink-0" aria-hidden="true" />This enrollment is read-only.
-			Registrars can edit grades only for the student's current enrollment.
+			{lockReason ?? "Registrars can edit grades only for the student's current enrollment."}
 		</p>
 	{/if}
 	{#if message}
@@ -173,7 +227,7 @@
 					{rows.length} subjects · {rows.reduce((sum, row) => sum + row.units, 0)} units
 				</p>
 			</div>
-			{#if data.canEdit}
+			{#if canEdit}
 				<div class="flex flex-wrap gap-2">
 					{#if editing}
 						<button
@@ -196,7 +250,7 @@
 						<button
 							type="button"
 							class="btn btn-primary btn-sm"
-							disabled={!rows.length}
+							disabled={busy || !rows.length}
 							onclick={() => {
 								editing = true;
 								success = '';
@@ -205,13 +259,35 @@
 						>
 							<Pencil class="size-4" aria-hidden="true" />Edit grades
 						</button>
+						{#if canFinalize}
+							<button
+								type="button"
+								class="btn border-base-300 btn-outline btn-sm"
+								disabled={busy || !savedGradesValid}
+								onclick={finalize}
+							>
+								{#if busy}
+									<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>
+								{:else}
+									<LockKeyhole class="size-4" aria-hidden="true" />
+								{/if}
+								{busy ? 'Finalizing...' : 'Finalize grades'}
+							</button>
+						{/if}
 					{/if}
 				</div>
 			{/if}
 		</header>
+		{#if canFinalize && incompleteCount > 0}
+			<p class="border-b border-base-300 bg-base-200/40 px-5 py-3 text-sm text-base-content/70">
+				Blank grades will be marked as INC (Incomplete) when finalized.
+			</p>
+		{/if}
 		{#if editing}
 			<p class="border-b border-base-300 bg-base-200/40 px-5 py-3 text-sm text-base-content/70">
-				Enter a grade from 1 to 5. Decimals are allowed; leave blank for no grade.
+				{finalized
+					? 'Administrators can correct finalized grades. Enter a grade from 1 to 5, or leave blank for INC (Incomplete).'
+					: 'Enter a grade from 1 to 5. Decimals are allowed; leave blank for no grade.'}
 			</p>
 		{/if}
 		{#if rows.length}
@@ -239,7 +315,7 @@
 								</td>
 								<td>{subject.units}</td>
 								<td>
-									{#if editing && data.canEdit}
+									{#if editing && canEdit}
 										<input
 											aria-label={`Grade for ${subject.subjectCode}`}
 											class="input w-28 bg-base-200 input-sm"
@@ -247,12 +323,12 @@
 											min="1"
 											max="5"
 											step="any"
-											placeholder="No grade"
+											placeholder={finalized ? 'INC' : 'No grade'}
 											disabled={busy}
 											bind:value={subject.grade}
 										/>
 									{:else}
-										{subject.savedGrade ?? 'No grade'}
+										{subject.savedGrade ?? (finalized ? 'INC (Incomplete)' : 'No grade')}
 									{/if}
 								</td>
 							</tr>

@@ -170,7 +170,7 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 					plan.subjects.map((entry) => ({
 						...entry,
 						enrollmentId: result.id,
-						addedBy: locals.user!.id
+						addedBy: locals.user.id
 					}))
 				)
 				.run();

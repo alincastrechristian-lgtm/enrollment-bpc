@@ -57,3 +57,35 @@ test('grade migration preserves subject attempts, enforces range, and can be ret
 	});
 	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
 });
+
+test('finalization flag defaults to false and migration preserves enrollment records and saved grades', (t) => {
+	const sqlite = new Database(':memory:');
+	t.after(() => sqlite.close());
+	migrate(drizzle(sqlite), migrationConfigThrough(t, 20));
+	sqlite.exec(`
+		INSERT INTO user (id, name, email) VALUES ('u', 'Student', 'student@example.com');
+		INSERT INTO student (id, user_id) VALUES ('2026-001', 'u');
+		INSERT INTO program (id, code, name) VALUES ('p', 'BSIS', 'Information Systems');
+		INSERT INTO curriculum (id, program_code, name) VALUES ('c', 'BSIS', 'Curriculum');
+		INSERT INTO subject (id, code, name) VALUES ('s', 'IS101', 'Introduction');
+		INSERT INTO enrollment (id, student_id, curriculum_id, section, school_year_start, semester, year_level, enrolled_at)
+		VALUES ('e', '2026-001', 'c', 'A', 2026, 1, 1, NULL);
+		INSERT INTO enrollment_subject (id, enrollment_id, subject_id, source, subject_code, subject_name, units, grade, added_by)
+		VALUES ('es', 'e', 's', 'extra', 'IS101', 'Introduction', 3, 1.25, 'u');
+	`);
+	const before = sqlite.prepare('SELECT * FROM enrollment').get();
+	const subjects = sqlite.prepare('SELECT * FROM enrollment_subject').all();
+	const config = migrationConfigThrough(t, 21);
+	migrate(drizzle(sqlite), config);
+	assert.deepEqual(sqlite.prepare('SELECT * FROM enrollment').get(), {
+		...before,
+		finalized_grades: 0
+	});
+	assert.deepEqual(sqlite.prepare('SELECT * FROM enrollment_subject').all(), subjects);
+	migrate(drizzle(sqlite), config);
+	assert.deepEqual(sqlite.prepare('SELECT * FROM enrollment').get(), {
+		...before,
+		finalized_grades: 0
+	});
+	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
+});

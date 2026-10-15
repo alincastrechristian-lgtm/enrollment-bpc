@@ -59,7 +59,15 @@ export const auth = betterAuth({
 	}
 });
 
-export function validateUser(locals: App.Locals, roles: Role[] = []) {
+type AuthenticatedLocals = App.Locals & {
+	user: NonNullable<App.Locals['user']>;
+	session: NonNullable<App.Locals['session']>;
+};
+
+export function validateUser(
+	locals: App.Locals,
+	roles: Role[] = []
+): asserts locals is AuthenticatedLocals {
 	if (!locals.session || !locals.user) {
 		throw error(401, 'Unauthorized');
 	}
@@ -67,22 +75,4 @@ export function validateUser(locals: App.Locals, roles: Role[] = []) {
 	if (roles.length > 0 && !roles.includes(locals.user.role as Role)) {
 		throw error(403, 'Forbidden');
 	}
-
-	return true;
 }
-
-// export function validateAction(locals: App.Locals, roles: Role[] = []) {
-// 	if (!locals.session || !locals.user) {
-// 		return fail(401, {
-// 			message: 'You must be logged in.'
-// 		});
-// 	}
-
-// 	if (roles.length > 0 && !roles.includes(locals.user.role as Role)) {
-// 		return fail(403, {
-// 			message: 'You do not have permission to perform this action.'
-// 		});
-// 	}
-
-// 	return null;
-// }

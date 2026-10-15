@@ -259,6 +259,8 @@ export const enrollment = sqliteTable(
 			.default('pending')
 			.notNull(),
 
+		finalizedGrades: integer('finalized_grades', { mode: 'boolean' }).default(false).notNull(),
+
 		enrolledAt: integer('enrolled_at', { mode: 'timestamp_ms' })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 			.notNull()
@@ -316,6 +318,7 @@ export const enrollmentSubject = sqliteTable(
 			onDelete: 'restrict'
 		}),
 
+		// Null means no grade until finalized, then INC (Incomplete).
 		grade: real('grade'),
 
 		// Historical values for this specific subject attempt.

@@ -364,6 +364,9 @@
 							<span class="badge badge-primary">Current</span>
 						{/if}
 						<span class="badge badge-outline capitalize">{entry.status}</span>
+						{#if entry.finalizedGrades}
+							<span class="badge badge-success">Grades finalized</span>
+						{/if}
 						<a
 							class="btn border-base-300 btn-outline btn-sm"
 							href={resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
@@ -402,7 +405,9 @@
 											</span>
 										</td>
 										<td>{subject.units}</td>
-										<td>{subject.grade ?? 'No grade'}</td>
+										<td>
+											{subject.grade ?? (entry.finalizedGrades ? 'INC (Incomplete)' : 'No grade')}
+										</td>
 									</tr>
 								{/each}
 							</tbody>

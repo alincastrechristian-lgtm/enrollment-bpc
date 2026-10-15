@@ -61,17 +61,17 @@ export const resetPasswordAndSignIn = command(
 export const completeFirstLogin = command(async () => {
 	const { locals, request } = getRequestEvent();
 	validateUser(locals);
-	if (locals.user!.setupComplete) return;
+	if (locals.user.setupComplete) return;
 
 	const account = await db.query.account.findFirst({
 		where: (account, { eq, and }) =>
-			and(eq(account.userId, locals.user!.id), eq(account.providerId, 'credential'))
+			and(eq(account.userId, locals.user.id), eq(account.providerId, 'credential'))
 	});
 	if (!account?.password) error(400, 'Set a password before completing account setup.');
 
 	try {
 		await auth.api.updateUser({ body: { setupComplete: true }, headers: request.headers });
-		await db.update(user).set({ emailVerified: true }).where(eq(user.id, locals.user!.id));
+		await db.update(user).set({ emailVerified: true }).where(eq(user.id, locals.user.id));
 	} catch (err) {
 		if (isAPIError(err) && err.statusCode >= 400 && err.statusCode < 500) {
 			error(err.statusCode, err.message);

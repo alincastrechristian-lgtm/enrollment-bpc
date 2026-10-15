@@ -32,7 +32,8 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			export async function deleteApplicant(){};export async function createApplicant(){};export async function updateApplicant(){}`,
 		'popup.js': `export async function showYesNo(props){window.questions.push(props);return window.confirm;}
 			export function showLoading(){};export function showError(message){window.messages.push({type:'error',message});}export function showSuccess(message){window.messages.push({type:'success',message});}`,
-		'grades.js': `window.gradeCalls=[];
+		'grades.js': `window.gradeCalls=[];window.finalizeCalls=[];
+			export async function finalizeEnrollmentGrades(data){window.finalizeCalls.push(data);if(window.failFinalize)throw new Error('Grades or subjects have changed. Reload before finalizing.');if(window.deferFinalize)await new Promise(resolve=>window.finishFinalize=resolve);return {success:true,finalizedGrades:true};}
 			export async function updateEnrollmentGrades(data){window.gradeCalls.push(data);if(window.failGrades)throw new Error('Grades have changed since this page was loaded. Refresh before saving again.');if(window.deferGrades)await new Promise(resolve=>window.finishGrades=resolve);return {success:true,grades:data.grades.map(({id,grade})=>({id,grade}))};}`,
 		'Harness.svelte': `<script>
 			import Topbar from '${sourcePath('src/lib/components/Topbar/Topbar.svelte')}';
@@ -55,7 +56,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			const curriculum={id:'c',name:'2026 Curriculum',programCode:'BSIS',program,yearLevels:2,semesters:2,publishedAt:new Date(),archivedAt:null,isActive:true};
 			const entries=[{id:'cs1',subjectId:'s1',subjectCode:'SNAP101',subjectName:'Published Introduction',yearLevel:1,semester:1,units:3},{id:'cs2',subjectId:'s2',subjectCode:'SNAP102',subjectName:'Published Programming',yearLevel:1,semester:2,units:4},{id:'cs3',subjectId:'s3',subjectCode:'SNAP201',subjectName:'Published Databases',yearLevel:2,semester:1,units:2}];
 			const subjects=[{id:'s1',code:'LIVE101',name:'Changed Introduction',isActive:true},{id:'s2',code:'LIVE102',name:'Other term',isActive:true},{id:'s3',code:'LIVE201',name:'Databases',isActive:true},{id:'s4',code:'EXTRA',name:'Extra subject',isActive:true}];
-			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'pending',enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
+			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'pending',finalizedGrades:false,enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
 			const historical={...current,curriculumId:'old-curriculum',curriculum:{...curriculum,id:'old-curriculum',programCode:'BSIT',program:{...program,id:'it',code:'BSIT',name:'Information Technology'}},id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,grade:null}]};
 			const student={id:'u',name:applicant.name,email:applicant.email,image:null,emailVerified:false,setupComplete:false,banned:false,banReason:null,createdAt:new Date(),updatedAt:new Date(),applicant,studentData:{studentId:'MA-202610-000001',applicant,applicantId:'a',currentEnrollmentId:'current',currentEnrollment:current,enrollments:[current,historical]}};
 		</script>
@@ -63,9 +64,13 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		{#key mode+revision}
 			{#if mode==='enroll'}<Editor data={{applicant,program,curriculum,entries,subjects,schoolYearStart:2026}} />
 			{:else if mode==='student'}<Student data={{student}} />
-			{:else if mode==='grade-current'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId},enrollment:current,isCurrent:true,canEdit:true}} />
-			{:else if mode==='grade-past-admin'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId},enrollment:historical,isCurrent:false,canEdit:true}} />
-			{:else if mode==='grade-past'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId},enrollment:historical,isCurrent:false,canEdit:false}} />
+			{:else if mode==='student-inc'}<Student data={{student:{...student,studentData:{...student.studentData,enrollments:[{...current,finalizedGrades:true},historical]}}}} />
+			{:else if mode==='grade-pending-account'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:false},enrollment:current,isCurrent:true,gradeLockReason:'The student must complete account setup before grades can be edited or finalized.',canEdit:false,canEditFinalized:false,canFinalize:false}} />
+			{:else if mode==='grade-finalized'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:{...current,finalizedGrades:true,subjects:current.subjects},isCurrent:true,gradeLockReason:'Grades are finalized. Only administrators can edit them.',canEdit:false,canEditFinalized:false,canFinalize:false}} />
+			{:else if mode==='grade-empty'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:{...current,subjects:[]},isCurrent:true,gradeLockReason:null,canEdit:true,canEditFinalized:true,canFinalize:true}} />
+			{:else if mode==='grade-current'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:current,isCurrent:true,gradeLockReason:null,canEdit:true,canEditFinalized:false,canFinalize:true}} />
+			{:else if mode==='grade-past-admin'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:historical,isCurrent:false,gradeLockReason:null,canEdit:true,canEditFinalized:true,canFinalize:true}} />
+			{:else if mode==='grade-past'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:historical,isCurrent:false,gradeLockReason:null,canEdit:false,canEditFinalized:false,canFinalize:false}} />
 			{:else if mode==='empty-student'}<Student data={{student:{...student,applicant:null,studentData:null}}} />
 			{:else if mode==='list'}<Students data={{users:[student],total:1,search:'',status:'all',filters:{}}} />
 			{:else if mode==='applicant'}<Applicant data={{applicant,programs:[program]}} />
@@ -269,15 +274,33 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 				.getByRole('article', { name: '2025–2026 · 1st Semester', exact: true })
 				.getByRole('link', { name: 'View', exact: true })
 		).toHaveAttribute('href', '/portal/user/students/u/enrollments/current');
-		await expect(
-			currentSummary.getByRole('link', { name: 'View', exact: true })
-		).toHaveAttribute('href', '/portal/user/students/u/enrollments/current');
+		await expect(currentSummary.getByRole('link', { name: 'View', exact: true })).toHaveAttribute(
+			'href',
+			'/portal/user/students/u/enrollments/current'
+		);
 		await expect(
 			history
 				.getByRole('article', { name: '2024–2025 · 2nd Semester', exact: true })
 				.getByRole('link', { name: 'View', exact: true })
 		).toHaveAttribute('href', '/portal/user/students/u/enrollments/old');
+		await page.evaluate(() => window.show('grade-pending-account'));
+		await expect(
+			page.getByText('The student must complete account setup', { exact: false })
+		).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toHaveCount(0);
+		await page.evaluate(() => window.show('grade-empty'));
+		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toBeDisabled();
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toBeDisabled();
+		await page.evaluate(() => window.show('grade-finalized'));
+		await expect(
+			page.getByText('Grades are finalized. Only administrators can edit them.', { exact: false })
+		).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
 		await page.evaluate(() => window.show('grade-current'));
+		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toBeEnabled();
 		await expect(page.getByRole('link', { name: 'ENROLLMENTS', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('link', { name: 'U', exact: true })).toHaveAttribute(
 			'href',
@@ -350,6 +373,28 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			path: path.resolve('.tmp/enrollment-grades-mobile.png'),
 			fullPage: true
 		});
+		await page.evaluate(() => (window.deferGrades = false));
+		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await page.evaluate(() => (window.confirm = false));
+		await page.getByRole('button', { name: 'Finalize grades', exact: true }).click();
+		await expect(page.getByText('Grades finalized', { exact: true })).toHaveCount(0);
+		assert.equal(await page.evaluate(() => window.finalizeCalls.length), 0);
+		assert.match(
+			await page.evaluate(() => window.questions.at(-1).message),
+			/1 subject has no grade and will be marked as INC \(Incomplete\)/
+		);
+		assert.equal(await page.evaluate(() => window.questions.at(-1).warning), true);
+		await page.evaluate(() => (window.confirm = true));
+		await page.getByRole('button', { name: 'Finalize grades', exact: true }).click();
+		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
+		assert.deepEqual(await page.evaluate(() => window.finalizeCalls.at(-1).grades), [
+			{ id: 'es1', grade: 2.25 },
+			{ id: 'es2', grade: null }
+		]);
+		await expect(page.getByText('Grades finalized', { exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toHaveCount(0);
+		assert.equal(await page.evaluate(() => window.finalizeCalls.at(-1).enrollmentId), 'current');
 		await page.getByRole('button', { name: 'Back', exact: true }).click();
 		await expect(page.getByRole('heading', { name: 'STUDENT DETAILS', exact: true })).toBeVisible();
 		assert.equal(await page.evaluate(() => window.navigation.at(-1)), '/portal/user/students/u');
@@ -359,10 +404,12 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('spinbutton')).toHaveCount(0);
 		await page.evaluate(() => {
 			window.show('grade-past-admin');
+			window.finalizeCalls = [];
 			window.deferGrades = false;
 		});
 		await expect(page.getByText('Historical enrollment', { exact: true })).toBeVisible();
 		await expect(page.getByText('Current enrollment', { exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toBeEnabled();
 		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
 		await page.getByLabel('Grade for OLD101', { exact: true }).fill('1.75');
 		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
@@ -370,11 +417,69 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('cell', { name: '1.75', exact: true })).toBeVisible();
 		await expect(page.getByText('Historical enrollment', { exact: true })).toBeVisible();
 		assert.equal(await page.evaluate(() => window.gradeCalls.at(-1).enrollmentId), 'old');
+		await page.evaluate(() => (window.confirm = false));
+		await page.getByRole('button', { name: 'Finalize grades', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toBeEnabled();
+		assert.equal(await page.evaluate(() => window.finalizeCalls.length), 0);
+		assert.equal(await page.evaluate(() => window.questions.at(-1).warning), true);
+		assert.match(
+			await page.evaluate(() => window.questions.at(-1).message),
+			/Administrators can still make corrections/
+		);
+		await page.evaluate(() => {
+			window.confirm = true;
+			window.failFinalize = true;
+		});
+		await page.getByRole('button', { name: 'Finalize grades', exact: true }).click();
+		await expect(page.getByRole('alert')).toContainText('Grades or subjects have changed');
+		await page.evaluate(() => {
+			window.failFinalize = false;
+			window.deferFinalize = true;
+		});
+		await page.getByRole('button', { name: 'Finalize grades', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Finalizing...', exact: true })).toBeDisabled();
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toBeDisabled();
+		await page
+			.getByRole('button', { name: 'Finalizing...', exact: true })
+			.evaluate((button) => button.dispatchEvent(new Event('click', { bubbles: true })));
+		assert.equal(await page.evaluate(() => window.finalizeCalls.length), 2);
+		assert.deepEqual(await page.evaluate(() => window.finalizeCalls[1]), {
+			userId: 'u',
+			enrollmentId: 'old',
+			grades: [{ id: 'old-subject', grade: 1.75 }]
+		});
+		await page.evaluate(() => window.finishFinalize());
+		await expect(page.getByRole('status')).toHaveText('Grades finalized successfully.');
+		await expect(page.getByText('Grades finalized', { exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toHaveCount(0);
+		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
+		const finalizedGrade = page.getByLabel('Grade for OLD101', { exact: true });
+		await finalizedGrade.fill('');
+		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
+		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
+		await expect(page.getByText('Grades finalized', { exact: true })).toBeVisible();
+		assert.deepEqual(await page.evaluate(() => window.gradeCalls.at(-1).grades), [
+			{ id: 'old-subject', grade: null, originalGrade: 1.75 }
+		]);
+		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
+		await expect(finalizedGrade).toHaveValue('');
+		await expect(finalizedGrade).toHaveAttribute('placeholder', 'INC');
+		await finalizedGrade.fill('2.25');
+		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
+		await expect(page.getByRole('status')).toHaveText('Grades saved successfully.');
+		await expect(page.getByRole('cell', { name: '2.25', exact: true })).toBeVisible();
+		await expect(page.getByText('Grades finalized', { exact: true })).toBeVisible();
+		assert.deepEqual(await page.evaluate(() => window.gradeCalls.at(-1).grades), [
+			{ id: 'old-subject', grade: 2.25, originalGrade: null }
+		]);
 		await page.getByRole('button', { name: 'Back', exact: true }).click();
 		await page.getByRole('button', { name: 'Resend setup link', exact: true }).click();
 		assert.deepEqual(await page.evaluate(() => window.mailCalls), [
 			{ email: 'stored@example.com' }
 		]);
+		await page.evaluate(() => window.show('student-inc'));
+		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
 		await page.evaluate(() => window.show('empty-student'));
 		await expect(page.getByText('No enrollment records yet.', { exact: true })).toBeVisible();
 		await expect(

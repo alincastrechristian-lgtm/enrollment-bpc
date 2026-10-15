@@ -4,8 +4,35 @@ import type { db, Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 
-export function canEditEnrollmentGrades(role: string | null | undefined, isCurrent: boolean) {
-	return role === Role.ADMIN || (role === Role.REGISTRAR && isCurrent);
+type StudentEnrollmentRecord = ReturnType<typeof getStudentEnrollment>;
+
+export function getEnrollmentGradeLockReason(
+	record: StudentEnrollmentRecord,
+	role: string | null | undefined
+) {
+	if (!record.user.setupComplete)
+		return 'The student must complete account setup before grades can be edited or finalized.';
+	if (record.enrollment.finalizedGrades && role !== Role.ADMIN)
+		return 'Grades are finalized. Only administrators can edit them.';
+	return null;
+}
+
+export function canEditEnrollmentGrades(
+	role: string | null | undefined,
+	record: StudentEnrollmentRecord
+) {
+	return (
+		!getEnrollmentGradeLockReason(record, role) &&
+		(role === Role.ADMIN ||
+			(role === Role.REGISTRAR && record.student.currentEnrollmentId === record.enrollment.id))
+	);
+}
+
+export function canFinalizeEnrollmentGrades(
+	role: string | null | undefined,
+	record: StudentEnrollmentRecord
+) {
+	return !record.enrollment.finalizedGrades && canEditEnrollmentGrades(role, record);
 }
 
 // Resolve enrollment ownership for both the view and the grade-writing transaction.
@@ -21,7 +48,7 @@ export function getStudentEnrollment(
 				studentId: studentData.studentId,
 				currentEnrollmentId: studentData.currentEnrollmentId
 			},
-			user: { id: user.id, name: user.name, email: user.email }
+			user: { id: user.id, name: user.name, email: user.email, setupComplete: user.setupComplete }
 		})
 		.from(enrollment)
 		.innerJoin(studentData, eq(studentData.studentId, enrollment.studentId))

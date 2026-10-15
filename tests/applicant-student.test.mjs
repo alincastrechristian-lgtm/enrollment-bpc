@@ -668,9 +668,11 @@ for (const role of [Role.STUDENT, null]) {
 	});
 }
 
-async function gradeFixture(t, role = Role.REGISTRAR) {
+async function gradeFixture(t, role = Role.REGISTRAR, setupComplete = true) {
 	const f = fixture(t, role);
 	const result = await f.enrollStudent(input);
+	const { eq } = require('drizzle-orm');
+	f.db.update(schema.user).set({ setupComplete }).where(eq(schema.user.id, result.userId)).run();
 	f.db
 		.insert(schema.enrollment)
 		.values({
@@ -855,6 +857,280 @@ for (const role of [Role.STUDENT, null]) {
 				userId: 'u',
 				enrollmentId: 'e',
 				grades: [{ id: 'subject', grade: 1, originalGrade: null }]
+			}),
+			{ status: role ? 403 : 401 }
+		);
+	});
+}
+
+async function completedGradeSnapshot(f, enrollmentId = f.result.enrollmentId) {
+	const page = await f.loadEnrollmentDetails(f.result.userId, enrollmentId);
+	const grades = page.enrollment.subjects.map((subject, index) => ({
+		id: subject.id,
+		grade: subject.grade ?? 1 + index * 0.25,
+		originalGrade: subject.grade
+	}));
+	await f.updateEnrollmentGrades({ userId: f.result.userId, enrollmentId, grades });
+	return {
+		userId: f.result.userId,
+		enrollmentId,
+		grades: grades.map(({ id, grade }) => ({ id, grade }))
+	};
+}
+
+for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+	test(`${role} cannot edit grades until the student's account setup is complete`, async (t) => {
+		const f = await gradeFixture(t, role, false);
+		for (const id of [f.result.enrollmentId, 'past']) {
+			const page = await f.loadEnrollmentDetails(f.result.userId, id);
+			assert.equal(page.canEdit, false);
+			assert.equal(page.canFinalize, false);
+			assert.match(page.gradeLockReason, /account setup/);
+		}
+		await assert.rejects(f.updateEnrollmentGrades(f.payload), { status: 409 });
+		await assert.rejects(
+			f.finalizeEnrollmentGrades({
+				userId: f.result.userId,
+				enrollmentId: role === Role.ADMIN ? 'past' : f.result.enrollmentId,
+				grades: [{ id: 'past-subject', grade: 2.5 }]
+			}),
+			{ status: 409 }
+		);
+		assert.ok(
+			f.db
+				.select()
+				.from(schema.enrollmentSubject)
+				.all()
+				.filter((row) => row.enrollmentId === f.result.enrollmentId)
+				.every((row) => row.grade === null)
+		);
+	});
+}
+
+test('account setup and finalization eligibility are rechecked when saving', async (t) => {
+	const f = await gradeFixture(t, Role.ADMIN);
+	const snapshot = await completedGradeSnapshot(f);
+	assert.equal(
+		(await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId)).canFinalize,
+		true
+	);
+	const { eq } = require('drizzle-orm');
+	f.db
+		.update(schema.user)
+		.set({ setupComplete: false })
+		.where(eq(schema.user.id, f.result.userId))
+		.run();
+	await assert.rejects(
+		f.updateEnrollmentGrades({
+			...snapshot,
+			grades: [{ ...snapshot.grades[0], originalGrade: snapshot.grades[0].grade, grade: 3 }]
+		}),
+		{ status: 409 }
+	);
+	await assert.rejects(f.finalizeEnrollmentGrades(snapshot), { status: 409 });
+	assert.equal(
+		(await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId)).enrollment
+			.finalizedGrades,
+		false
+	);
+});
+
+for (const historical of [false, true]) {
+	test(`admin can correct finalized ${historical ? 'historical' : 'current'} grades while preserving finalization`, async (t) => {
+		const f = await gradeFixture(t, Role.ADMIN);
+		const snapshot = await completedGradeSnapshot(f, historical ? 'past' : f.result.enrollmentId);
+		await f.finalizeEnrollmentGrades(snapshot);
+		const page = await f.loadEnrollmentDetails(f.result.userId, snapshot.enrollmentId);
+		assert.equal(page.enrollment.finalizedGrades, true);
+		assert.equal(page.canEdit, true);
+		assert.equal(page.canEditFinalized, true);
+		assert.equal(page.canFinalize, false);
+		assert.equal(page.gradeLockReason, null);
+		await f.updateEnrollmentGrades({
+			...snapshot,
+			grades: [{ ...snapshot.grades[0], originalGrade: snapshot.grades[0].grade, grade: null }]
+		});
+		const incomplete = await f.loadEnrollmentDetails(f.result.userId, snapshot.enrollmentId);
+		assert.equal(incomplete.enrollment.finalizedGrades, true);
+		assert.equal(
+			incomplete.enrollment.subjects.find((s) => s.id === snapshot.grades[0].id).grade,
+			null
+		);
+		await assert.rejects(f.finalizeEnrollmentGrades(snapshot), { status: 409 });
+		const correction = {
+			...snapshot,
+			grades: [{ ...snapshot.grades[0], originalGrade: null, grade: 3.5 }]
+		};
+		await f.updateEnrollmentGrades(correction);
+		await assert.rejects(f.updateEnrollmentGrades(correction), { status: 409 });
+		const corrected = await f.loadEnrollmentDetails(f.result.userId, snapshot.enrollmentId);
+		assert.equal(corrected.enrollment.finalizedGrades, true);
+		assert.equal(
+			corrected.enrollment.subjects.find((s) => s.id === snapshot.grades[0].id).grade,
+			3.5
+		);
+		assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+	});
+}
+
+test('registrars can finalize only current grades and cannot edit finalized grades', async (t) => {
+	const f = await gradeFixture(t, Role.REGISTRAR);
+	const historical = await f.loadEnrollmentDetails(f.result.userId, 'past');
+	assert.equal(historical.canFinalize, false);
+	await assert.rejects(
+		f.finalizeEnrollmentGrades({
+			userId: f.result.userId,
+			enrollmentId: 'past',
+			grades: [{ id: 'past-subject', grade: 2.5 }]
+		}),
+		{ status: 409 }
+	);
+	const snapshot = await completedGradeSnapshot(f);
+	assert.equal(
+		(await f.loadEnrollmentDetails(f.result.userId, snapshot.enrollmentId)).canFinalize,
+		true
+	);
+	await f.finalizeEnrollmentGrades(snapshot);
+	const page = await f.loadEnrollmentDetails(f.result.userId, snapshot.enrollmentId);
+	assert.equal(page.enrollment.finalizedGrades, true);
+	assert.equal(page.canEdit, false);
+	assert.equal(page.canEditFinalized, false);
+	assert.equal(page.canFinalize, false);
+	assert.match(page.gradeLockReason, /Only administrators/);
+	await assert.rejects(
+		f.updateEnrollmentGrades({
+			...snapshot,
+			grades: [{ ...snapshot.grades[0], originalGrade: snapshot.grades[0].grade, grade: 4 }]
+		}),
+		{ status: 409 }
+	);
+	await assert.rejects(f.finalizeEnrollmentGrades(snapshot), { status: 409 });
+});
+
+for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+	for (const mixed of [false, true]) {
+		test(`${role} finalizes ${mixed ? 'mixed numeric and blank' : 'all blank'} grades as incomplete without changing grades`, async (t) => {
+			const f = await gradeFixture(t, role);
+			if (mixed) await f.updateEnrollmentGrades({ ...f.payload, grades: [f.payload.grades[0]] });
+			const before = await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId);
+			const snapshot = {
+				userId: f.result.userId,
+				enrollmentId: f.result.enrollmentId,
+				grades: before.enrollment.subjects.map(({ id, grade }) => ({ id, grade }))
+			};
+			await f.finalizeEnrollmentGrades(snapshot);
+			const page = await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId);
+			assert.equal(page.enrollment.finalizedGrades, true);
+			assert.deepEqual(page.enrollment.subjects, before.enrollment.subjects);
+			assert.equal(page.canEdit, role === Role.ADMIN);
+			assert.equal(page.canFinalize, false);
+			assert.ok(page.enrollment.subjects.some((s) => s.grade === null));
+		});
+	}
+}
+
+test('finalization rejects invalid grades and enrollments with no subjects', async (t) => {
+	const f = await gradeFixture(t, Role.ADMIN);
+	const snapshot = {
+		userId: f.result.userId,
+		enrollmentId: f.result.enrollmentId,
+		grades: f.subjects.map((subject) => ({ id: subject.id, grade: null }))
+	};
+	for (const grade of [0, 5.1, Infinity, 'INC', undefined]) {
+		await assert.rejects(
+			f.finalizeEnrollmentGrades({
+				...snapshot,
+				grades: [{ ...snapshot.grades[0], grade }]
+			}),
+			{ name: 'ZodError' }
+		);
+	}
+	const { eq } = require('drizzle-orm');
+	f.db
+		.delete(schema.enrollmentSubject)
+		.where(eq(schema.enrollmentSubject.enrollmentId, f.result.enrollmentId))
+		.run();
+	await assert.rejects(f.finalizeEnrollmentGrades(snapshot), { status: 400 });
+	assert.equal(
+		(await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId)).enrollment
+			.finalizedGrades,
+		false
+	);
+});
+
+test('finalization rejects a stale blank grade snapshot after another staff member enters a grade', async (t) => {
+	const f = await gradeFixture(t, Role.REGISTRAR);
+	const before = await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId);
+	const snapshot = {
+		userId: f.result.userId,
+		enrollmentId: f.result.enrollmentId,
+		grades: before.enrollment.subjects.map(({ id, grade }) => ({ id, grade }))
+	};
+	await f.updateEnrollmentGrades({ ...f.payload, grades: [f.payload.grades[0]] });
+	await assert.rejects(f.finalizeEnrollmentGrades(snapshot), { status: 409 });
+	assert.equal(
+		(await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId)).enrollment
+			.finalizedGrades,
+		false
+	);
+});
+
+test('finalization rejects stale or incomplete review snapshots without changing grades', async (t) => {
+	const f = await gradeFixture(t, Role.ADMIN);
+	const snapshot = await completedGradeSnapshot(f);
+	await assert.rejects(
+		f.finalizeEnrollmentGrades({ ...snapshot, grades: snapshot.grades.slice(1) }),
+		{ status: 409 }
+	);
+	await assert.rejects(
+		f.finalizeEnrollmentGrades({ ...snapshot, grades: [snapshot.grades[0], snapshot.grades[0]] }),
+		{ status: 400 }
+	);
+	await assert.rejects(f.finalizeEnrollmentGrades({ ...snapshot, userId: 'operator' }), {
+		status: 404
+	});
+	await f.updateEnrollmentGrades({
+		...snapshot,
+		grades: [{ ...snapshot.grades[0], originalGrade: snapshot.grades[0].grade, grade: 3 }]
+	});
+	await assert.rejects(f.finalizeEnrollmentGrades(snapshot), { status: 409 });
+	const page = await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId);
+	assert.equal(page.enrollment.finalizedGrades, false);
+	assert.equal(
+		page.enrollment.subjects.find((subject) => subject.id === snapshot.grades[0].id).grade,
+		3
+	);
+});
+
+test('a finalization that wins the write transaction prevents a concurrent grade change', async (t) => {
+	const f = await gradeFixture(t, Role.REGISTRAR);
+	const snapshot = await completedGradeSnapshot(f);
+	const results = await Promise.allSettled([
+		f.finalizeEnrollmentGrades(snapshot),
+		f.updateEnrollmentGrades({
+			...snapshot,
+			grades: [{ ...snapshot.grades[0], originalGrade: snapshot.grades[0].grade, grade: 4 }]
+		})
+	]);
+	assert.equal(results[0].status, 'fulfilled');
+	assert.equal(results[1].status, 'rejected');
+	assert.equal(results[1].reason.status, 409);
+	const page = await f.loadEnrollmentDetails(f.result.userId, f.result.enrollmentId);
+	assert.equal(page.enrollment.finalizedGrades, true);
+	assert.equal(
+		page.enrollment.subjects.find((subject) => subject.id === snapshot.grades[0].id).grade,
+		snapshot.grades[0].grade
+	);
+});
+
+for (const role of [Role.STUDENT, null]) {
+	test(`${role ?? 'anonymous'} cannot finalize grades`, async (t) => {
+		const f = fixture(t, role);
+		await assert.rejects(
+			f.finalizeEnrollmentGrades({
+				userId: 'u',
+				enrollmentId: 'e',
+				grades: [{ id: 's', grade: 1 }]
 			}),
 			{ status: role ? 403 : 401 }
 		);

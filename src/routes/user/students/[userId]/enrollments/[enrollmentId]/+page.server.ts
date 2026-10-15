@@ -2,7 +2,12 @@ import { Role } from '#lib/Roles.js';
 import { curriculum, enrollmentSubject } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
-import { canEditEnrollmentGrades, getStudentEnrollment } from '#lib/server/student-enrollment.js';
+import {
+	canEditEnrollmentGrades,
+	canFinalizeEnrollmentGrades,
+	getEnrollmentGradeLockReason,
+	getStudentEnrollment
+} from '#lib/server/student-enrollment.js';
 import { error } from '@sveltejs/kit';
 import { asc, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
@@ -22,10 +27,14 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		.orderBy(asc(enrollmentSubject.subjectCode), asc(enrollmentSubject.id))
 		.all();
 	const isCurrent = record.student.currentEnrollmentId === record.enrollment.id;
+	const gradeLockReason = getEnrollmentGradeLockReason(record, locals.user.role);
 	return {
 		student: { ...record.user, studentId: record.student.studentId },
 		enrollment: { ...record.enrollment, curriculum: selectedCurriculum, subjects },
 		isCurrent,
-		canEdit: canEditEnrollmentGrades(locals.user!.role, isCurrent)
+		gradeLockReason,
+		canEdit: canEditEnrollmentGrades(locals.user.role, record),
+		canEditFinalized: locals.user.role === Role.ADMIN,
+		canFinalize: canFinalizeEnrollmentGrades(locals.user.role, record)
 	};
 };

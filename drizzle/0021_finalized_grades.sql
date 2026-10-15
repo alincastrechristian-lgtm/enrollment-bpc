@@ -1,0 +1,1 @@
+ALTER TABLE `enrollment` ADD `finalized_grades` integer DEFAULT false NOT NULL;
