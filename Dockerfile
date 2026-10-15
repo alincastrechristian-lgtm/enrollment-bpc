@@ -34,6 +34,7 @@ COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
 COPY --from=build --chown=node:node /app/src/lib/server/db ./src/lib/server/db
 COPY --from=build --chown=node:node /app/src/lib/schema.ts ./src/lib/schema.ts
+COPY --from=build --chown=node:node /app/src/lib/email.ts ./src/lib/email.ts
 COPY --from=build --chown=node:node /app/src/lib/Roles.ts ./src/lib/Roles.ts
 COPY --chown=root:root docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY --chown=node:node scripts/migrate.mjs ./scripts/migrate.mjs
