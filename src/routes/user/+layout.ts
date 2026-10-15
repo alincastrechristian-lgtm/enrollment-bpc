@@ -49,7 +49,7 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	},
 	'/user/curriculum': {
 		pageTitle: 'CURRICULUM',
-		pageDescription: 'Organize program curricula and subject requirements.'
+		pageDescription: 'View curriculum subjects, semesters, and unit requirements.'
 	},
 	'/user/curriculum/new': {
 		pageTitle: 'NEW CURRICULUM',

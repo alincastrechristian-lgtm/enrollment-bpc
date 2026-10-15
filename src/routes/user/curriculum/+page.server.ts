@@ -2,7 +2,11 @@ import { MAX_ITEMS_PER_PAGE } from '#lib/components/Table/TableValues.js';
 import { Role } from '#lib/Roles.js';
 import { curriculum, curriculumSubject, filterCurriculumSchema, program } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
-import { curriculumStatus } from '#lib/server/curriculum.js';
+import {
+	curriculumStatus,
+	getCurriculum,
+	getCurrentStudentCurriculumId
+} from '#lib/server/curriculum.js';
 import { db } from '#lib/server/db/index.js';
 import { schemaFilters } from '#lib/server/filters.js';
 import { redirect } from '@sveltejs/kit';
@@ -10,7 +14,20 @@ import { and, asc, count, eq, like, or, sum } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url }) => {
-	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR, Role.STUDENT]);
+	if (locals.user.role === Role.STUDENT) {
+		const curriculumId = getCurrentStudentCurriculumId(locals.user.id);
+		return {
+			isStudent: true,
+			studentCurriculum: curriculumId ? getCurriculum(curriculumId) : null,
+			records: [],
+			total: 0,
+			search: '',
+			status: 'all' as const,
+			filters: {},
+			canManage: false
+		};
+	}
 	const search = url.searchParams.get('q')?.trim() ?? '';
 	const value = url.searchParams.get('status');
 	const status =
@@ -74,5 +91,14 @@ export const load: PageServerLoad = ({ locals, url }) => {
 			...record,
 			totalUnits: Number(record.totalUnits ?? 0)
 		}));
-	return { records, total, search, status, filters, canManage: locals.user?.role === Role.ADMIN };
+	return {
+		records,
+		total,
+		search,
+		status,
+		filters,
+		canManage: locals.user.role === Role.ADMIN,
+		isStudent: false,
+		studentCurriculum: null
+	};
 };

@@ -1,7 +1,36 @@
-import { curriculum, curriculumSubject, program, subject } from '#lib/schema.js';
+import {
+	curriculum,
+	curriculumSubject,
+	enrollment,
+	program,
+	studentData,
+	subject
+} from '#lib/schema.js';
 import { db, type Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
+
+export function getCurrentStudentCurriculumId(userId: string): string | null {
+	// Follow the student's enrollment, not the program's latest curriculum revision.
+	return (
+		db
+			.select({ id: curriculum.id })
+			.from(studentData)
+			.innerJoin(
+				enrollment,
+				and(
+					eq(enrollment.id, studentData.currentEnrollmentId),
+					eq(enrollment.studentId, studentData.studentId)
+				)
+			)
+			.innerJoin(
+				curriculum,
+				and(eq(curriculum.id, enrollment.curriculumId), isNotNull(curriculum.publishedAt))
+			)
+			.where(eq(studentData.userId, userId))
+			.get()?.id ?? null
+	);
+}
 
 // Publication freezes the curriculum; the program pointer selects its current version.
 export const curriculumStatus = sql<'draft' | 'inactive' | 'active' | 'archived'>`case

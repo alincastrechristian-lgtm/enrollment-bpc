@@ -75,6 +75,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			{:else if mode==='edit'}<Editor {programs} {subjects} {curriculum} {entries} />
 			{:else if mode==='multi-edit'}<Editor {programs} {subjects} {curriculum} entries={multiEntries} />
 			{:else if mode==='empty'}<Editor programs={[]} subjects={[]} />
+			{:else if mode.startsWith('student-')}<List data={{isStudent:true,studentCurriculum:mode==='student-empty'?null:{curriculum:{...curriculum,status:'archived',publishedAt:new Date()},entries:multiEntries},records:[],total:0,canManage:false}} />
 			{:else if mode.startsWith('list')}<List data={{records:[{...curriculum,status:curriculumStatus,publishedAt:curriculumStatus==='draft'?null:new Date(),subjectCount:1,totalUnits:3}],total:1,search:'',status:'all',filters:{},canManage:mode==='list-admin'}} />
 			{:else}<View data={{curriculum:{...curriculum,status:mode==='published'?'archived':curriculumStatus,publishedAt:mode==='published'||curriculumStatus!=='draft'?new Date():null,semesters:mode==='third-semester-view'?3:2},entries:mode==='multi-view'?multiEntries:mode==='third-semester-view'?entries.map(entry=>({...entry,semester:3})):entries,canManage:mode!=='registrar' && mode!=='multi-view'}} />{/if}
 		{/key}`
@@ -807,6 +808,21 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			await page.evaluate(() => 'activeCurriculumId' in window.catalogUpdates.at(-1).data),
 			false
 		);
+		await page.evaluate(() => window.show('student-current'));
+		await expect(page.getByRole('heading', { name: '2026 Curriculum', exact: true })).toBeVisible();
+		await expect(page.getByText('Current curriculum', { exact: true })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'View enrollment', exact: true })).toHaveAttribute(
+			'href',
+			'/portal/user/enrollment'
+		);
+		await expect(page.getByText('Original Introduction', { exact: true })).toBeVisible();
+		await expect(page.getByText('Programming', { exact: true })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Edit curriculum', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Activate', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+		await page.evaluate(() => window.show('student-empty'));
+		await expect(page.getByRole('heading', { name: 'No curriculum assigned' })).toBeVisible();
+		await expect(page.getByRole('textbox', { name: 'Search curricula' })).toHaveCount(0);
 		assert.deepEqual(errors, []);
 	} finally {
 		await browser?.close();
