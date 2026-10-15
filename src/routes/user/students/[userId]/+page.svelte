@@ -2,7 +2,7 @@
 	import { resendMagicLink } from '#lib/actions/user.remote.js';
 	import { showError, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { resolve } from '$app/paths';
-	import { BookOpen, FileCheck, GraduationCap, MailCheck, User } from '@lucide/svelte';
+	import { BookOpen, FileCheck, GraduationCap, MailCheck, RotateCcw, User } from '@lucide/svelte';
 	import { semesterLabel } from '../../curriculum/SubjectLayout.svelte';
 	import type { PageProps } from './$types';
 
@@ -14,6 +14,50 @@
 	const current = $derived(
 		enrollments.find((entry) => entry.id === record?.currentEnrollmentId) ?? null
 	);
+	let historyFilters = $state({ schoolYear: '', semester: '', status: '', programCode: '' });
+	const schoolYears = $derived(
+		[...new Set(enrollments.map((entry) => entry.schoolYearStart))].sort((a, b) => b - a)
+	);
+	const semesters = $derived(
+		[...new Set(enrollments.map((entry) => entry.semester))].sort((a, b) => a - b)
+	);
+	const statuses = $derived([...new Set(enrollments.map((entry) => entry.status))].sort());
+	const programs = $derived(
+		[
+			...new Map(
+				enrollments.map(
+					(entry) => [entry.curriculum.programCode, entry.curriculum.program] as const
+				)
+			)
+		]
+			.map(([code, program]) => ({ code, label: program ? `${code} — ${program.name}` : code }))
+			.sort((a, b) => a.code.localeCompare(b.code))
+	);
+	const hasHistoryFilters = $derived(
+		Boolean(
+			historyFilters.schoolYear ||
+			historyFilters.semester ||
+			historyFilters.status ||
+			historyFilters.programCode
+		)
+	);
+	const filteredEnrollments = $derived(
+		enrollments.filter(
+			(entry) =>
+				(!historyFilters.schoolYear ||
+					entry.schoolYearStart === Number(historyFilters.schoolYear)) &&
+				(!historyFilters.semester || entry.semester === Number(historyFilters.semester)) &&
+				(!historyFilters.status || entry.status === historyFilters.status) &&
+				(!historyFilters.programCode || entry.curriculum.programCode === historyFilters.programCode)
+		)
+	);
+	function clearHistoryFilters() {
+		historyFilters = { schoolYear: '', semester: '', status: '', programCode: '' };
+	}
+	$effect(() => {
+		// A different student must not inherit the previous student's selections.
+		if (student.id) clearHistoryFilters();
+	});
 	let resending = $state(false);
 	const formatter = new Intl.DateTimeFormat('en-PH', {
 		timeZone: 'Asia/Manila',
@@ -196,10 +240,84 @@
 		</aside>
 	</div>
 	<section class="space-y-4" aria-labelledby="history-heading">
-		<h2 id="history-heading" class="flex items-center gap-2 text-lg font-bold">
-			<BookOpen class="size-5 text-primary" aria-hidden="true" />Enrollment history
-		</h2>
-		{#each enrollments as entry (entry.id)}
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<h2 id="history-heading" class="flex items-center gap-2 text-lg font-bold">
+				<BookOpen class="size-5 text-primary" aria-hidden="true" />Enrollment history
+			</h2>
+			{#if enrollments.length}
+				<button
+					type="button"
+					class="btn border-base-300 btn-outline btn-sm"
+					disabled={!hasHistoryFilters}
+					onclick={clearHistoryFilters}
+				>
+					<RotateCcw class="size-4" aria-hidden="true" />Clear filters
+				</button>
+			{/if}
+		</div>
+		{#if enrollments.length}
+			<fieldset
+				class="grid gap-4 rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
+			>
+				<legend class="sr-only">Filter enrollment history</legend>
+				<label class="space-y-2">
+					<span class="text-sm font-semibold">School year</span>
+					<select
+						aria-label="School year"
+						class="select w-full bg-base-200"
+						bind:value={historyFilters.schoolYear}
+					>
+						<option value="">All school years</option>
+						{#each schoolYears as year (year)}
+							<option value={String(year)}>{year}–{year + 1}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="space-y-2">
+					<span class="text-sm font-semibold">Semester</span>
+					<select
+						aria-label="Semester"
+						class="select w-full bg-base-200"
+						bind:value={historyFilters.semester}
+					>
+						<option value="">All semesters</option>
+						{#each semesters as semester (semester)}
+							<option value={String(semester)}>{semesterLabel(semester)}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="space-y-2">
+					<span class="text-sm font-semibold">Enrollment status</span>
+					<select
+						aria-label="Enrollment status"
+						class="select w-full bg-base-200"
+						bind:value={historyFilters.status}
+					>
+						<option value="">All statuses</option>
+						{#each statuses as status (status)}
+							<option value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="space-y-2">
+					<span class="text-sm font-semibold">Program</span>
+					<select
+						aria-label="Program"
+						class="select w-full bg-base-200"
+						bind:value={historyFilters.programCode}
+					>
+						<option value="">All programs</option>
+						{#each programs as program (program.code)}
+							<option value={program.code}>{program.label}</option>
+						{/each}
+					</select>
+				</label>
+			</fieldset>
+			<p class="text-sm text-base-content/60" role="status">
+				Showing {filteredEnrollments.length} of {enrollments.length} enrollments
+			</p>
+		{/if}
+		{#each filteredEnrollments as entry (entry.id)}
 			<article
 				class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
 				aria-labelledby={`enrollment-${entry.id}`}
@@ -266,7 +384,9 @@
 			</article>
 		{:else}
 			<p class="rounded-2xl border border-base-300 bg-base-100 p-6 text-sm text-base-content/60">
-				No enrollment records yet.
+				{enrollments.length
+					? 'No enrollments match these filters. Try another selection or clear filters.'
+					: 'No enrollment records yet.'}
 			</p>
 		{/each}
 	</section>

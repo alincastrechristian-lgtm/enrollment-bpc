@@ -53,7 +53,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			const entries=[{id:'cs1',subjectId:'s1',subjectCode:'SNAP101',subjectName:'Published Introduction',yearLevel:1,semester:1,units:3},{id:'cs2',subjectId:'s2',subjectCode:'SNAP102',subjectName:'Published Programming',yearLevel:1,semester:2,units:4},{id:'cs3',subjectId:'s3',subjectCode:'SNAP201',subjectName:'Published Databases',yearLevel:2,semester:1,units:2}];
 			const subjects=[{id:'s1',code:'LIVE101',name:'Changed Introduction',isActive:true},{id:'s2',code:'LIVE102',name:'Other term',isActive:true},{id:'s3',code:'LIVE201',name:'Databases',isActive:true},{id:'s4',code:'EXTRA',name:'Extra subject',isActive:true}];
 			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'pending',enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
-			const historical={...current,id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,grade:null}]};
+			const historical={...current,curriculumId:'old-curriculum',curriculum:{...curriculum,id:'old-curriculum',programCode:'BSIT',program:{...program,id:'it',code:'BSIT',name:'Information Technology'}},id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,grade:null}]};
 			const student={id:'u',name:applicant.name,email:applicant.email,image:null,emailVerified:false,setupComplete:false,banned:false,banReason:null,createdAt:new Date(),updatedAt:new Date(),applicant,studentData:{studentId:'MA-202610-000001',applicant,applicantId:'a',currentEnrollmentId:'current',currentEnrollment:current,enrollments:[current,historical]}};
 		</script>
 		<Topbar pageTitle={metadata.pageTitle} pageDescription={metadata.pageDescription} />
@@ -217,12 +217,55 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
 		await page.setViewportSize({ width: 1360, height: 960 });
 		await page.screenshot({ path: path.resolve('.tmp/student-page-desktop.png'), fullPage: true });
+		const history = page.getByRole('region', { name: 'Enrollment history', exact: true });
+		const currentSummary = page.getByRole('region', { name: 'Current enrollment', exact: true });
+		await expect(history.getByRole('article')).toHaveCount(2);
+		await expect(history.getByLabel('Program', { exact: true }).getByRole('option')).toHaveCount(3);
+		await history.getByLabel('Program', { exact: true }).selectOption('BSIT');
+		await expect(history.getByRole('article')).toHaveCount(1);
+		await expect(history.getByText('Historical subject', { exact: true })).toBeVisible();
+		await history.getByLabel('School year', { exact: true }).selectOption('2025');
+		await expect(history.getByRole('article')).toHaveCount(0);
+		await expect(currentSummary).toContainText('pending');
+		await history.getByRole('button', { name: 'Clear filters', exact: true }).click();
+		await expect(history.getByLabel('Program', { exact: true })).toHaveValue('');
+		await expect(history.getByRole('article')).toHaveCount(2);
+		await expect(
+			history.getByRole('button', { name: 'Clear filters', exact: true })
+		).toBeDisabled();
+		await history.getByLabel('School year', { exact: true }).selectOption('2024');
+		await expect(history.getByRole('article')).toHaveCount(1);
+		await expect(history.getByText('Historical subject', { exact: true })).toBeVisible();
+		await expect(history.getByRole('status')).toHaveText('Showing 1 of 2 enrollments');
+		await expect(currentSummary).toContainText('pending');
+		await history.getByLabel('Semester', { exact: true }).selectOption('1');
+		await expect(history.getByRole('article')).toHaveCount(0);
+		await expect(
+			history.getByText('No enrollments match these filters.', { exact: false })
+		).toBeVisible();
+		await history.getByRole('button', { name: 'Clear filters', exact: true }).click();
+		await expect(history.getByRole('article')).toHaveCount(2);
+		await history.getByLabel('Semester', { exact: true }).selectOption('2');
+		await expect(history.getByRole('article')).toHaveCount(1);
+		await expect(history.getByText('Historical subject', { exact: true })).toBeVisible();
+		await history.getByLabel('Enrollment status', { exact: true }).selectOption('pending');
+		await expect(history.getByRole('article')).toHaveCount(0);
+		await history.getByLabel('Semester', { exact: true }).selectOption('');
+		await expect(history.getByRole('article')).toHaveCount(1);
+		await expect(history.getByText('Published Databases', { exact: true })).toBeVisible();
+		await page.setViewportSize({ width: 390, height: 844 });
+		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+		await history.getByRole('button', { name: 'Clear filters', exact: true }).click();
+		await expect(history.getByRole('article')).toHaveCount(2);
 		await page.getByRole('button', { name: 'Resend setup link', exact: true }).click();
 		assert.deepEqual(await page.evaluate(() => window.mailCalls), [
 			{ email: 'stored@example.com' }
 		]);
 		await page.evaluate(() => window.show('empty-student'));
 		await expect(page.getByText('No enrollment records yet.', { exact: true })).toBeVisible();
+		await expect(
+			page.getByRole('group', { name: 'Filter enrollment history', exact: true })
+		).toHaveCount(0);
 		await page.evaluate(() => window.show('list'));
 		await expect(page.getByRole('cell', { name: 'B', exact: true })).toBeVisible();
 		await page.getByRole('button', { name: 'Actions for Test Student', exact: true }).click();
