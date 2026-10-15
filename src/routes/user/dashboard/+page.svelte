@@ -5,7 +5,9 @@
 	import RegistrarDashboard from '#lib/pages/Dashboard/Registrar/Dashboard.svelte';
 	import StudentDashboard from '#lib/pages/Dashboard/Student/Dashboard.svelte';
 	import { Role } from '#lib/Roles.js';
+	import type { PageProps } from './$types';
 
+	let { data }: PageProps = $props();
 	const session = authClient.useSession();
 </script>
 
@@ -14,8 +16,8 @@
 		<AdminDashboard />
 	{:else if $session.data.user.role === Role.REGISTRAR}
 		<RegistrarDashboard />
-	{:else if $session.data.user.role === Role.STUDENT}
-		<StudentDashboard />
+	{:else if $session.data.user.role === Role.STUDENT && data.studentDashboard}
+		<StudentDashboard data={data.studentDashboard} />
 	{:else}
 		<ErrorPage
 			message="You do not have permission to access this page."

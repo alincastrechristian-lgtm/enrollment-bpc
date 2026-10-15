@@ -41,12 +41,13 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			import {page} from './state.svelte.js';
 			import Editor from '${sourcePath('src/routes/user/applicants/EnrollmentEditor.svelte')}';
 			import Student from '${sourcePath('src/routes/user/students/[userId]/+page.svelte')}';
+			import MyEnrollment from '${sourcePath('src/routes/user/enrollment/+page.svelte')}';
 			import EnrollmentDetails from '${sourcePath('src/routes/user/students/EnrollmentDetails.svelte')}';
 			import Students from '${sourcePath('src/routes/user/students/+page.svelte')}';
 			import Applicant from '${sourcePath('src/routes/user/applicants/[applicantId]/+page.svelte')}';
 			import Applicants from '${sourcePath('src/routes/user/applicants/+page.svelte')}';
 			let mode=$state('enroll');let revision=$state(0);window.show=(value)=>mode=value;
-			const routeId=$derived(mode.startsWith('grade-')?'/user/students/[userId]/enrollments/[enrollmentId]':mode==='enroll'?'/user/applicants/[applicantId]/enroll':mode==='student'||mode==='empty-student'?'/user/students/[userId]':mode==='list'?'/user/students':mode==='applicant'||mode==='linked-applicant'||mode==='incomplete'?'/user/applicants/[applicantId]':'/user/applicants');
+			const routeId=$derived(mode.startsWith('my-enrollment')?'/user/enrollment':mode.startsWith('grade-')?'/user/students/[userId]/enrollments/[enrollmentId]':mode==='enroll'?'/user/applicants/[applicantId]/enroll':mode==='student'||mode==='empty-student'?'/user/students/[userId]':mode==='list'?'/user/students':mode==='applicant'||mode==='linked-applicant'||mode==='incomplete'?'/user/applicants/[applicantId]':'/user/applicants');
 			const routeUrl=$derived(new URL('/portal'+routeId.replace('[applicantId]','a').replace('[userId]','u').replace('[enrollmentId]',mode.startsWith('grade-past')?'old':'current'),window.location.href));
 			const metadata=$derived(loadMetadata({url:routeUrl,route:{id:routeId},params:{userId:'u'}}));
 			$effect(()=>{page.url=routeUrl;});
@@ -64,6 +65,8 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		{#key mode+revision}
 			{#if mode==='enroll'}<Editor data={{applicant,program,curriculum,entries,subjects,schoolYearStart:2026}} />
 			{:else if mode==='student'}<Student data={{student}} />
+			{:else if mode==='my-enrollment'}<MyEnrollment data={{record:{studentId:student.studentData.studentId,currentEnrollmentId:'current',enrollments:[{...current,finalizedGrades:true},historical]}}} />
+			{:else if mode==='my-enrollment-empty'}<MyEnrollment data={{record:null}} />
 			{:else if mode==='student-inc'}<Student data={{student:{...student,studentData:{...student.studentData,enrollments:[{...current,finalizedGrades:true},historical]}}}} />
 			{:else if mode==='grade-pending-account'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:false},enrollment:current,isCurrent:true,gradeLockReason:'The student must complete account setup before grades can be edited or finalized.',canEdit:false,canEditFinalized:false,canFinalize:false}} />
 			{:else if mode==='grade-finalized'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:{...current,finalizedGrades:true,subjects:current.subjects},isCurrent:true,gradeLockReason:'Grades are finalized. Only administrators can edit them.',canEdit:false,canEditFinalized:false,canFinalize:false}} />
@@ -224,7 +227,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		).toBeVisible();
 		await expect(page.getByText('Historical subject', { exact: true })).toBeVisible();
 		await expect(page.getByRole('columnheader', { name: 'Grade', exact: true })).toHaveCount(2);
-		await expect(page.getByRole('cell', { name: 'No grade', exact: true })).toHaveCount(2);
+		await expect(page.getByRole('cell', { name: '-', exact: true })).toHaveCount(2);
 		await expect(page.getByRole('cell', { name: '1.25', exact: true })).toHaveCount(2);
 		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
 		await page.setViewportSize({ width: 1360, height: 960 });
@@ -480,6 +483,42 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		]);
 		await page.evaluate(() => window.show('student-inc'));
 		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
+		await page.evaluate(() => window.show('my-enrollment'));
+		await expect(page.getByRole('heading', { name: 'My enrollment', exact: true })).toBeVisible();
+		await expect(
+			page.getByText('Review your enrollment history, subjects, and grades.', { exact: true })
+		).toBeVisible();
+		await expect(page.getByText('Showing 2 of 2 enrollments', { exact: true })).toBeVisible();
+		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
+		await expect(
+			page
+				.getByRole('row')
+				.filter({ has: page.getByRole('cell', { name: 'LIVE101', exact: true }) })
+				.getByRole('cell')
+				.last()
+		).toHaveText('1.25');
+		await expect(page.getByRole('link', { name: 'View', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
+		await page.getByLabel('School year', { exact: true }).selectOption('2024');
+		await expect(page.getByText('Showing 1 of 2 enrollments', { exact: true })).toBeVisible();
+		await expect(page.getByRole('cell', { name: 'OLD101', exact: true })).toBeVisible();
+		await expect(page.getByRole('cell', { name: 'SNAP201', exact: true })).toHaveCount(0);
+		await page.getByLabel('Program', { exact: true }).selectOption('BSIS');
+		await expect(
+			page.getByText('No enrollments match these filters.', { exact: false })
+		).toBeVisible();
+		await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+		await expect(page.getByText('Showing 2 of 2 enrollments', { exact: true })).toBeVisible();
+		await page.setViewportSize({ width: 1360, height: 960 });
+		await page.screenshot({ path: path.resolve('.tmp/my-enrollment-desktop.png'), fullPage: true });
+		await page.setViewportSize({ width: 390, height: 844 });
+		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+		await page.screenshot({ path: path.resolve('.tmp/my-enrollment-mobile.png'), fullPage: true });
+		await page.evaluate(() => window.show('my-enrollment-empty'));
+		await expect(page.getByText('No enrollment records yet.', { exact: true })).toBeVisible();
+		await expect(
+			page.getByRole('group', { name: 'Filter enrollment history', exact: true })
+		).toHaveCount(0);
 		await page.evaluate(() => window.show('empty-student'));
 		await expect(page.getByText('No enrollment records yet.', { exact: true })).toBeVisible();
 		await expect(

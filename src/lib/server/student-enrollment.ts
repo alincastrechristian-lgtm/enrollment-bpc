@@ -1,6 +1,6 @@
 import { Role } from '#lib/Roles.js';
 import { enrollment, studentData, user } from '#lib/schema.js';
-import type { db, Transaction } from '#lib/server/db/index.js';
+import { db, type Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 
@@ -57,4 +57,51 @@ export function getStudentEnrollment(
 		.get();
 	if (!result) error(404, 'Student enrollment not found.');
 	return result;
+}
+
+export async function getStudentEnrollmentHistory(userId: string) {
+	// Scope history to the authenticated student, never a supplied account ID.
+	const record = await db.query.studentData.findFirst({
+		where: eq(studentData.userId, userId),
+		columns: { studentId: true, currentEnrollmentId: true },
+		with: {
+			enrollments: {
+				orderBy: (enrollment, { desc }) => [
+					desc(enrollment.schoolYearStart),
+					desc(enrollment.semester),
+					desc(enrollment.enrolledAt),
+					desc(enrollment.id)
+				],
+				with: {
+					curriculum: {
+						columns: { name: true, programCode: true },
+						with: { program: { columns: { code: true, name: true } } }
+					},
+					subjects: {
+						columns: {
+							id: true,
+							subjectCode: true,
+							subjectName: true,
+							source: true,
+							units: true,
+							grade: true
+						},
+						orderBy: (entry, { asc }) => [asc(entry.subjectCode), asc(entry.id)]
+					}
+				}
+			}
+		}
+	});
+	return record
+		? {
+				...record,
+				enrollments: record.enrollments.map((enrollment) => ({
+					...enrollment,
+					subjects: enrollment.subjects.map((subject) => ({
+						...subject,
+						grade: enrollment.finalizedGrades ? subject.grade : null
+					}))
+				}))
+			}
+		: null;
 }

@@ -37,7 +37,7 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	},
 	'/user/enrollment': {
 		pageTitle: 'ENROLLMENT',
-		pageDescription: 'Track active enrollment periods and batches.'
+		pageDescription: 'Review your enrollment history, subjects, and grades.'
 	},
 	'/user/subjects': {
 		pageTitle: 'SUBJECTS',
@@ -74,6 +74,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	'/user/settings/email': {
 		pageTitle: 'EMAIL SETTINGS',
 		pageDescription: 'Configure the system sender and SMTP connection.'
+	},
+	'/user/settings/profile': {
+		pageTitle: 'MY PROFILE',
+		pageDescription: 'View your personal details and account information.'
 	},
 	'/user/settings': {
 		pageTitle: 'SETTINGS',
