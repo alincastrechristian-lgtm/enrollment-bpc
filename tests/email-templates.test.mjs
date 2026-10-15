@@ -160,6 +160,7 @@ test('SMTP sends supplied HTML and preserves plain email compatibility', async (
 			}
 		},
 		'./email-html': htmlHelpers,
+		'../email': { EmailApiType: { SMTP: 'smtp', RESEND: 'resend' } },
 		'./settings': {
 			getSystemSettings: async () => ({
 				smtpHost: 'smtp.example.com',
@@ -170,7 +171,7 @@ test('SMTP sends supplied HTML and preserves plain email compatibility', async (
 			})
 		}
 	});
-	const message = templates.createMagicLinkEmail(url, 300);
+	const message = templates.createResetPasswordEmail(url, 300);
 	assert.equal(
 		await sendEmail('student@example.com', message.subject, message.text, message.html),
 		true

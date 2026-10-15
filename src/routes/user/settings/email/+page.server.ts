@@ -7,12 +7,13 @@ export async function load({ locals }) {
 
 	const settings = await getSystemSettings();
 
-	const { senderPassword, ...safeSettings } = settings;
+	const { senderPassword, resendApiKey, ...safeSettings } = settings;
 
 	return {
 		settings: {
 			...safeSettings,
-			hasSenderPassword: Boolean(senderPassword)
+			hasSenderPassword: Boolean(senderPassword),
+			hasResendApiKey: Boolean(resendApiKey)
 		}
 	};
 }

@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import type z from 'zod';
+import { EmailApiType } from './email';
 
 const uuid = () =>
 	text('id')
@@ -25,7 +26,12 @@ export const systemSettings = sqliteTable('system_settings', {
 	smtpPort: integer('smtp_port').default(465),
 	senderEmail: text('sender_email'),
 	senderName: text('sender_name').default('BPC Enrollment System'),
-	senderPassword: text('sender_password')
+	senderPassword: text('sender_password'),
+
+	emailApiType: text('email_api_type', { enum: [EmailApiType.SMTP, EmailApiType.RESEND] }).default(
+		EmailApiType.SMTP
+	),
+	resendApiKey: text('resend_api_key')
 });
 
 export const program = sqliteTable('program', {

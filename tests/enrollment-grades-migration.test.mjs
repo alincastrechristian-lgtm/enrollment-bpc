@@ -24,7 +24,7 @@ test('grade migration preserves subject attempts, enforces range, and can be ret
 	`);
 	const before = sqlite.prepare('SELECT * FROM enrollment_subject').get();
 	const enrollmentBefore = sqlite.prepare('SELECT * FROM enrollment').get();
-	const config = { migrationsFolder: 'drizzle' };
+	const config = migrationConfigThrough(t, 18);
 	migrate(drizzle(sqlite), config);
 	const { remarks, ...attempt } = before;
 	assert.equal(remarks, null);
