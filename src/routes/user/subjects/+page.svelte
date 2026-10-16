@@ -13,7 +13,7 @@
 	import { filterSubjectSchema, type Subject } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
 
-	import { BookOpen, Pencil, Plus, Settings, Trash2 } from '@lucide/svelte';
+	import { BookOpen, Pencil, Plus, Ellipsis, Trash2 } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 	import SubjectDialog from './SubjectDialog.svelte';
 
@@ -139,7 +139,7 @@
 							disabled={busy}
 						>
 							{#snippet trigger()}
-								<Settings class="size-4" aria-hidden="true" />
+								<Ellipsis class="size-4" aria-hidden="true" />
 							{/snippet}
 							<ul class="menu w-full p-0">
 								<li>

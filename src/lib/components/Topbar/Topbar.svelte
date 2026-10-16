@@ -1,134 +1,133 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { ArrowLeft } from '@lucide/svelte';
-
+	import { ArrowLeft, ChevronRight, Menu, Moon, Sun } from '@lucide/svelte';
+	import { getSidebarItems, isActiveLink } from '../Sidebar/navigation';
+	import ThemeController from '../ThemeController/ThemeController.svelte';
 	const session = authClient.useSession();
-
-	const defaultPageTitle =
-		page.url.pathname.at(-1) === '/'
-			? 'DASHBOARD'
-			: page.url.pathname.split('/').at(-1)?.toUpperCase();
-
-	let isRootPath = $derived(
-		page.url.pathname.split('/').filter((segment) => segment !== '').length <= 2
-	);
-
-	const pagePath = $derived(page.url.pathname.split('/').filter((segment) => segment !== ''));
-
-	const previousPath = $derived(
-		page.url.pathname
-			.split('/')
-			.filter((segment) => segment !== '')
-			.slice(0, -1)
-			.join('/')
-	);
-
 	let {
 		drawerToggleId = 'user-sidebar-drawer',
-		pageTitle = defaultPageTitle,
+		pageTitle,
 		pageDescription,
-		backHref
+		backHref,
+		sidebarOpen = false
 	}: {
 		drawerToggleId?: string;
 		pageTitle?: string;
 		pageDescription?: string;
 		backHref?: string;
+		sidebarOpen?: boolean;
 	} = $props();
+	const links = $derived(
+		getSidebarItems($session.data?.user.role).flatMap((item) =>
+			'children' in item ? item.children : [item]
+		)
+	);
+	const section = $derived(links.find((item) => isActiveLink(item.href, page.url.pathname)));
+	const title = $derived(pageTitle ?? section?.label ?? 'Dashboard');
+	const detail = $derived(
+		!!backHref ||
+			(!!section && page.url.pathname.replace(/\/$/, '') !== section.href.replace(/\/$/, ''))
+	);
+	const initials = $derived(
+		($session.data?.user.name ?? 'User')
+			.trim()
+			.split(/\s+/)
+			.slice(0, 2)
+			.map((part) => part.charAt(0))
+			.join('')
+			.toUpperCase()
+	);
+	function toggleSidebar() {
+		const control = document.getElementById(drawerToggleId);
+		if (control instanceof HTMLInputElement) control.click();
+	}
 </script>
 
-<header
-	class="sticky top-0 z-20 border-b border-base-300 bg-base-100/85 shadow-sm backdrop-blur-md"
->
-	<div class="flex h-19 items-center justify-between px-6 lg:px-10">
+<header class="sticky top-0 z-20 border-b border-base-300 bg-base-100/95 backdrop-blur-xl">
+	<div class="flex min-h-21 w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
 		<div class="flex min-w-0 items-center gap-3">
-			<label
-				for={drawerToggleId}
-				class="btn btn-square btn-ghost text-base-content/80 hover:bg-base-200 xl:hidden"
-				aria-label="Open sidebar"
-			>
-				<svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-					<path d="M4 7H20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-					<path d="M4 12H20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-					<path d="M4 17H20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-				</svg>
-			</label>
-
-			<p
-				class="truncate text-xl font-extrabold tracking-wide text-primary uppercase lg:text-[2rem]"
-			>
-				Bulacan Polytechnic College
-			</p>
-
-			<span class="hidden text-xl font-semibold text-primary/90 xl:inline">- Main Campus</span>
-		</div>
-
-		<div class="flex items-center gap-4">
-			<div class="hidden text-right lg:block">
-				<p class="text-xs font-bold tracking-wide text-base-content/60 uppercase">
-					{$session.data?.user.role}
-				</p>
-				<p class="text-sm font-semibold text-base-content/80">{$session.data?.user.name}</p>
-			</div>
-
-			<button
-				class="btn btn-circle border-none bg-neutral text-base font-bold text-primary-content hover:bg-neutral/80"
-			>
-				{$session.data?.user.name
-					.split(' ')
-					.map((name) => name.charAt(0))
-					.join('')
-					.toUpperCase()}
-			</button>
-		</div>
-	</div>
-
-	<div
-		class="flex items-center justify-between border-t border-base-200 bg-base-200/70 px-6 py-5 lg:px-10"
-	>
-		<div>
-			<h1 class="text-3xl font-black tracking-tight text-base-content">
-				{pageTitle}
-			</h1>
-
-			{#if pageDescription}
-				<p class="mt-1 text-sm text-base-content/60">{pageDescription}</p>
-			{/if}
-
-			<p class="mt-1 text-xs font-medium tracking-wide text-base-content/50">
-				{#each pagePath as segment, index (index)}
-					{#if index === 0 || index === pagePath.length - 1 || (backHref && index === pagePath.length - 2)}
-						{segment.toUpperCase()}
-					{:else}
-						<a
-							class="link link-hover"
-							href={index === 0
-								? '/'
-								: `/${pagePath
-										.slice(0, index + 1)
-										.join('/')
-										.toLowerCase()}`}
-						>
-							{segment.toUpperCase()}
-						</a>
-					{/if}
-					{#if index < pagePath.length - 1}
-						<span class="mx-1.5">/</span>
-					{/if}
-				{/each}
-			</p>
-		</div>
-
-		{#if !isRootPath}
 			<button
 				type="button"
-				class="btn gap-2 btn-ghost text-base-content/60 btn-sm hover:bg-base-300/60 hover:text-base-content"
-				onclick={() => (backHref || previousPath) && goto(backHref ?? '/' + previousPath)}
+				class="btn btn-square btn-ghost btn-sm xl:hidden"
+				aria-label="Open sidebar"
+				aria-controls={`${drawerToggleId}-panel`}
+				aria-expanded={sidebarOpen}
+				onclick={toggleSidebar}
 			>
-				<ArrowLeft size={17} strokeWidth={2} />
-				Back
+				<Menu class="size-5" aria-hidden="true" />
 			</button>
-		{/if}
+			{#if detail}
+				<button
+					type="button"
+					class="btn btn-square border-base-300 btn-outline btn-sm"
+					aria-label="Back"
+					title="Back"
+					onclick={() => goto(backHref ?? section?.href ?? resolve('/user/dashboard'))}
+				>
+					<ArrowLeft class="size-4" aria-hidden="true" />
+				</button>
+			{/if}
+			<div class="min-w-0">
+				<nav
+					aria-label="Breadcrumb"
+					class="mb-1 flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-base-content/45"
+				>
+					<a href={resolve('/user/dashboard')} class="hover:text-primary">Workspace</a>
+					{#if section}
+						<ChevronRight class="size-3 shrink-0" aria-hidden="true" />
+						<a href={section.href} class="truncate hover:text-primary">{section.label}</a>
+					{/if}
+					{#if detail}
+						<ChevronRight class="size-3 shrink-0" aria-hidden="true" />
+						<span class="truncate">Details</span>
+					{/if}
+				</nav>
+				<h1 class="truncate text-sm font-bold tracking-tight sm:text-lg">{title}</h1>
+				{#if pageDescription}
+					<p class="mt-1 hidden max-w-xl truncate text-xs text-base-content/50 md:block">
+						{pageDescription}
+					</p>
+				{/if}
+			</div>
+		</div>
+		<div class="flex shrink-0 items-center gap-2 sm:gap-4">
+			<ThemeController>
+				{#snippet children({ isDark, toggleTheme })}
+					<button
+						type="button"
+						class="btn btn-square btn-ghost btn-sm"
+						aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+						onclick={toggleTheme}
+					>
+						{#if isDark}
+							<Sun class="size-4" aria-hidden="true" />
+						{:else}
+							<Moon class="size-4" aria-hidden="true" />
+						{/if}
+					</button>
+				{/snippet}
+			</ThemeController>
+			<span class="hidden h-7 w-px bg-base-300 sm:block" aria-hidden="true"></span>
+			<a
+				href={resolve('/user/settings/profile')}
+				class="flex items-center gap-3 rounded-xl p-1 transition-colors hover:bg-base-200"
+				aria-label="View my profile"
+			>
+				<span class="hidden max-w-40 text-right lg:block">
+					<span class="block truncate text-xs font-semibold">{$session.data?.user.name}</span>
+					<span class="mt-1 block text-[10px] text-base-content/50 capitalize">
+						{$session.data?.user.role === 'admin' ? 'Administrator' : $session.data?.user.role}
+					</span>
+				</span>
+				<span
+					class="grid size-9 place-items-center rounded-xl border border-primary/10 bg-primary/10 text-xs font-bold text-primary"
+				>
+					{initials}
+				</span>
+			</a>
+		</div>
 	</div>
 </header>

@@ -55,9 +55,9 @@
 </script>
 
 <svelte:head><title>{student.name} | BPC Enrollment System</title></svelte:head>
-<section class="mx-auto max-w-7xl space-y-6">
-	<header class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+<section class="w-full space-y-6">
+	<header class="portal-page-header">
+		<div class="h-1 bg-primary" aria-hidden="true"></div>
 		<div class="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
 			<div class="flex min-w-0 items-center gap-4">
 				{#if student.image}
@@ -106,10 +106,7 @@
 	</header>
 	<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
 		<div class="min-w-0 space-y-6">
-			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-				aria-labelledby="student-info-heading"
-			>
+			<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="student-info-heading">
 				<h2 id="student-info-heading" class="mb-5 font-bold">Student information</h2>
 				<dl class="grid gap-5 text-sm sm:grid-cols-2">
 					{#each details as [label, value] (label)}
@@ -121,7 +118,7 @@
 				</dl>
 			</section>
 			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
+				class="portal-panel p-5 shadow-sm sm:p-6"
 				aria-labelledby="current-enrollment-heading"
 			>
 				<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -175,10 +172,7 @@
 			</section>
 		</div>
 		<aside class="space-y-6">
-			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm"
-				aria-labelledby="account-heading"
-			>
+			<section class="portal-panel p-5 shadow-sm" aria-labelledby="account-heading">
 				<h2 id="account-heading" class="mb-4 font-bold">Account information</h2>
 				<dl class="space-y-4 text-sm">
 					<div>

@@ -1,24 +1,12 @@
 <script lang="ts">
-	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
-	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
+
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import { filterUserSchema } from '#lib/schema.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { refreshAll } from '$app/navigation';
-	import {
-		Eye,
-		Mail,
-		MailCheck,
-		Pencil,
-		Plus,
-		Settings,
-		Trash2,
-		User,
-		UserPlus,
-		X
-	} from '@lucide/svelte';
+	import { Mail, MailCheck, Plus, User, UserPlus, X } from '@lucide/svelte';
 	import { createRegistrar, resendMagicLink } from '#lib/actions/user.remote.js';
 
 	let { data } = $props();
@@ -26,14 +14,19 @@
 	const registrars = $derived(data.users);
 	let registrarDialog: HTMLDialogElement;
 	let registrarForm: HTMLFormElement;
+	let creating = $state(false);
+	let resendingEmail = $state<string | null>(null);
 
 	function openRegistrarPopup() {
+		if (creating) return;
 		registrarForm.reset();
 		registrarDialog.showModal();
 	}
 
 	async function handleCreateRegistrar(event: SubmitEvent) {
 		event.preventDefault();
+		if (creating) return;
+		creating = true;
 
 		const form = event.currentTarget as HTMLFormElement;
 		const formData = new FormData(form);
@@ -60,10 +53,14 @@
 				title: 'Unable to create registrar',
 				message: getErrorMessage(error, 'Failed to create registrar. Please try again.')
 			});
+		} finally {
+			creating = false;
 		}
 	}
 
 	async function resend(email: string) {
+		if (resendingEmail) return;
+		resendingEmail = email;
 		showLoading();
 
 		await resendMagicLink({ email })
@@ -72,6 +69,9 @@
 			})
 			.catch((error) => {
 				showError(getErrorMessage(error, 'Failed to send verification email'));
+			})
+			.finally(() => {
+				resendingEmail = null;
 			});
 	}
 </script>
@@ -149,43 +149,20 @@
 			<!-- Actions -->
 			<td class="pr-5">
 				<div class="flex justify-end pr-2">
-					<Dropdown id={`registrar-${registrar.id}`} label={`Actions for ${registrar.name}`}>
-						{#snippet trigger()}
-							<Settings class="h-4 w-4" />
-						{/snippet}
-
-						<ul class="menu w-full p-0">
-							<li>
-								<a href="/user/registrars/view">
-									<Eye class="h-4 w-4" />
-									View
-								</a>
-							</li>
-
-							<li>
-								<button type="button">
-									<Pencil class="h-4 w-4" />
-									Edit
-								</button>
-							</li>
-
-							{#if !registrar.setupComplete}
-								<li>
-									<button type="button" onclick={() => resend(registrar.email)}>
-										<MailCheck class="h-4 w-4" />
-										Resend verification
-									</button>
-								</li>
-							{/if}
-
-							<li class="text-error">
-								<button type="button">
-									<Trash2 class="h-4 w-4" />
-									Delete
-								</button>
-							</li>
-						</ul>
-					</Dropdown>
+					{#if !registrar.setupComplete}
+						<button
+							type="button"
+							class="btn gap-2 border-base-300 btn-outline btn-sm"
+							disabled={!!resendingEmail}
+							onclick={() => resend(registrar.email)}
+						>
+							<MailCheck class="size-4" aria-hidden="true" />{resendingEmail === registrar.email
+								? 'Sending…'
+								: 'Resend setup link'}
+						</button>
+					{:else}
+						<span class="text-xs text-base-content/45">Account ready</span>
+					{/if}
 				</div>
 			</td>
 		</tr>
@@ -194,12 +171,23 @@
 
 <dialog
 	bind:this={registrarDialog}
-	class="z-0"
+	class="modal"
+	oncancel={(event) => {
+		if (creating) event.preventDefault();
+	}}
 	aria-labelledby="new-registrar-title"
 	aria-describedby="new-registrar-description"
 >
-	<PopupCard onClose={() => registrarDialog.close()}>
-		<form bind:this={registrarForm} class="card-body gap-6 p-6" onsubmit={handleCreateRegistrar}>
+	<div
+		class="modal-box max-w-lg overflow-y-auto rounded-2xl border border-base-300 bg-base-100 p-0"
+	>
+		<div class="h-1 bg-primary" aria-hidden="true"></div>
+		<form
+			bind:this={registrarForm}
+			class="space-y-6 p-6 sm:p-8"
+			aria-busy={creating}
+			onsubmit={handleCreateRegistrar}
+		>
 			<div class="flex items-start gap-4">
 				<div
 					class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
@@ -216,6 +204,7 @@
 					type="button"
 					class="btn btn-circle btn-ghost btn-sm"
 					aria-label="Close new registrar popup"
+					disabled={creating}
 					onclick={() => registrarDialog.close()}
 				>
 					<X class="size-4" aria-hidden="true" />
@@ -260,20 +249,20 @@
 					<button
 						type="button"
 						class="btn flex-1 border-base-300 btn-outline"
+						disabled={creating}
 						onclick={() => registrarDialog.close()}
 					>
 						Cancel
 					</button>
-					<button
-						type="submit"
-						class="btn flex-1 btn-primary"
-						aria-describedby="registrar-submit-hint"
-					>
+					<button type="submit" disabled={creating} class="btn flex-1 btn-primary">
 						<Plus class="size-4" aria-hidden="true" />
-						Create Registrar
+						{creating ? 'Creating…' : 'Create Registrar'}
 					</button>
 				</div>
 			</div>
+			<p class="text-xs leading-relaxed text-base-content/55">
+				An account setup link will be sent to this email. The registrar chooses their own password.
+			</p>
 		</form>
-	</PopupCard>
+	</div>
 </dialog>

@@ -62,7 +62,7 @@
 			{/if}
 
 			<!-- Action -->
-			<button class="btn w-full btn-success" onclick={close}>
+			<button class="btn w-full btn-primary" onclick={close}>
 				<Check class="size-4" />
 				{buttonText}
 			</button>

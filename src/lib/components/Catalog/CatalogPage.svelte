@@ -21,8 +21,8 @@
 	} = $props();
 </script>
 
-<section class="space-y-6">
-	<div class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm sm:p-5">
+<section class="w-full space-y-5" aria-label={title}>
+	<div class="portal-panel p-4 sm:p-5">
 		{@render toolbar()}
 	</div>
 	<Table {title} {description} {total} {itemLabel} {header}>

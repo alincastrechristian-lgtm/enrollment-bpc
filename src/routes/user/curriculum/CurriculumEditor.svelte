@@ -236,8 +236,13 @@
 <svelte:head>
 	<title>{curriculum ? 'Edit' : 'New'} Curriculum | BPC Enrollment System</title>
 </svelte:head>
-<form class="mx-auto max-w-7xl space-y-6" onsubmit={save}>
-	<div class="flex justify-end">
+<form class="w-full space-y-6" onsubmit={save}>
+	<div
+		class="sticky top-24 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-300 bg-base-100/95 p-4 shadow-sm backdrop-blur-xl"
+	>
+		<p class="text-xs font-medium text-base-content/60">
+			{saved ? 'Changes saved' : dirty ? 'Unsaved changes' : 'No unsaved changes'}
+		</p>
 		<div class="flex items-center gap-2">
 			<a
 				class="btn border-base-300 btn-outline btn-sm"
@@ -268,7 +273,7 @@
 	{/if}
 	<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
 		<div class="min-w-0 space-y-6">
-			<section class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6">
+			<section class="portal-panel p-5 shadow-sm sm:p-6">
 				<div class="mb-5 flex items-center gap-3">
 					<span
 						class="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
@@ -354,7 +359,7 @@
 					</p>
 				{/if}
 			</section>
-			<section class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+			<section class="portal-panel overflow-hidden">
 				<SubjectLayout
 					{yearLevels}
 					{semesters}
@@ -514,10 +519,7 @@
 				</SubjectLayout>
 			</section>
 		</div>
-		<aside
-			class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm xl:sticky xl:top-6"
-			aria-label="Curriculum summary"
-		>
+		<aside class="portal-panel p-5 shadow-sm xl:sticky xl:top-28" aria-label="Curriculum summary">
 			<div class="flex items-center gap-2 font-bold">
 				<GraduationCap class="size-5 text-primary" aria-hidden="true" />Draft summary
 			</div>

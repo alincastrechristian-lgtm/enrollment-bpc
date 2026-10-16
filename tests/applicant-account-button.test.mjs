@@ -499,7 +499,8 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await page.evaluate(() => window.show('student-inc'));
 		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
 		await page.evaluate(() => window.show('my-enrollment'));
-		await expect(page.getByRole('heading', { name: 'My enrollment', exact: true })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'ENROLLMENT', exact: true })).toBeVisible();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 		await expect(
 			page.getByText('Review your enrollment history, subjects, and grades.', { exact: true })
 		).toBeVisible();

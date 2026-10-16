@@ -87,7 +87,7 @@
 	role="dialog"
 	aria-labelledby={`filters-title-${id}`}
 	style={`position-anchor: --filters-${id}`}
-	class="filter-panel w-[min(38rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-base-300 bg-base-100 text-base-content shadow-2xl"
+	class="filter-panel portal-panel w-[min(38rem,calc(100vw-2rem))] overflow-hidden text-base-content shadow-2xl"
 >
 	<div class="flex items-start gap-3 border-b border-base-300 bg-base-200/40 px-5 py-4">
 		<div

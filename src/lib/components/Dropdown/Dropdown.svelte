@@ -34,8 +34,8 @@
 <div
 	id={popoverId}
 	popover="auto"
-	style={`position-anchor: ${anchorName}`}
-	class="menu dropdown w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg"
+	style={`position-anchor: ${anchorName}; position-area: bottom span-left; position-try-fallbacks: flip-block, flip-inline; inset: auto; margin: 0.375rem 0 0`}
+	class="fixed z-40 w-56 rounded-xl border border-base-300 bg-base-100 p-2 shadow-lg"
 >
 	{@render children()}
 </div>

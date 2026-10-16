@@ -36,7 +36,7 @@
 	onpointerdown={handlePointerDown}
 	onpointerup={handleOutsideClick}
 	onpointercancel={() => (outsidePointerId = null)}
-	class={`fixed inset-0 z-40 flex items-center justify-center bg-base-100/70 ${
+	class={`fixed inset-0 z-40 flex items-center justify-center bg-neutral/35 p-4 ${
 		blur ? 'backdrop-blur-sm' : ''
 	}`}
 >

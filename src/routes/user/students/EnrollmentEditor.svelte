@@ -206,7 +206,7 @@
 	}
 </script>
 
-<form class="mx-auto max-w-7xl space-y-6" onsubmit={save}>
+<form class="w-full space-y-6" onsubmit={save}>
 	{#if hasGradeConcerns}
 		<p class="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm" role="status">
 			{gradeWarning}
@@ -227,26 +227,11 @@
 	{/if}
 	<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
 		<div class="min-w-0 space-y-6">
-			<section
-				class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-				aria-labelledby="student-heading"
-			>
-				<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+			<section class="portal-panel overflow-hidden" aria-labelledby="student-heading">
+				<div class="h-1 bg-primary" aria-hidden="true"></div>
 				<div class="p-5 sm:p-6">
 					<header class="mb-4 flex flex-wrap items-center justify-between gap-3">
 						<h2 id="student-heading" class="font-bold">Student information</h2>
-						<button
-							type="submit"
-							class="btn btn-primary btn-sm"
-							disabled={busy || saved || !rows.length}
-						>
-							{#if busy}
-								<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>
-							{:else}
-								<UserPlus class="size-4" aria-hidden="true" />
-							{/if}
-							{busy ? 'Enrolling...' : 'Enroll Student'}
-						</button>
 					</header>
 					<dl class="grid gap-4 text-sm sm:grid-cols-2">
 						{#each [['Full name', data.student.name], ['Student number', data.student.studentId], ['Program', `${data.program.code} — ${data.program.name}`], ['Email', data.student.email], ['Contact number', data.student.contactNumber], ['Address', data.student.address]] as [label, value] (label)}
@@ -258,10 +243,7 @@
 					</dl>
 				</div>
 			</section>
-			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-				aria-labelledby="enrollment-heading"
-			>
+			<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="enrollment-heading">
 				<h2 id="enrollment-heading" class="mb-4 flex items-center gap-2 font-bold">
 					<GraduationCap class="size-5 text-primary" aria-hidden="true" />Enrollment details
 				</h2>
@@ -311,10 +293,7 @@
 				</fieldset>
 			</section>
 			{#if outstandingSubjects.length}
-				<section
-					class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm"
-					aria-labelledby="outstanding-subjects-heading"
-				>
+				<section class="portal-panel p-5 shadow-sm" aria-labelledby="outstanding-subjects-heading">
 					<div class="flex flex-wrap items-center justify-between gap-4">
 						<div>
 							<h2 id="outstanding-subjects-heading" class="flex items-center gap-2 font-bold">
@@ -353,10 +332,7 @@
 					</p>
 				</section>
 			{/if}
-			<section
-				class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-				aria-labelledby="subjects-heading"
-			>
+			<section class="portal-panel overflow-hidden" aria-labelledby="subjects-heading">
 				<div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-5">
 					<h2 id="subjects-heading" class="flex items-center gap-2 font-bold">
 						<BookOpen class="size-5 text-primary" aria-hidden="true" />Enrollment subjects
@@ -467,7 +443,7 @@
 			</section>
 		</div>
 		<aside
-			class="space-y-4 rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm xl:sticky xl:top-6"
+			class="portal-panel space-y-4 p-5 shadow-sm xl:sticky xl:top-28"
 			aria-labelledby="summary-heading"
 		>
 			<h2 id="summary-heading" class="font-bold">Enrollment summary</h2>
@@ -500,6 +476,26 @@
 			</p>
 		</aside>
 	</div>
+	<footer
+		class="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/15 bg-base-100/95 p-4 shadow-lg shadow-base-content/5 backdrop-blur-xl"
+	>
+		<div>
+			<p class="text-sm font-semibold">
+				{saved ? 'Enrollment saved' : 'Ready to review this enrollment?'}
+			</p>
+			<p class="mt-1 text-xs text-base-content/55">
+				{rows.length} subjects · {totalUnits} units · Review your selection before confirming.
+			</p>
+		</div>
+		<button type="submit" class="btn btn-primary btn-sm" disabled={busy || saved || !rows.length}>
+			{#if busy}
+				<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>
+			{:else}
+				<UserPlus class="size-4" aria-hidden="true" />
+			{/if}
+			{busy ? 'Enrolling...' : 'Enroll Student'}
+		</button>
+	</footer>
 </form>
 
 <dialog
@@ -509,7 +505,7 @@
 	aria-describedby="outstanding-dialog-description"
 >
 	<div
-		class="modal-box flex max-h-[85dvh] max-w-3xl flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 p-0 shadow-xl"
+		class="portal-panel modal-box flex max-h-[85dvh] max-w-3xl flex-col overflow-hidden p-0 shadow-xl"
 	>
 		<div class="h-1.5 shrink-0 bg-primary" aria-hidden="true"></div>
 		<header

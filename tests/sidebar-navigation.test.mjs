@@ -40,16 +40,7 @@ for (const [role, expected] of [
 	],
 	[
 		'registrar',
-		[
-			'Dashboard',
-			'Students',
-			'Subjects',
-			'Programs',
-			'Curriculum',
-			'Notifications',
-			'Reports',
-			'Settings'
-		]
+		['Dashboard', 'Students', 'Subjects', 'Programs', 'Curriculum', 'Notifications', 'Settings']
 	],
 	['student', ['Dashboard', 'Enrollment', 'Curriculum', 'Notifications', 'Settings']]
 ]) {

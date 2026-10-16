@@ -13,23 +13,23 @@
 	--color-base-100: oklch(100% 0 0);
 	--color-base-200: oklch(97.466% 0.011 259.822);
 	--color-base-300: oklch(93.268% 0.016 262.751);
-	--color-base-content: oklch(41.886% 0.053 255.824);
+	--color-base-content: oklch(29% 0.04 260);
 	--color-primary: oklch(56.86% 0.255 257.57);
-	--color-primary-content: oklch(91.372% 0.051 257.57);
+	--color-primary-content: oklch(99% 0.004 257);
 	--color-secondary: oklch(42.551% 0.161 282.339);
 	--color-secondary-content: oklch(88.51% 0.032 282.339);
 	--color-accent: oklch(59.939% 0.191 335.171);
 	--color-accent-content: oklch(11.988% 0.038 335.171);
 	--color-neutral: oklch(19.616% 0.063 257.651);
 	--color-neutral-content: oklch(83.923% 0.012 257.651);
-	--color-info: oklch(88.127% 0.085 214.515);
-	--color-info-content: oklch(17.625% 0.017 214.515);
-	--color-success: oklch(80.494% 0.077 197.823);
-	--color-success-content: oklch(16.098% 0.015 197.823);
-	--color-warning: oklch(89.172% 0.045 71.47);
-	--color-warning-content: oklch(17.834% 0.009 71.47);
-	--color-error: oklch(73.092% 0.11 20.076);
-	--color-error-content: oklch(14.618% 0.022 20.076);
+	--color-info: oklch(50% 0.13 240);
+	--color-info-content: oklch(99% 0.004 240);
+	--color-success: oklch(48% 0.105 165);
+	--color-success-content: oklch(99% 0.004 165);
+	--color-warning: oklch(50% 0.11 65);
+	--color-warning-content: oklch(99% 0.004 65);
+	--color-error: oklch(53% 0.19 25);
+	--color-error-content: oklch(99% 0.004 25);
 	--radius-selector: 1rem;
 	--radius-field: 0.5rem;
 	--radius-box: 1rem;
@@ -49,8 +49,8 @@
 	--color-base-200: oklch(23.26% 0.014 253.1);
 	--color-base-300: oklch(21.15% 0.012 254.09);
 	--color-base-content: oklch(97.807% 0.029 256.847);
-	--color-primary: oklch(58% 0.233 277.117);
-	--color-primary-content: oklch(96% 0.018 272.314);
+	--color-primary: oklch(74% 0.14 253);
+	--color-primary-content: oklch(20% 0.04 255);
 	--color-secondary: oklch(65% 0.241 354.308);
 	--color-secondary-content: oklch(94% 0.028 342.258);
 	--color-accent: oklch(77% 0.152 181.912);
@@ -65,7 +65,7 @@
 	--color-warning-content: oklch(41% 0.112 45.904);
 	--color-error: oklch(71% 0.194 13.428);
 	--color-error-content: oklch(27% 0.105 12.094);
-	--radius-selector: 0.5rem;
+	--radius-selector: 1rem;
 	--radius-field: 0.25rem;
 	--radius-box: 0.5rem;
 	--size-selector: 0.25rem;
@@ -73,4 +73,115 @@
 	--border: 1px;
 	--depth: 1;
 	--noise: 0;
+}
+
+@layer base {
+	html {
+		scroll-padding-top: 6rem;
+	}
+	body {
+		-webkit-font-smoothing: antialiased;
+	}
+	button,
+	input,
+	select,
+	textarea {
+		font: inherit;
+	}
+	:where(a, button, input, select, textarea, summary):focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 3px;
+	}
+	::selection {
+		background: color-mix(in oklch, var(--color-primary) 20%, transparent);
+	}
+}
+
+@layer components {
+	.portal-panel {
+		border: 1px solid var(--color-base-300);
+		border-radius: 1rem;
+		background: var(--color-base-100);
+		box-shadow: 0 2px 4px -3px color-mix(in oklch, var(--color-base-content) 15%, transparent);
+	}
+	.portal-page-header {
+		position: relative;
+		overflow: hidden;
+		border: 1px solid var(--color-base-300);
+		border-radius: 1rem;
+		background: linear-gradient(
+			115deg,
+			var(--color-base-100) 60%,
+			color-mix(in oklch, var(--color-primary) 5%, var(--color-base-100))
+		);
+	}
+	.portal-eyebrow {
+		font-size: 0.6875rem;
+		line-height: 1.5;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--color-primary);
+	}
+	.portal-shell .btn,
+	.portal-auth .btn {
+		font-weight: 600;
+		box-shadow: none;
+	}
+	.portal-shell .btn:not(.btn-circle):not(.join-item),
+	.portal-auth .btn:not(.btn-circle) {
+		border-radius: 0.625rem;
+	}
+	.portal-shell :is(.input, .select, .textarea),
+	.portal-auth :is(.input, .select, .textarea) {
+		border-color: var(--color-base-300);
+		background-color: var(--color-base-100);
+		border-radius: 0.625rem;
+		box-shadow: none;
+	}
+	.portal-shell :is(.input, .select, .textarea):focus-within,
+	.portal-auth :is(.input, .select, .textarea):focus-within {
+		border-color: var(--color-primary);
+		outline: 2px solid color-mix(in oklch, var(--color-primary) 20%, transparent);
+		outline-offset: 1px;
+	}
+	.portal-shell .table th {
+		font-weight: 600;
+	}
+	.portal-shell .table td {
+		vertical-align: middle;
+	}
+	.portal-shell .badge {
+		font-size: 0.6875rem;
+		font-weight: 600;
+	}
+	.portal-shell .badge-success {
+		border-color: color-mix(in oklch, var(--color-success) 20%, transparent);
+		background: color-mix(in oklch, var(--color-success) 9%, var(--color-base-100));
+		color: var(--color-success);
+	}
+	.portal-shell .badge-warning {
+		border-color: color-mix(in oklch, var(--color-warning) 20%, transparent);
+		background: color-mix(in oklch, var(--color-warning) 9%, var(--color-base-100));
+		color: var(--color-warning);
+	}
+	.portal-shell .badge-error {
+		border-color: color-mix(in oklch, var(--color-error) 20%, transparent);
+		background: color-mix(in oklch, var(--color-error) 9%, var(--color-base-100));
+		color: var(--color-error);
+	}
+	.portal-shell dialog::backdrop {
+		background: color-mix(in oklch, var(--color-neutral) 35%, transparent);
+		backdrop-filter: blur(4px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
 }

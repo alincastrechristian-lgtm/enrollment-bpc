@@ -207,9 +207,9 @@
 	<title>{isAdmin ? 'Admin' : 'Registrar'} dashboard | BPC Enrollment System</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6">
-	<header class="relative overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+<div class="w-full space-y-6">
+	<header class="portal-panel relative overflow-hidden">
+		<div class="h-1 bg-primary" aria-hidden="true"></div>
 		<div
 			class="pointer-events-none absolute -top-24 -right-16 size-72 rounded-full bg-primary/5"
 			aria-hidden="true"
@@ -262,7 +262,7 @@
 					if (stat.label === 'Academic follow-ups') selectedQueue = 'followUp';
 					if (stat.label === 'Ready for next term') selectedQueue = 'ready';
 				}}
-				class="group rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm transition-colors hover:border-primary/40"
+				class="group portal-panel p-5 shadow-sm transition-colors hover:border-primary/40"
 			>
 				<div class="flex items-center justify-between gap-3">
 					<span class="grid size-10 place-items-center rounded-xl {stat.color}">
@@ -286,7 +286,7 @@
 		<div class="min-w-0 space-y-6">
 			<section
 				id="worklist"
-				class="scroll-mt-6 overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+				class="portal-panel scroll-mt-6 overflow-hidden"
 				aria-labelledby="worklist-title"
 			>
 				<div class="flex flex-wrap items-center justify-between gap-3 p-5 pb-4 sm:px-6">
@@ -419,10 +419,7 @@
 				{/if}
 			</section>
 
-			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-				aria-labelledby="activity-title"
-			>
+			<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="activity-title">
 				<div class="flex flex-wrap items-start justify-between gap-4">
 					<div>
 						<h2 id="activity-title" class="text-lg font-bold">Enrollment activity</h2>
@@ -498,10 +495,7 @@
 				</p>
 			</section>
 
-			<section
-				class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-				aria-labelledby="recent-title"
-			>
+			<section class="portal-panel overflow-hidden" aria-labelledby="recent-title">
 				<div class="flex items-center justify-between gap-3 p-5 sm:px-6">
 					<div>
 						<h2 id="recent-title" class="text-lg font-bold">Recent enrollments</h2>
@@ -583,10 +577,7 @@
 		</div>
 
 		<aside class="min-w-0 space-y-6" aria-label="Enrollment insights">
-			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-				aria-labelledby="mix-title"
-			>
+			<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="mix-title">
 				<h2 id="mix-title" class="font-bold">Student enrollment mix</h2>
 				<p class="mt-1 text-xs text-base-content/50">One linked current record per student</p>
 				<div
@@ -622,10 +613,7 @@
 				</div>
 			</section>
 
-			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-				aria-labelledby="programs-title"
-			>
+			<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="programs-title">
 				<div class="flex items-center justify-between gap-2">
 					<h2 id="programs-title" class="font-bold">Students by program</h2>
 					<BookOpen class="size-4 text-primary/50" aria-hidden="true" />
@@ -672,10 +660,7 @@
 				</a>
 			</section>
 
-			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-				aria-labelledby="results-title"
-			>
+			<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="results-title">
 				<h2 id="results-title" class="font-bold">Released grade outcomes</h2>
 				<p class="mt-1 text-xs leading-relaxed text-base-content/50">
 					Subjects in current, finalized, non-dropped enrollments
@@ -723,7 +708,7 @@
 			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				<a
 					href={resolve('/user/registrars')}
-					class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm transition-colors hover:border-primary/40"
+					class="portal-panel p-5 shadow-sm transition-colors hover:border-primary/40"
 				>
 					<div class="flex items-center justify-between">
 						<UserShield class="size-5 text-primary" aria-hidden="true" /><ArrowUpRight
@@ -743,7 +728,7 @@
 				</a>
 				<a
 					href={resolve('/user/programs')}
-					class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm transition-colors hover:border-primary/40"
+					class="portal-panel p-5 shadow-sm transition-colors hover:border-primary/40"
 				>
 					<div class="flex items-center justify-between">
 						<GraduationCap class="size-5 text-primary" aria-hidden="true" /><ArrowUpRight
@@ -767,7 +752,7 @@
 				</a>
 				<a
 					href={resolve('/user/curriculum')}
-					class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm transition-colors hover:border-primary/40"
+					class="portal-panel p-5 shadow-sm transition-colors hover:border-primary/40"
 				>
 					<div class="flex items-center justify-between">
 						<Layers class="size-5 text-primary" aria-hidden="true" /><ArrowUpRight
@@ -785,7 +770,7 @@
 				</a>
 				<a
 					href={resolve('/user/subjects')}
-					class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm transition-colors hover:border-primary/40"
+					class="portal-panel p-5 shadow-sm transition-colors hover:border-primary/40"
 				>
 					<div class="flex items-center justify-between">
 						<BookOpen class="size-5 text-primary" aria-hidden="true" /><ArrowUpRight

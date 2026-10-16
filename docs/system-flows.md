@@ -69,7 +69,7 @@ flowchart TD
 ```
 
 | Capability | Admin | Registrar | Student |
-|---|---|---|---|
+| ----------------------------------------- | ----------------------------------------- | --------------------------------- | ---------------------------- |
 | Create/view students; enroll students | Yes | Yes | No |
 | Create/list registrar accounts | Yes | No | No |
 | Manage programs, subjects, curricula | Yes | View only | Own assigned curriculum only |
@@ -513,7 +513,7 @@ flowchart TD
 Saving settings does not send a test email. Password/API-key visibility controls only show or hide newly entered values; existing secrets are not loaded into the page.
 
 | Trigger | Email attempt | Saved state if delivery fails |
-|---|---|---|
+| ------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------ |
 | Create student | Account setup link | Student remains; invitation failure can be shown |
 | Create registrar | Account setup link | Registrar remains; action can show error |
 | Resend verification | Account setup link | Account remains |
@@ -545,7 +545,7 @@ flowchart TD
 ```
 
 | Control or case | Current effect |
-|---|---|
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | Open `/user/*` without sign-in | User layout redirects to `/login`; individual protected loads/commands also enforce authentication |
 | Unauthorized protected action | 401; no database mutation |
 | Wrong role | 403; no database mutation |
@@ -554,7 +554,7 @@ flowchart TD
 | Unexpected server failure | Generic public message; internal details stay on server |
 | Error-page Back | Browser back; home fallback if no prior entry |
 | Error-page retry | Reload current path/query when retry is offered |
-| Top-bar Back | Explicit student parent route on enrollment screens; otherwise previous-path navigation |
+| Top-bar Back                                           | Explicit student parent route on enrollment screens; otherwise return to the current navigation section |
 | Sidebar link | Navigate to permitted page |
 | Sidebar Settings group | Expand/collapse navigation links |
 | Theme control | Toggle light/dark UI; no academic data change |
@@ -568,17 +568,14 @@ flowchart TD
 These are visible UI, not working backend workflows:
 
 | Screen/control | What actually happens now |
-|---|---|
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | Student dashboard notification list | Sample notifications; read/filter actions affect component state only |
-| Notifications page | Hardcoded list; search has no backend behavior |
-| Notifications: compose | Opens compose dialog |
-| Notifications: Send | Prevents form submission and closes dialog; sends/stores nothing |
-| Notifications: open row | Logs selected notification ID; no real detail view |
-| Notifications: archive/delete | No connected operation |
-| Reports | Heading only; no report generation |
+| Notifications page                  | Labeled sample inbox with local search and All/Unread filters                                           |
+| Notifications: open row             | Shows message details and marks that sample message read locally                                        |
+| Notifications: Mark all as read     | Updates sample read state for this component session; no backend write                                  |
+| Reports                             | Coming-soon screen linking to live dashboard and records; no report generation                          |
 | Student Edit/Delete | Disabled; no personal-data edit/delete workflow |
-| Registrar Edit/Delete | Buttons have no connected handlers |
-| Registrar View | Points to `/user/registrars/view`; no matching page currently exists, so leads to not found |
+| Registrar Edit/Delete/View          | Not offered; the directory shows account details and supports setup-link resend for unfinished accounts |
 | Profile editing | Read-only page; no save action |
 | Two-factor account flow | Auth plugin exists, but no complete dedicated verification/enrollment UI in current pages |
 
@@ -589,7 +586,7 @@ The real enrollment/grade/meeting/drop notices described above are separate from
 All 26 exported remote commands are covered above. Source links are relative to this document.
 
 | Source | Command | Workflow |
-|---|---|---|
+| --------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
 | [user.remote.ts](../src/lib/actions/user.remote.ts) | `createStudent` | Create personal record and account, assign student number, request setup email |
 | same | `createRegistrar` | Create registrar account and request setup email |
 | same | `resendMagicLink` | Request account setup/reset link |

@@ -67,7 +67,7 @@
 	}}
 >
 	<div
-		class="modal-box flex max-h-[90dvh] max-w-2xl flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 p-0 shadow-xl"
+		class="portal-panel modal-box flex max-h-[90dvh] max-w-2xl flex-col overflow-hidden p-0 shadow-xl"
 	>
 		<div class="h-1.5 shrink-0 bg-primary" aria-hidden="true"></div>
 		<header

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Minus, Plus } from '@lucide/svelte';
+	import { ChevronLeft, ChevronRight, Minus, Plus, SearchX } from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 	import { MAX_ITEMS_PER_PAGE } from './TableValues';
 
@@ -82,38 +82,35 @@
 	});
 </script>
 
-<div class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-	<!-- Header -->
-	<div class="flex items-center justify-between border-b border-base-300 px-5 py-4">
-		<div>
-			<h2 class="font-bold text-base-content">{title}</h2>
-
-			{#if description}
-				<p class="mt-0.5 text-xs text-base-content/50">
-					{description}
-				</p>
-			{/if}
-		</div>
-
-		{#if total !== undefined}
-			<span class="badge badge-ghost font-semibold text-base-content/60">
-				{total} records
-			</span>
-		{/if}
-	</div>
-
+<div class="portal-panel overflow-hidden">
 	<!-- Table -->
-	<div class="overflow-x-auto">
-		<table class="table w-full">
-			<thead>
-				{@render header()}
-			</thead>
+	{#if total === 0}
+		<div class="px-6 py-16 text-center" role="status">
+			<span
+				class="mx-auto grid size-14 place-items-center rounded-2xl border border-primary/10 bg-primary/5 text-primary"
+			>
+				<SearchX class="size-6" aria-hidden="true" />
+			</span>
+			<h3 class="mt-5 text-base font-bold">No {itemLabel} to display</h3>
+			<p class="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-base-content/55">
+				If you’re searching, try a different term or clear your filters. New records will appear
+				here when available.
+			</p>
+		</div>
+	{:else}
+		<div class="overflow-x-auto">
+			<table class="table w-full">
+				<caption class="sr-only">{title}{description ? ` — ${description}` : ''}</caption>
+				<thead>
+					{@render header()}
+				</thead>
 
-			<tbody>
-				{@render children()}
-			</tbody>
-		</table>
-	</div>
+				<tbody>
+					{@render children()}
+				</tbody>
+			</table>
+		</div>
+	{/if}
 
 	<!-- Footer -->
 	<div
@@ -121,96 +118,115 @@
 	>
 		<p class="text-xs font-medium text-base-content/60">
 			Showing
-			<span class="font-bold text-base-content/80"
-				>{total === 0 ? 0 : (activePage - 1) * MAX_ITEMS_PER_PAGE + 1}–{Math.min(
+			<span class="font-bold text-base-content/80">
+				{total === 0 ? 0 : (activePage - 1) * MAX_ITEMS_PER_PAGE + 1}–{Math.min(
 					activePage * MAX_ITEMS_PER_PAGE,
 					total ?? 0
-				)}</span
-			>
+				)}
+			</span>
 			of
 			<span class="font-bold text-base-content/80">{total ?? 0}</span>
 			{itemLabel}
 		</p>
 
-		<nav class="join" aria-label="Table pagination">
-			<button
-				type="button"
-				class="btn join-item btn-sm"
-				aria-label="Previous page"
-				disabled={activePage <= 1}
-				onclick={() => onChangePage(activePage - 1)}>«</button
-			>
-			{#each pages as page, index (index)}
-				{#if page === '...'}
-					<button
-						type="button"
-						class="btn join-item btn-sm"
-						aria-label="Go to page"
-						popovertarget={`table-page-${instanceId}-${index}`}
-						style={`anchor-name: --table-page-${instanceId}-${index}`}
-						onclick={() => (targetPage = activePage)}>...</button
-					>
-					<div
-						id={`table-page-${instanceId}-${index}`}
-						popover="auto"
-						style={`position-anchor: --table-page-${instanceId}-${index}; position-area: top; margin-bottom: 0.5rem`}
-						class="dropdown dropdown-top w-60 rounded-box border border-base-300 bg-base-100 p-3 shadow-lg"
-						ontoggle={focusPageInput}
-					>
-						<form class="space-y-3" onsubmit={goToPage}>
-							<label for={`table-page-input-${instanceId}-${index}`} class="text-sm font-semibold">
-								Go to page
-							</label>
-							<div class="join flex">
-								<button
-									type="button"
-									class="btn join-item btn-sm"
-									aria-label="Decrease page"
-									disabled={targetPage !== undefined && targetPage <= 1}
-									onclick={() => stepPage(-1)}><Minus class="size-4" aria-hidden="true" /></button
+		{#if pageCount > 1}
+			<nav class="join" aria-label="Table pagination">
+				<button
+					type="button"
+					class="btn join-item btn-sm"
+					aria-label="Previous page"
+					disabled={activePage <= 1}
+					onclick={() => onChangePage(activePage - 1)}
+				>
+					<ChevronLeft class="size-4" aria-hidden="true" />
+				</button>
+				{#each pages as page, index (index)}
+					{#if page === '...'}
+						<button
+							type="button"
+							class="btn join-item btn-sm"
+							aria-label="Go to page"
+							popovertarget={`table-page-${instanceId}-${index}`}
+							style={`anchor-name: --table-page-${instanceId}-${index}`}
+							onclick={() => (targetPage = activePage)}
+						>
+							...
+						</button>
+						<div
+							id={`table-page-${instanceId}-${index}`}
+							popover="auto"
+							style={`position-anchor: --table-page-${instanceId}-${index}; position-area: top; margin-bottom: 0.5rem`}
+							class="dropdown dropdown-top w-60 rounded-box border border-base-300 bg-base-100 p-3 shadow-lg"
+							ontoggle={focusPageInput}
+						>
+							<form class="space-y-3" onsubmit={goToPage}>
+								<label
+									for={`table-page-input-${instanceId}-${index}`}
+									class="text-sm font-semibold"
 								>
-								<input
-									id={`table-page-input-${instanceId}-${index}`}
-									type="number"
-									class="input join-item min-w-0 flex-1 text-center input-sm"
-									min="1"
-									max={pageCount}
-									step="1"
-									required
-									bind:value={targetPage}
-								/>
+									Go to page
+								</label>
+								<div class="join flex">
+									<button
+										type="button"
+										class="btn join-item btn-sm"
+										aria-label="Decrease page"
+										disabled={targetPage !== undefined && targetPage <= 1}
+										onclick={() => stepPage(-1)}
+									>
+										<Minus class="size-4" aria-hidden="true" />
+									</button>
+									<input
+										id={`table-page-input-${instanceId}-${index}`}
+										type="number"
+										class="input join-item min-w-0 flex-1 text-center input-sm"
+										min="1"
+										max={pageCount}
+										step="1"
+										required
+										bind:value={targetPage}
+									/>
+									<button
+										type="button"
+										class="btn join-item btn-sm"
+										aria-label="Increase page"
+										disabled={targetPage !== undefined && targetPage >= pageCount}
+										onclick={() => stepPage(1)}
+									>
+										<Plus class="size-4" aria-hidden="true" />
+									</button>
+								</div>
 								<button
-									type="button"
-									class="btn join-item btn-sm"
-									aria-label="Increase page"
-									disabled={targetPage !== undefined && targetPage >= pageCount}
-									onclick={() => stepPage(1)}><Plus class="size-4" aria-hidden="true" /></button
+									type="submit"
+									class="btn w-full btn-primary btn-sm"
+									disabled={!validTargetPage || !onChangePage}
 								>
-							</div>
-							<button
-								type="submit"
-								class="btn w-full btn-primary btn-sm"
-								disabled={!validTargetPage || !onChangePage}>Go</button
-							>
-						</form>
-					</div>
-				{:else}
-					<button
-						type="button"
-						class={`btn join-item btn-sm ${page === activePage ? 'bg-primary text-primary-content hover:bg-primary/80' : ''}`}
-						aria-label={`Page ${page}`}
-						aria-current={page === activePage ? 'page' : undefined}
-						onclick={() => onChangePage(page)}>{page}</button
-					>
-				{/if}
-			{/each}
-			<button
-				type="button"
-				class="btn join-item btn-sm"
-				aria-label="Next page"
-				disabled={activePage >= pageCount}
-				onclick={() => onChangePage(activePage + 1)}>»</button
-			>
-		</nav>
+									Go
+								</button>
+							</form>
+						</div>
+					{:else}
+						<button
+							type="button"
+							class={`btn join-item btn-sm ${page === activePage ? 'bg-primary text-primary-content hover:bg-primary/80' : ''}`}
+							aria-label={`Page ${page}`}
+							aria-current={page === activePage ? 'page' : undefined}
+							onclick={() => onChangePage(page)}
+						>
+							{page}
+						</button>
+					{/if}
+				{/each}
+				<button
+					type="button"
+					class="btn join-item btn-sm"
+					aria-label="Next page"
+					disabled={activePage >= pageCount}
+					onclick={() => onChangePage(activePage + 1)}
+				>
+					<ChevronRight class="size-4" aria-hidden="true" />
+				</button>
+			</nav>
+		{/if}
 	</div>
 </div>

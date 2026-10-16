@@ -25,7 +25,7 @@
 			active
 				? nested
 					? 'bg-primary/10 text-primary'
-					: 'bg-primary text-primary-content shadow-lg shadow-primary/20'
+					: 'bg-primary/10 text-primary'
 				: 'text-base-content/80 hover:bg-base-200 hover:text-base-content'
 		}`}
 	>
@@ -38,7 +38,10 @@
 	</a>
 {/snippet}
 
-<nav aria-label="Main navigation" class="flex-1 overflow-y-auto px-3 py-4">
+<nav aria-label="Main navigation" class="min-h-0 flex-1 overflow-y-auto px-3 py-5">
+	<p class="mb-3 px-4 text-[10px] font-semibold tracking-widest text-base-content/40 uppercase">
+		Workspace
+	</p>
 	<ul class="space-y-1">
 		{#each items as item ('children' in item ? item.id : item.href)}
 			<li>
@@ -49,7 +52,7 @@
 						aria-expanded={expandedGroups[item.id] ?? false}
 						aria-controls={`sidebar-group-${item.id}`}
 						onclick={() => (expandedGroups[item.id] = !expandedGroups[item.id])}
-						class={`group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${active ? 'bg-primary text-primary-content shadow-lg shadow-primary/20' : 'text-base-content/80 hover:bg-base-200 hover:text-base-content'}`}
+						class={`group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${active ? 'bg-primary/10 text-primary' : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'}`}
 					>
 						<item.icon
 							class={`h-4.5 w-4.5 shrink-0 ${active ? '' : 'text-base-content/50 group-hover:text-base-content'}`}

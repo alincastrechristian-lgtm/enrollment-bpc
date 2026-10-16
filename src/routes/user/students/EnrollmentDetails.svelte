@@ -326,9 +326,9 @@
 
 <svelte:head><title>Enrollment · {data.student.name} | BPC Enrollment System</title></svelte:head>
 
-<form class="mx-auto max-w-7xl space-y-6" onsubmit={save}>
-	<header class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+<form class="w-full space-y-6" onsubmit={save}>
+	<header class="portal-page-header">
+		<div class="h-1 bg-primary" aria-hidden="true"></div>
 		<div class="p-5 sm:p-6">
 			<div class="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
 				<span class="flex items-center gap-2 text-primary">
@@ -402,10 +402,7 @@
 		</p>
 	{/if}
 
-	<section
-		class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-		aria-labelledby="progress-heading"
-	>
+	<section class="portal-panel overflow-hidden" aria-labelledby="progress-heading">
 		<div
 			class="flex flex-wrap items-center justify-between gap-2 border-b border-base-300/70 px-5 py-3.5 sm:px-6"
 		>
@@ -546,10 +543,7 @@
 		{/if}
 	</section>
 
-	<section
-		class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-		aria-labelledby="enrollment-subjects-heading"
-	>
+	<section class="portal-panel overflow-hidden" aria-labelledby="enrollment-subjects-heading">
 		<header
 			class="flex flex-wrap items-center justify-between gap-4 border-b border-base-300 p-5 sm:p-6"
 		>

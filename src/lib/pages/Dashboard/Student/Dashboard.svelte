@@ -79,9 +79,9 @@
 
 <svelte:head><title>Student dashboard | BPC Enrollment System</title></svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6">
-	<header class="relative overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+<div class="w-full space-y-6">
+	<header class="portal-panel relative overflow-hidden">
+		<div class="h-1 bg-primary" aria-hidden="true"></div>
 		<div class="flex flex-col justify-between gap-6 p-5 sm:p-7 lg:flex-row lg:items-center">
 			<div class="min-w-0">
 				<div class="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
@@ -197,7 +197,7 @@
 
 	<section class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label="Semester summary">
 		{#each [{ label: 'Current subjects', value: subjects.length, detail: semester ? `${totalUnits} units this semester` : 'No current enrollment', icon: BookOpen, tone: 'bg-primary/10 text-primary' }, { label: 'Subjects passed', value: passedCount ?? '\u2014', detail: semester?.finalizedGrades ? 'Final grades released' : 'Awaiting final grades', icon: CircleCheck, tone: 'bg-success/20 text-base-content' }, { label: 'Need attention', value: attentionCount, detail: `${data.failedCount} failed \u00b7 ${data.incompleteCount} incomplete`, icon: CircleAlert, tone: 'bg-warning/35 text-warning-content' }, { label: 'Unread updates', value: unreadCount, detail: 'Sample notifications', icon: BellRing, tone: 'bg-secondary/10 text-secondary' }] as item (item.label)}
-			<article class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm sm:p-5">
+			<article class="portal-panel p-4 shadow-sm sm:p-5">
 				<div class="flex items-start justify-between gap-2">
 					<p class="text-xs font-medium text-base-content/65 sm:text-sm">{item.label}</p>
 					<span class={`flex size-8 shrink-0 items-center justify-center rounded-lg ${item.tone}`}>
@@ -212,10 +212,7 @@
 
 	<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
 		<div class="min-w-0 space-y-6">
-			<section
-				class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-				aria-labelledby="grades-heading"
-			>
+			<section class="portal-panel overflow-hidden" aria-labelledby="grades-heading">
 				<header
 					class="flex flex-wrap items-start justify-between gap-3 border-b border-base-300 p-5 sm:p-6"
 				>
@@ -313,10 +310,7 @@
 				</footer>
 			</section>
 
-			<section
-				class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-				aria-labelledby="next-steps-heading"
-			>
+			<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="next-steps-heading">
 				<h2 id="next-steps-heading" class="text-lg font-bold">Your next steps</h2>
 				<p class="mt-1 text-xs text-base-content/60">
 					Small actions to keep your studies moving forward.
@@ -340,14 +334,16 @@
 		</div>
 
 		<aside class="min-w-0 space-y-6">
-			<section
-				class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-				aria-labelledby="notifications-heading"
-			>
+			<section class="portal-panel overflow-hidden" aria-labelledby="notifications-heading">
 				<header class="p-5 pb-0 sm:px-6 sm:pt-6">
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<h2 id="notifications-heading" class="flex items-center gap-2 text-lg font-bold">
 							<Bell class="size-5 text-primary" aria-hidden="true" />Notifications
+							<span
+								class="rounded-full border border-base-300 px-2 py-0.5 text-[10px] font-medium text-base-content/50"
+							>
+								Sample updates
+							</span>
 							<span
 								class="badge border-0 bg-primary/10 badge-sm text-primary"
 								aria-label={`${unreadCount} unread notifications`}
@@ -435,10 +431,7 @@
 				<p class="sr-only" role="status">{unreadCount} unread notifications</p>
 			</section>
 
-			<section
-				class="flex gap-3 rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm"
-				aria-labelledby="help-heading"
-			>
+			<section class="portal-panel flex gap-3 p-5 shadow-sm" aria-labelledby="help-heading">
 				<Info class="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
 				<div>
 					<h2 id="help-heading" class="text-sm font-semibold">

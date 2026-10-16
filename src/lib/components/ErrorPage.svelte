@@ -108,8 +108,8 @@
 			</div>
 		{/if}
 
-		<div class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-			<div class="h-1.5 bg-primary"></div>
+		<div class="portal-panel overflow-hidden">
+			<div class="h-1 bg-primary"></div>
 			<div class="p-6 text-center sm:p-10">
 				<div
 					class="mx-auto mb-6 grid size-20 place-items-center rounded-2xl bg-primary/10 text-primary"

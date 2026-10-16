@@ -117,9 +117,9 @@
 </script>
 
 <svelte:head><title>{data.curriculum.name} | Curriculum</title></svelte:head>
-<section class="mx-auto max-w-7xl space-y-6">
-	<article class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+<section class="w-full space-y-6">
+	<article class="portal-panel overflow-hidden">
+		<div class="h-1 bg-primary" aria-hidden="true"></div>
 		<div class="flex flex-col justify-between gap-5 p-5 sm:p-6 lg:flex-row lg:items-center">
 			<div class="flex items-center gap-4">
 				<span
@@ -245,10 +245,7 @@
 			This draft is archived. Unarchive it to edit.
 		</div>
 	{/if}
-	<section
-		class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-		aria-label="Curriculum subjects"
-	>
+	<section class="portal-panel overflow-hidden" aria-label="Curriculum subjects">
 		<SubjectLayout
 			yearLevels={data.curriculum.yearLevels}
 			semesters={data.curriculum.semesters}
@@ -258,7 +255,7 @@
 		>
 			<div class="space-y-5 p-5">
 				{#each visibleGroups as group (`${group.yearLevel}-${group.semester}`)}
-					<article class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+					<article class="portal-panel overflow-hidden">
 						<div class="flex items-center justify-between gap-3 border-b border-base-300 p-5">
 							<div class="flex items-center gap-3">
 								<CalendarDays class="size-5 text-primary" aria-hidden="true" />
@@ -293,7 +290,7 @@
 						</div>
 					</article>
 				{:else}
-					<div class="rounded-2xl border border-base-300 bg-base-100 py-12 text-center">
+					<div class="portal-panel py-12 text-center">
 						<BookOpen class="mx-auto mb-3 size-8 text-base-content/25" aria-hidden="true" />
 						<h2 class="font-semibold">
 							{subjectLayout === 'tabbed'

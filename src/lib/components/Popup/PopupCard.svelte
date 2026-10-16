@@ -13,7 +13,7 @@
 
 <BlurPage {onClose}>
 	<div
-		class={`animate-fade-up card w-[calc(100%-2rem)] border border-base-300 bg-base-100/95 shadow-2xl ${className}`}
+		class={`card max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-2xl border border-base-300 bg-base-100 shadow-2xl ${className}`}
 	>
 		{#if children}
 			{@render children()}

@@ -23,7 +23,7 @@
 		Layers,
 		Pencil,
 		Plus,
-		Settings,
+		Ellipsis,
 		Trash2
 	} from '@lucide/svelte';
 	import { confirmCurriculumActivation, confirmCurriculumStateChange } from './activation.js';
@@ -93,10 +93,10 @@
 		<CurriculumDetails data={{ ...data.studentCurriculum, canManage: false, isStudent: true }} />
 	{:else}
 		<section
-			class="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+			class="portal-panel mx-auto max-w-3xl overflow-hidden"
 			aria-labelledby="student-curriculum-title"
 		>
-			<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+			<div class="h-1 bg-primary" aria-hidden="true"></div>
 			<div class="p-8 text-center sm:p-12">
 				<div
 					class="mx-auto mb-5 grid size-16 place-items-center rounded-2xl bg-primary/10 text-primary"
@@ -201,7 +201,7 @@
 					<div class="flex justify-end">
 						<Dropdown id={`curriculum-${row.id}`} label={`Actions for ${row.name}`} disabled={busy}>
 							{#snippet trigger()}
-								<Settings class="size-4" aria-hidden="true" />
+								<Ellipsis class="size-4" aria-hidden="true" />
 							{/snippet}
 							<ul class="menu w-full p-0">
 								<li>

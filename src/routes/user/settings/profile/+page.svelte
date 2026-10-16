@@ -38,9 +38,9 @@
 
 <svelte:head><title>My profile | BPC Enrollment System</title></svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6">
-	<header class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+<div class="w-full space-y-6">
+	<header class="portal-page-header">
+		<div class="h-1 bg-primary" aria-hidden="true"></div>
 		<div class="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
 			<div class="flex min-w-0 items-center gap-4 sm:gap-5">
 				{#if profile.image}
@@ -58,8 +58,7 @@
 					</span>
 				{/if}
 				<div class="min-w-0">
-					<p class="text-xs font-semibold tracking-widest text-primary">MY PROFILE</p>
-					<h1 class="mt-1.5 text-2xl font-bold tracking-tight wrap-anywhere sm:text-3xl">
+					<h1 class="text-2xl font-bold tracking-tight wrap-anywhere sm:text-3xl">
 						{profile.name}
 					</h1>
 					<p class="mt-1 text-sm wrap-anywhere text-base-content/60">{profile.email}</p>
@@ -85,10 +84,7 @@
 	</header>
 
 	<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-		<section
-			class="min-w-0 rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-			aria-labelledby="personal-heading"
-		>
+		<section class="portal-panel min-w-0 p-5 shadow-sm sm:p-6" aria-labelledby="personal-heading">
 			<h2 id="personal-heading" class="flex items-center gap-2 text-lg font-bold">
 				<UserRound class="size-5 text-primary" aria-hidden="true" />Personal information
 			</h2>
@@ -128,10 +124,7 @@
 			</dl>
 		</section>
 
-		<section
-			class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6"
-			aria-labelledby="account-heading"
-		>
+		<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="account-heading">
 			<h2 id="account-heading" class="flex items-center gap-2 text-lg font-bold">
 				<ShieldCheck class="size-5 text-primary" aria-hidden="true" />Account details
 			</h2>
@@ -158,10 +151,7 @@
 	</div>
 
 	{#if profile.student}
-		<section
-			class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-			aria-labelledby="student-heading"
-		>
+		<section class="portal-panel overflow-hidden" aria-labelledby="student-heading">
 			<header
 				class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-5 sm:px-6"
 			>

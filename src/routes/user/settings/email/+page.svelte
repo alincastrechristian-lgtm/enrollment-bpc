@@ -96,20 +96,8 @@
 			onsubmit={saveChanges}
 			oninput={() => (feedback = '')}
 			aria-busy={busy}
-			class="min-w-0 rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+			class="portal-panel min-w-0"
 		>
-			<div class="flex items-center gap-3 border-b border-base-300 p-5 sm:p-6">
-				<div
-					class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-				>
-					<Mail class="h-5 w-5" aria-hidden="true" />
-				</div>
-				<div>
-					<h1 class="text-lg font-bold text-base-content">System email settings</h1>
-					<p class="mt-1 text-sm text-base-content/60">Manage outgoing enrollment emails.</p>
-				</div>
-			</div>
-
 			<div class="space-y-6 p-5 sm:p-6">
 				<fieldset class="space-y-2" disabled={busy}>
 					<legend class="mb-2 text-sm font-bold text-base-content">Email provider</legend>
@@ -337,7 +325,7 @@
 		</form>
 
 		<aside class="space-y-6">
-			<div class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6">
+			<div class="portal-panel p-5 shadow-sm sm:p-6">
 				<h2 class="text-sm font-bold text-base-content">Sender preview</h2>
 				<p class="mt-1 text-xs text-base-content/60">
 					How your sender details appear to recipients.
@@ -366,7 +354,7 @@
 					</div>
 				</div>
 			</div>
-			<div class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6">
+			<div class="portal-panel p-5 shadow-sm sm:p-6">
 				<div class="flex items-center gap-2">
 					<ShieldCheck class="h-4 w-4 text-primary" aria-hidden="true" />
 					<h2 class="text-sm font-bold text-base-content">Before you connect</h2>

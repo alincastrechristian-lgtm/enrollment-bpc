@@ -11,7 +11,7 @@
 		GraduationCap,
 		MailCheck,
 		Pencil,
-		Settings,
+		Ellipsis,
 		Trash2,
 		UserPlus
 	} from '@lucide/svelte';
@@ -92,9 +92,12 @@
 					</div>
 
 					<div class="min-w-0">
-						<p class="truncate font-bold text-base-content">
+						<a
+							href={resolve('/user/students/[userId]', { userId: student.id })}
+							class="font-semibold text-base-content hover:text-primary hover:underline"
+						>
 							{student.name}
-						</p>
+						</a>
 
 						<p class="mt-0.5 text-xs text-base-content/50">
 							{student.email}
@@ -143,7 +146,7 @@
 				<div class="flex justify-end pr-2">
 					<Dropdown id={`student-${student.id}`} label={`Actions for ${student.name}`}>
 						{#snippet trigger()}
-							<Settings class="h-4 w-4" />
+							<Ellipsis class="h-4 w-4" />
 						{/snippet}
 
 						<ul class="menu w-full p-0">

@@ -101,9 +101,7 @@
 		{/if}
 	</div>
 	{#if enrollments.length}
-		<fieldset
-			class="grid gap-4 rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
-		>
+		<fieldset class="portal-panel grid gap-4 p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
 			<legend class="sr-only">Filter enrollment history</legend>
 			<label class="space-y-2">
 				<span class="text-sm font-semibold">School year</span>
@@ -163,10 +161,7 @@
 		</p>
 	{/if}
 	{#each filteredEnrollments as entry (entry.id)}
-		<article
-			class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-			aria-labelledby={`enrollment-${entry.id}`}
-		>
+		<article class="portal-panel overflow-hidden" aria-labelledby={`enrollment-${entry.id}`}>
 			<div class="flex flex-wrap items-start justify-between gap-3 border-b border-base-300 p-5">
 				<div>
 					<h3 id={`enrollment-${entry.id}`} class="font-bold">
@@ -254,7 +249,7 @@
 			{/if}
 		</article>
 	{:else}
-		<p class="rounded-2xl border border-base-300 bg-base-100 p-6 text-sm text-base-content/60">
+		<p class="portal-panel p-6 text-sm text-base-content/60">
 			{enrollments.length
 				? 'No enrollments match these filters. Try another selection or clear filters.'
 				: 'No enrollment records yet.'}

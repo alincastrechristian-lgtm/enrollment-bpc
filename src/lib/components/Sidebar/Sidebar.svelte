@@ -1,92 +1,69 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
 	import { resolve } from '$app/paths';
-	import { LogOut, Moon, Sun } from '@lucide/svelte';
+	import { ArrowUpRight, LogOut, ShieldCheck } from '@lucide/svelte';
 	import SidebarNavigation from './SidebarNavigation.svelte';
 	import { getSidebarItems } from './navigation';
-	import { showYesNo } from '../Popup/Popup.svelte';
-	import ThemeController from '../ThemeController/ThemeController.svelte';
-
+	import { showError, showYesNo } from '../Popup/Popup.svelte';
+	import { getErrorMessage } from '#lib/errors.js';
 	const session = authClient.useSession();
-
 	const sidebarItems = $derived(getSidebarItems($session?.data?.user.role));
-
+	let signingOut = $state(false);
 	async function logout() {
-		if (!(await showYesNo('Are you sure you want to log out?'))) {
-			return;
+		if (signingOut || !(await showYesNo('Are you sure you want to log out?'))) return;
+		signingOut = true;
+		try {
+			const result = await authClient.signOut();
+			if (result.error) throw result.error;
+			window.location.href = resolve('/login');
+		} catch (cause) {
+			showError(getErrorMessage(cause, 'Could not sign out. Please try again.'));
+		} finally {
+			signingOut = false;
 		}
-
-		await authClient.signOut();
-		window.location.href = resolve('/login');
 	}
 </script>
 
-<aside
-	class="h-full w-full overflow-hidden bg-base-300 text-base-content shadow-2xl shadow-base-content/10"
->
-	<!-- Header -->
-	<div class="border-b border-base-content/10 bg-primary px-5 py-4 text-primary-content">
-		<div class="flex items-center">
-			<div class="flex items-center gap-3">
-				<div
-					class="grid h-16 w-16 place-content-center rounded-full bg-base-100 text-sm font-black text-base-content"
-				>
-					BPC
-				</div>
-
-				<div>
-					<p class="text-xs leading-tight font-bold tracking-wide opacity-90">ENROLLMENT</p>
-					<p class="text-xs leading-tight font-bold tracking-wide opacity-90">SYSTEM</p>
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<div class="flex h-[calc(100%-5.5rem)] flex-col">
-		<SidebarNavigation items={sidebarItems} />
-
-		<!-- Theme -->
-		<ThemeController>
-			{#snippet children({ isDark, toggleTheme })}
-				<div class="px-3 pb-3">
-					<label
-						class="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-base-content/10 bg-base-200 px-4 py-2.5 transition-colors hover:bg-base-content/10"
-					>
-						<div class="swap swap-rotate">
-							<input
-								type="checkbox"
-								class="theme-controller"
-								value={isDark}
-								onclick={toggleTheme}
-							/>
-
-							<Sun class="h-5 w-5 swap-on text-base-content/70" />
-
-							<Moon class="h-5 w-5 swap-off text-base-content/70" />
-						</div>
-
-						<span class="text-sm font-semibold text-base-content">Theme</span>
-					</label>
-				</div>
-			{/snippet}
-		</ThemeController>
-
-		<!-- Logout -->
-		<div class="px-3 pb-3">
-			<button
-				type="button"
-				onclick={logout}
-				class="group flex w-full items-center gap-3 rounded-xl border border-base-content/10 bg-base-200 px-4 py-3 text-sm font-semibold text-base-content/80 transition-colors hover:border-error/30 hover:bg-error/10 hover:text-error"
+<aside class="flex h-full w-full flex-col border-r border-base-300 bg-base-100 text-base-content">
+	<a
+		href={resolve('/user/dashboard')}
+		class="flex shrink-0 items-center gap-3 border-b border-base-300 px-6 py-6"
+		aria-label="BPC Enrollment Portal dashboard"
+	>
+		<span
+			class="grid size-11 place-items-center rounded-xl bg-primary text-xs font-black text-primary-content"
+		>
+			BPC
+		</span>
+		<span>
+			<span class="block text-sm font-bold tracking-tight">Enrollment Portal</span>
+			<span class="mt-1 block text-[10px] text-base-content/50">Bulacan Polytechnic College</span>
+		</span>
+	</a>
+	<SidebarNavigation items={sidebarItems} />
+	<div class="shrink-0 space-y-3 border-t border-base-300 p-4">
+		<div class="rounded-xl border border-primary/10 bg-primary/5 p-3.5">
+			<p class="flex items-center gap-2 text-xs font-semibold">
+				<ShieldCheck class="size-4 text-primary" aria-hidden="true" />Your BPC workspace
+			</p>
+			<p class="mt-2 text-[11px] leading-relaxed text-base-content/55">
+				Enrollment and academic records, connected.
+			</p>
+			<a
+				href={resolve('/')}
+				class="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
 			>
-				<LogOut class="h-4.5 w-4.5 text-base-content/50 group-hover:text-error" strokeWidth={2.2} />
-
-				Logout
-			</button>
+				Visit portal home<ArrowUpRight class="size-3" aria-hidden="true" />
+			</a>
 		</div>
-
-		<!-- Footer -->
-		<div class="border-t border-base-content/10 px-5 py-4">
-			<p class="text-[10px] tracking-wide text-base-content/40">BPC • COLLEGE ENROLLMENT SYSTEM</p>
-		</div>
+		<button
+			type="button"
+			disabled={signingOut}
+			onclick={logout}
+			class="btn w-full justify-start gap-3 border-base-300 bg-base-100 text-base-content/65 btn-sm hover:border-error/25 hover:bg-error/5 hover:text-error"
+		>
+			<LogOut class="size-4" aria-hidden="true" />{signingOut ? 'Signing out…' : 'Log out'}
+		</button>
+		<p class="text-center text-[10px] text-base-content/40">BPC · College Enrollment System</p>
 	</div>
 </aside>

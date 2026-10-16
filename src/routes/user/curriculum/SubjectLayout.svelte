@@ -67,7 +67,9 @@
 </script>
 
 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-5">
-	{#if heading}{@render heading()}{/if}
+	{#if heading}
+		{@render heading()}
+	{/if}
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="join" role="group" aria-label="Subject layout">
 			<button
@@ -77,8 +79,10 @@
 				aria-pressed={layout === 'all'}
 				onclick={() => {
 					layout = 'all';
-				}}><List class="size-4" aria-hidden="true" />All subjects</button
+				}}
 			>
+				<List class="size-4" aria-hidden="true" />All subjects
+			</button>
 			<button
 				type="button"
 				class={`btn join-item gap-2 btn-sm ${layout === 'tabbed' ? 'btn-primary' : 'border-base-300 bg-base-100'}`}
@@ -86,10 +90,14 @@
 				aria-pressed={layout === 'tabbed'}
 				onclick={() => {
 					layout = 'tabbed';
-				}}><PanelsTopLeft class="size-4" aria-hidden="true" />Tabbed</button
+				}}
 			>
+				<PanelsTopLeft class="size-4" aria-hidden="true" />Tabbed
+			</button>
 		</div>
-		{#if actions}{@render actions()}{/if}
+		{#if actions}
+			{@render actions()}
+		{/if}
 	</div>
 </div>
 {#if layout === 'tabbed'}
@@ -109,8 +117,9 @@
 						year = option;
 					}}
 					class={`btn shrink-0 border-none btn-sm ${year === option ? 'bg-primary/10 text-primary' : 'btn-ghost text-base-content/60'}`}
-					>Year {option}</button
 				>
+					Year {option}
+				</button>
 			{/each}
 		</div>
 		<div role="tablist" aria-label="Subject semester" class="flex gap-1 overflow-x-auto pb-1">
@@ -128,8 +137,9 @@
 						semester = option;
 					}}
 					class={`btn shrink-0 border-none btn-sm ${semester === option ? 'bg-primary/10 text-primary' : 'btn-ghost text-base-content/60'}`}
-					>{semesterLabel(option)}</button
 				>
+					{semesterLabel(option)}
+				</button>
 			{/each}
 		</div>
 	</div>

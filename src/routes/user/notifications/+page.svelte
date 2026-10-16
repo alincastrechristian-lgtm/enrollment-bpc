@@ -1,274 +1,224 @@
 <script lang="ts">
-	import { Archive, Bell, Mail, Plus, Search, Send, Settings, Trash2 } from '@lucide/svelte';
-
-	let showCompose = $state(false);
-
-	const notifications = [
+	import { Bell, Check, CheckCheck, ChevronRight, Inbox, Mail, Search, X } from '@lucide/svelte';
+	const samples = [
 		{
-			id: 1,
-			recipient: 'john@email.com',
-			subject: 'BPC Enrollment Requirements - Incomplete',
-			preview:
-				"Your enrollment is currently incomplete. Please contact the Registrar's Office to review your enrollment.",
-			date: 'Today, 9:42 AM'
+			id: 'grades',
+			title: 'Your grades are ready to view',
+			message:
+				'Final grades have been released for your enrollment. Open your academic record to review your results and any next steps.',
+			category: 'Academic update',
+			date: 'Today',
+			unread: true
 		},
 		{
-			id: 2,
-			recipient: 'maria@email.com',
-			subject: 'Enrollment Received',
-			preview: 'Your enrollment has been successfully received and is currently being reviewed.',
-			date: 'Yesterday, 3:18 PM'
+			id: 'meeting',
+			title: 'A conversation about your next step',
+			message:
+				'The Registrar’s Office would like to discuss your academic progress. Contact the office to arrange a meeting and review your enrollment options.',
+			category: 'Follow-up',
+			date: 'Today',
+			unread: true
 		},
 		{
-			id: 3,
-			recipient: 'juan@email.com',
-			subject: 'Enrollment Approved',
-			preview:
-				'Congratulations! Your enrollment has been approved. Please proceed to the next step.',
-			date: 'Sep 26, 2026'
+			id: 'enrollment',
+			title: 'Your enrollment is confirmed',
+			message:
+				'Your program, section, and subject list are ready to review. You can find the details in your enrollment record.',
+			category: 'Enrollment',
+			date: 'Yesterday',
+			unread: false
 		},
 		{
-			id: 4,
-			recipient: 'ana@email.com',
-			subject: 'Account Setup Required',
-			preview: 'Complete account setup to access your enrollment information.',
-			date: 'Sep 25, 2026'
+			id: 'account',
+			title: 'Welcome to your BPC portal',
+			message:
+				'Your account is ready. Explore your dashboard, enrollment history, and assigned curriculum. If you need assistance, the Registrar’s Office is here to help.',
+			category: 'Account',
+			date: 'Earlier',
+			unread: false
 		}
 	];
+	let notifications = $state(samples.map((item) => ({ ...item })));
+	let query = $state('');
+	let filter = $state<'all' | 'unread'>('all');
+	let selected = $state<string | null>(null);
+	const unread = $derived(notifications.filter((item) => item.unread).length);
+	const visible = $derived(
+		notifications.filter(
+			(item) =>
+				(filter === 'all' || item.unread) &&
+				`${item.title} ${item.message} ${item.category}`
+					.toLowerCase()
+					.includes(query.trim().toLowerCase())
+		)
+	);
+	const current = $derived(notifications.find((item) => item.id === selected));
+	function open(id: string) {
+		selected = id;
+		const item = notifications.find((item) => item.id === id);
+		if (item) item.unread = false;
+	}
 </script>
 
-<svelte:head>
-	<title>Notifications</title>
-</svelte:head>
-
-<section class="mx-auto max-w-7xl">
-	<div class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<!-- Header -->
-		<div
-			class="flex flex-col gap-4 border-b border-base-300 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+<svelte:head><title>Notifications | BPC Enrollment Portal</title></svelte:head>
+<section class="w-full space-y-5" aria-label="Notifications">
+	<div class="portal-panel flex flex-wrap items-center gap-x-4 gap-y-3 p-4 sm:p-5">
+		<span
+			class="shrink-0 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary"
 		>
-			<div class="flex items-center gap-3">
-				<div
-					class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
-				>
-					<Bell size={19} strokeWidth={2} />
-				</div>
-
-				<div>
-					<h2 class="font-bold text-base-content">Notifications</h2>
-					<p class="text-xs text-base-content/50">
-						{notifications.length} sent notifications
-					</p>
-				</div>
-			</div>
-
-			<button
-				type="button"
-				class="btn gap-2 border-0 bg-primary px-5 text-primary-content shadow-sm hover:bg-primary/80"
-				onclick={() => (showCompose = true)}
+			Sample inbox
+		</span>
+		<p class="min-w-0 flex-1 basis-64 text-xs leading-relaxed text-base-content/60">
+			These are sample messages. Real academic and enrollment notices are available on your
+			dashboard and sent by email. Read status here is temporary.
+		</p>
+	</div>
+	<div class="portal-panel overflow-hidden">
+		<div
+			class="flex flex-col justify-between gap-4 border-b border-base-300 p-4 sm:flex-row sm:items-center sm:p-5"
+		>
+			<div
+				class="flex gap-1 rounded-xl bg-base-200 p-1"
+				role="group"
+				aria-label="Notification filter"
 			>
-				<Plus size={17} />
-				Compose
+				<button
+					type="button"
+					aria-pressed={filter === 'all'}
+					onclick={() => (filter = 'all')}
+					class="rounded-lg px-4 py-2 text-xs font-semibold {filter === 'all'
+						? 'bg-base-100 text-primary shadow-sm'
+						: 'text-base-content/55'}"
+				>
+					All updates <span class="ml-1 tabular-nums">{notifications.length}</span>
+				</button>
+				<button
+					type="button"
+					aria-pressed={filter === 'unread'}
+					onclick={() => (filter = 'unread')}
+					class="rounded-lg px-4 py-2 text-xs font-semibold {filter === 'unread'
+						? 'bg-base-100 text-primary shadow-sm'
+						: 'text-base-content/55'}"
+				>
+					Unread <span class="ml-1 tabular-nums">{unread}</span>
+				</button>
+			</div>
+			<button
+				class="btn gap-2 border-base-300 btn-outline btn-sm"
+				type="button"
+				disabled={!unread}
+				onclick={() => {
+					for (const item of notifications) item.unread = false;
+				}}
+			>
+				<CheckCheck class="size-4" aria-hidden="true" />Mark all as read
 			</button>
 		</div>
-
-		<!-- Toolbar -->
-		<div
-			class="flex flex-col gap-3 border-b border-base-300 bg-base-200/50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6"
-		>
-			<label class="input-bordered input flex w-full items-center gap-3 bg-base-100 sm:max-w-md">
-				<Search size={16} class="text-base-content/50" />
-
-				<input type="text" placeholder="Search sent notifications..." class="grow text-sm" />
+		<div class="border-b border-base-300 p-4 sm:p-5">
+			<label class="input flex w-full items-center gap-3">
+				<Search class="size-4 shrink-0 text-base-content/45" aria-hidden="true" />
+				<input
+					type="search"
+					aria-label="Search notifications"
+					placeholder="Search updates…"
+					bind:value={query}
+					class="min-w-0 grow text-sm"
+				/>
 			</label>
 		</div>
-
-		<!-- Notification list -->
-		<div>
-			{#each notifications as notification (notification.id)}
-				<div
-					class="group flex items-start gap-4 border-b border-base-200 px-5 py-4 transition-colors last:border-0 hover:bg-base-200 sm:px-6"
-				>
-					<!-- Mail icon -->
-					<div
-						class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:flex"
-					>
-						<Send size={16} />
-					</div>
-
-					<!-- Notification content -->
+		<div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+			<div class="min-w-0 lg:border-r lg:border-base-300">
+				{#each visible as item (item.id)}
 					<button
 						type="button"
-						class="min-w-0 flex-1 text-left"
-						onclick={() => console.log('Open notification:', notification.id)}
+						onclick={() => open(item.id)}
+						aria-pressed={selected === item.id}
+						class="flex w-full items-start gap-3 border-b border-base-200 p-5 text-left transition-colors last:border-b-0 hover:bg-base-200/50 sm:px-6 {selected ===
+						item.id
+							? 'bg-primary/5'
+							: ''}"
 					>
-						<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-							<p class="truncate text-sm font-semibold text-base-content/80">
-								{notification.recipient}
-							</p>
-
-							<span class="shrink-0 text-xs font-medium text-base-content/50">
-								{notification.date}
+						<span
+							class="mt-0.5 grid size-10 shrink-0 place-items-center rounded-xl {item.unread
+								? 'bg-primary/10 text-primary'
+								: 'bg-base-200 text-base-content/40'}"
+						>
+							<Mail class="size-4" aria-hidden="true" />
+						</span>
+						<span class="min-w-0 flex-1">
+							<span
+								class="mb-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-base-content/50"
+							>
+								<span class="font-semibold">{item.category}</span>
+								<span>{item.date}</span>
 							</span>
-						</div>
-
-						<p class="mt-0.5 truncate text-sm font-medium text-base-content/80">
-							{notification.subject}
-						</p>
-
-						<p class="mt-1 line-clamp-1 text-xs text-base-content/50">
-							{notification.preview}
-						</p>
+							<span class="block text-sm {item.unread ? 'font-bold' : 'font-medium'}">
+								{item.title}{#if item.unread}
+									<span
+										class="ml-2 inline-block size-1.5 rounded-full bg-primary"
+										aria-label="Unread"
+									></span>
+								{/if}
+							</span>
+							<span class="mt-2 line-clamp-2 block text-xs leading-relaxed text-base-content/55">
+								{item.message}
+							</span>
+						</span>
+						<ChevronRight class="mt-6 size-4 shrink-0 text-base-content/30" aria-hidden="true" />
 					</button>
-
-					<!-- Actions -->
-					<div class="dropdown dropdown-end shrink-0">
+				{:else}
+					<div class="px-6 py-16 text-center" role="status">
+						<Inbox class="mx-auto size-8 text-primary/50" aria-hidden="true" />
+						<h3 class="mt-4 text-sm font-semibold">You’re all caught up</h3>
+						<p class="mt-2 text-xs text-base-content/55">
+							No messages match this view. Try All updates or clear your search.
+						</p>
+					</div>
+				{/each}
+			</div>
+			<aside
+				class="border-t border-base-300 bg-base-200/20 p-5 sm:p-7 lg:border-t-0"
+				aria-label="Notification details"
+			>
+				{#if current}
+					<div class="flex items-center justify-between gap-3">
+						<span class="portal-eyebrow">{current.category}</span>
 						<button
 							type="button"
-							tabindex="0"
-							class="btn btn-circle btn-ghost btn-xs"
-							aria-label={`Actions for ${notification.recipient}`}
-							title="Actions"
+							class="btn btn-square btn-ghost btn-sm"
+							aria-label="Close notification"
+							onclick={() => (selected = null)}
 						>
-							<Settings size={14} />
+							<X class="size-4" aria-hidden="true" />
 						</button>
-						<ul
-							tabindex="-1"
-							class="menu dropdown-content z-10 mt-2 w-36 rounded-box border border-base-300 bg-base-100 p-2 shadow"
-						>
-							<li><button type="button"><Archive size={14} />Archive</button></li>
-							<li class="text-error"><button type="button"><Trash2 size={14} />Delete</button></li>
-						</ul>
 					</div>
-				</div>
-			{/each}
-		</div>
-
-		<!-- Footer -->
-		<div
-			class="flex items-center justify-between border-t border-base-300 bg-base-200/50 px-5 py-3 sm:px-6"
-		>
-			<p class="text-xs font-medium text-base-content/50">
-				{notifications.length} notifications
-			</p>
-
-			<div class="join">
-				<button class="btn join-item btn-sm" disabled>«</button>
-				<button class="btn join-item bg-primary text-primary-content btn-sm hover:bg-primary/80">
-					1
-				</button>
-				<button class="btn join-item btn-sm">2</button>
-				<button class="btn join-item btn-sm">»</button>
-			</div>
+					<span
+						class="mt-6 grid size-12 place-items-center rounded-2xl border border-primary/10 bg-primary/5 text-primary"
+					>
+						<Bell class="size-5" aria-hidden="true" />
+					</span>
+					<h3 class="mt-5 text-xl font-bold tracking-tight">{current.title}</h3>
+					<p class="mt-2 text-xs text-base-content/45">{current.date} · Sample notification</p>
+					<p class="mt-6 text-sm leading-relaxed text-base-content/70">{current.message}</p>
+					<p
+						class="mt-8 flex items-center gap-2 border-t border-base-300 pt-4 text-xs text-base-content/50"
+					>
+						<Check class="size-4 text-primary" aria-hidden="true" />Marked as read in this preview
+					</p>
+				{:else}
+					<div class="flex min-h-64 flex-col items-center justify-center text-center">
+						<span
+							class="grid size-14 place-items-center rounded-2xl border border-base-300 bg-base-100 text-primary"
+						>
+							<Mail class="size-6" aria-hidden="true" />
+						</span>
+						<h3 class="mt-5 font-semibold">A little clarity, one update at a time.</h3>
+						<p class="mt-3 max-w-xs text-xs leading-relaxed text-base-content/55">
+							Select a message to read it here. On mobile, its details appear below the inbox.
+						</p>
+					</div>
+				{/if}
+			</aside>
 		</div>
 	</div>
 </section>
-
-<!-- Compose Modal -->
-{#if showCompose}
-	<dialog class="modal modal-open">
-		<div class="modal-box max-w-2xl overflow-hidden p-0">
-			<!-- Modal header -->
-			<div class="flex items-center justify-between border-b border-base-300 px-5 py-4">
-				<div class="flex items-center gap-3">
-					<div
-						class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"
-					>
-						<Mail size={17} />
-					</div>
-
-					<div>
-						<h3 class="font-bold text-base-content">New Notification</h3>
-						<p class="text-xs text-base-content/50">Compose an email to an student.</p>
-					</div>
-				</div>
-
-				<button
-					type="button"
-					class="btn btn-circle btn-ghost text-base-content/50 btn-sm"
-					onclick={() => (showCompose = false)}
-					aria-label="Close"
-				>
-					×
-				</button>
-			</div>
-
-			<!-- Form -->
-			<form
-				class="p-5 sm:p-6"
-				onsubmit={(event) => {
-					event.preventDefault();
-					showCompose = false;
-				}}
-			>
-				<div class="space-y-5">
-					<div>
-						<label for="recipient" class="mb-2 block text-sm font-bold text-base-content/80">
-							Recipient
-						</label>
-
-						<input
-							id="recipient"
-							name="recipient"
-							type="email"
-							placeholder="student@email.com"
-							required
-							class="input-bordered input w-full border-base-300 bg-base-200/50 text-sm focus:border-primary focus:outline-none"
-						/>
-					</div>
-
-					<div>
-						<label for="subject" class="mb-2 block text-sm font-bold text-base-content/80">
-							Subject
-						</label>
-
-						<input
-							id="subject"
-							name="subject"
-							type="text"
-							placeholder="Enter email subject"
-							required
-							class="input-bordered input w-full border-base-300 bg-base-200/50 text-sm focus:border-primary focus:outline-none"
-						/>
-					</div>
-
-					<div>
-						<label for="message" class="mb-2 block text-sm font-bold text-base-content/80">
-							Message
-						</label>
-
-						<textarea
-							id="message"
-							name="message"
-							rows="7"
-							placeholder="Write your message..."
-							required
-							class="textarea-bordered textarea w-full resize-y border-base-300 bg-base-200/50 text-sm leading-relaxed focus:border-primary focus:outline-none"></textarea>
-					</div>
-				</div>
-
-				<div class="mt-6 flex justify-end gap-2 border-t border-base-200 pt-5">
-					<button
-						type="button"
-						class="btn btn-ghost text-base-content/60"
-						onclick={() => (showCompose = false)}
-					>
-						Cancel
-					</button>
-
-					<button
-						type="submit"
-						class="btn gap-2 border-0 bg-primary px-5 text-primary-content hover:bg-primary/80"
-					>
-						<Send size={16} />
-						Send Email
-					</button>
-				</div>
-			</form>
-		</div>
-
-		<form method="dialog" class="modal-backdrop">
-			<button onclick={() => (showCompose = false)}>close</button>
-		</form>
-	</dialog>
-{/if}

@@ -62,7 +62,7 @@
 			{/if}
 
 			<!-- Action -->
-			<button class="btn w-full btn-error" onclick={close}>
+			<button class="btn w-full border-base-300 btn-outline" onclick={close}>
 				<X class="size-4" />
 				{buttonText}
 			</button>

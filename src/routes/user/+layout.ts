@@ -47,6 +47,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'NEW CURRICULUM',
 		pageDescription: 'Build a curriculum and arrange its subjects.'
 	},
+	'/user/curriculum/[curriculumId]/edit': {
+		pageTitle: 'EDIT CURRICULUM',
+		pageDescription: 'Update the curriculum draft and arrange its subjects.'
+	},
 	'/user/curriculum/*': {
 		pageTitle: 'CURRICULUM DETAILS',
 		pageDescription: 'Review curriculum subjects, semesters, and units.'
@@ -57,15 +61,15 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	},
 	'/user/notifications': {
 		pageTitle: 'NOTIFICATIONS',
-		pageDescription: 'Send and track system notifications.'
+		pageDescription: 'Review enrollment news, academic updates, and next steps.'
 	},
 	'/user/reports': {
 		pageTitle: 'REPORTS',
-		pageDescription: 'Generate and view enrollment reports.'
+		pageDescription: 'Explore enrollment insights and reporting tools.'
 	},
 	'/user/settings/email': {
 		pageTitle: 'EMAIL SETTINGS',
-		pageDescription: 'Configure the system sender and SMTP connection.'
+		pageDescription: 'Configure the sender and provider for outgoing system emails.'
 	},
 	'/user/settings/profile': {
 		pageTitle: 'MY PROFILE',

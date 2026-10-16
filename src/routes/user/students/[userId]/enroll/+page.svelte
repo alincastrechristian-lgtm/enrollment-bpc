@@ -29,16 +29,14 @@
 </script>
 
 <svelte:head><title>Enroll {data.student.name} | BPC Enrollment System</title></svelte:head>
-<div class="mx-auto max-w-7xl space-y-6">
+<div class="w-full space-y-6">
 	{#if data.enrollmentLockReason}
 		<section
 			class="flex min-h-[60vh] w-full items-center justify-center px-4 py-12 sm:px-6"
 			aria-labelledby="enrollment-blocked-title"
 		>
-			<div
-				class="w-full max-w-xl overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
-			>
-				<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+			<div class="portal-panel w-full max-w-xl overflow-hidden">
+				<div class="h-1 bg-primary" aria-hidden="true"></div>
 				<div class="p-6 text-center sm:p-10">
 					<div
 						class="mx-auto mb-6 grid size-20 place-items-center rounded-2xl bg-primary/10 text-primary"
@@ -85,8 +83,8 @@
 				enrolling again.
 			</p>
 		{/if}
-		<section class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-			<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+		<section class="portal-panel overflow-hidden">
+			<div class="h-1 bg-primary" aria-hidden="true"></div>
 			<div class="space-y-2 p-5 sm:p-6">
 				<label class="block space-y-2">
 					<span class="text-sm font-bold">Program for this enrollment</span>
@@ -124,7 +122,7 @@
 				/>
 			{/key}
 		{:else}
-			<div class="rounded-2xl border border-base-300 bg-base-100 p-10 text-center">
+			<div class="portal-panel p-10 text-center">
 				<BookOpen class="mx-auto mb-4 size-10 text-primary/40" aria-hidden="true" />
 				<h1 class="text-xl font-bold">Choose a program to enroll {data.student.name}</h1>
 				<p class="mt-3 text-sm text-base-content/60">
