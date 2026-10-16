@@ -5,6 +5,7 @@ import {
 	Bell,
 	BookOpen,
 	ClipboardCheck,
+	ClipboardList,
 	Gauge,
 	GraduationCap,
 	Layers,
@@ -31,6 +32,7 @@ const items: SidebarItem[] = [
 	{ label: 'Dashboard', href: resolve('/user/dashboard'), icon: Gauge },
 	{ label: 'Registrars', href: resolve('/user/registrars'), icon: UserShield, roles: [Role.ADMIN] },
 	{ label: 'Students', href: resolve('/user/students'), icon: Users, roles: staff },
+	{ label: 'Masterlist', href: resolve('/user/masterlist'), icon: ClipboardList, roles: staff },
 	{
 		label: 'Enrollment',
 		href: resolve('/user/enrollment'),

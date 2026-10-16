@@ -30,6 +30,7 @@ for (const [role, expected] of [
 			'Dashboard',
 			'Registrars',
 			'Students',
+			'Masterlist',
 			'Subjects',
 			'Programs',
 			'Curriculum',
@@ -40,7 +41,16 @@ for (const [role, expected] of [
 	],
 	[
 		'registrar',
-		['Dashboard', 'Students', 'Subjects', 'Programs', 'Curriculum', 'Notifications', 'Settings']
+		[
+			'Dashboard',
+			'Students',
+			'Masterlist',
+			'Subjects',
+			'Programs',
+			'Curriculum',
+			'Notifications',
+			'Settings'
+		]
 	],
 	['student', ['Dashboard', 'Enrollment', 'Curriculum', 'Notifications', 'Settings']]
 ]) {

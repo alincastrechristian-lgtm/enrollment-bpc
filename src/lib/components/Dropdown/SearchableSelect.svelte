@@ -12,7 +12,8 @@
 		disabled = false,
 		small = false,
 		createLabel,
-		oncreate
+		oncreate,
+		onchange
 	}: {
 		id: string;
 		label: string;
@@ -25,6 +26,7 @@
 		small?: boolean;
 		createLabel?: string;
 		oncreate?: () => void;
+		onchange?: (value: string) => void;
 	} = $props();
 
 	const panelId = $derived(`${id}-dropdown`);
@@ -50,6 +52,7 @@
 		value = option.value;
 		validationAttempted = false;
 		close();
+		onchange?.(value);
 	}
 	function create() {
 		if (disabled || !oncreate) return;
@@ -123,14 +126,16 @@
 	{disabled}
 	popovertarget={panelId}
 >
-	<span class={`truncate ${selected ? '' : 'text-base-content/50'}`}
-		>{selected?.label ?? placeholder}</span
-	>
+	<span class={`truncate ${selected ? '' : 'text-base-content/50'}`}>
+		{selected?.label ?? placeholder}
+	</span>
 	<ChevronDown class="size-4 shrink-0 text-base-content/50" aria-hidden="true" />
 </button>
-{#if invalid}<p id={`${id}-error`} class="mt-1 text-xs text-error">
+{#if invalid}
+	<p id={`${id}-error`} class="mt-1 text-xs text-error">
 		{placeholder} to continue.
-	</p>{/if}
+	</p>
+{/if}
 <div
 	bind:this={panel}
 	id={panelId}
@@ -166,7 +171,9 @@
 					onkeydown={choiceKeydown}
 				>
 					<span class="min-w-0 wrap-break-word">{option.label}</span>
-					{#if option.value === value}<Check class="size-4 shrink-0" aria-hidden="true" />{/if}
+					{#if option.value === value}
+						<Check class="size-4 shrink-0" aria-hidden="true" />
+					{/if}
 				</button>
 			</li>
 		{:else}
@@ -175,14 +182,18 @@
 			</li>
 		{/each}
 	</ul>
-	{#if createLabel && oncreate}<div class="mt-2 border-t border-base-300 pt-2">
+	{#if createLabel && oncreate}
+		<div class="mt-2 border-t border-base-300 pt-2">
 			<button
 				type="button"
 				data-choice
 				class="btn w-full justify-start gap-2 btn-ghost text-primary btn-sm"
 				{disabled}
 				onclick={create}
-				onkeydown={choiceKeydown}><Plus class="size-4" aria-hidden="true" />{createLabel}</button
+				onkeydown={choiceKeydown}
 			>
-		</div>{/if}
+				<Plus class="size-4" aria-hidden="true" />{createLabel}
+			</button>
+		</div>
+	{/if}
 </div>

@@ -14,6 +14,11 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'STUDENTS',
 		pageDescription: 'Create student accounts and manage enrollment records.'
 	},
+	'/user/masterlist': {
+		pageTitle: 'STUDENT MASTERLIST',
+		pageDescription:
+			'View student rosters by school year, semester, program, year level, and section.'
+	},
 	'/user/students/[userId]/enroll': {
 		pageTitle: 'ENROLL STUDENT',
 		pageDescription:

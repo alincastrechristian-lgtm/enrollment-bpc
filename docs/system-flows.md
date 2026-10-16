@@ -71,6 +71,7 @@ flowchart TD
 | Capability | Admin | Registrar | Student |
 | ----------------------------------------- | ----------------------------------------- | --------------------------------- | ---------------------------- |
 | Create/view students; enroll students | Yes | Yes | No |
+| View student masterlist by term and class | Yes | Yes | No |
 | Create/list registrar accounts | Yes | No | No |
 | Delete unfinished students without enrollment history | Yes | Yes | No |
 | Disable/enable registrar accounts | Yes | No | No |
@@ -490,6 +491,7 @@ flowchart TD
 
 - Student program filter is searchable and gets options from all programs. Section choices are A–D; year/semester options use stored academic values.
 - Student academic filters follow the linked current enrollment, not any historical enrollment. **Has current enrollment** checks whether a linked record exists; a linked dropped/completed record still counts as present.
+- **Masterlist** (`/user/masterlist`) is available to admin and registrar. School year, semester, searchable program, year level, and section dropdowns update results automatically. It defaults to the latest recorded non-dropped term and lists enrolled/completed records from that specific term, including historical classes even after a student changes program or section. Dropped attempts and students without an enrollment are excluded. There is no name search, Apply button, or pagination: 50 students load initially, with additional batches loaded on scroll or **Load more** until all matching students appear. Each batch rechecks staff access and retains the selected term and class. Changing filters cancels pending row requests and starts a fresh list; failed batches offer **Retry**. Student names open profiles and **View** opens that term's enrollment. **Reset filters** returns to the latest term.
 - Setup/verification filters concern account setup, not an enrollment pending state. Enrollment statuses are `enrolled`, `completed`, and `dropped`.
 - History's **Current** badge means the record matches `currentEnrollmentId`; it is independent of enrollment status. The ordinary `enrolled` badge is omitted while other statuses remain visible.
 - History filters do not write to the database. Staff history links open an enrollment detail record; students review their history read-only.
