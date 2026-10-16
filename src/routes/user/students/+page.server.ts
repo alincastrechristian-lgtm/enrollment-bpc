@@ -16,6 +16,7 @@ import { schemaFilters } from '#lib/server/filters.js';
 import { error, redirect } from '@sveltejs/kit';
 import { and, asc, count, eq, inArray, isNull, isNotNull, like, or } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { canDeleteStudentAccount } from '#lib/students.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
@@ -97,13 +98,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		orderBy: [asc(user.name), asc(user.id)],
 		with: {
 			studentData: {
-				with: { currentEnrollment: { with: { curriculum: { columns: { programCode: true } } } } }
+				with: {
+					currentEnrollment: { with: { curriculum: { columns: { programCode: true } } } },
+					enrollments: { columns: { id: true }, limit: 1 }
+				}
 			}
 		}
 	});
 
 	return {
-		users,
+		users: users.map((student) => ({
+			...student,
+			canDelete: canDeleteStudentAccount({
+				setupComplete: student.setupComplete,
+				currentEnrollmentId: student.studentData?.currentEnrollmentId,
+				hasEnrollment: !!student.studentData?.enrollments.length
+			})
+		})),
 		filterOptions: {
 			programCode: db
 				.select({ code: program.code })

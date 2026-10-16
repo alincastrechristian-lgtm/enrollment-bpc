@@ -2,10 +2,16 @@
 	import { getErrorMessage } from '#lib/errors.js';
 	import { getEnrollmentLockReason, getGradeConcerns } from '#lib/enrollment-grades.js';
 	import EnrollmentHistory from '#lib/components/EnrollmentHistory.svelte';
-	import { resendMagicLink } from '#lib/actions/user.remote.js';
-	import { showError, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
+	import { deleteStudent, resendMagicLink } from '#lib/actions/user.remote.js';
+	import {
+		showError,
+		showLoading,
+		showSuccess,
+		showYesNo
+	} from '#lib/components/Popup/Popup.svelte.js';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { ArrowRight, Eye, GraduationCap, MailCheck } from '@lucide/svelte';
+	import { ArrowRight, Eye, GraduationCap, MailCheck, Trash2 } from '@lucide/svelte';
 	import { semesterLabel } from '../../curriculum/SubjectLayout.svelte';
 	import type { PageProps } from './$types';
 
@@ -27,6 +33,40 @@
 		)
 	);
 	let resending = $state(false);
+	let deleting = $state(false);
+	async function removeStudent() {
+		if (deleting || resending) return;
+		deleting = true;
+		let deleted = false;
+		try {
+			if (
+				!(await showYesNo({
+					title: 'Delete student account?',
+					message: `Permanently delete ${student.name}'s account and personal details? This cannot be undone.`,
+					warning: true,
+					yesText: 'Delete account',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			showLoading('Deleting student account...');
+			await deleteStudent({ userId: student.id });
+			deleted = true;
+			await goto(resolve('/user/students'));
+			showSuccess('Student account deleted successfully.');
+		} catch (cause) {
+			showError(
+				getErrorMessage(
+					cause,
+					deleted
+						? 'Student deleted. Return to the student list to continue.'
+						: 'Failed to delete student account. Please try again.'
+				)
+			);
+		} finally {
+			deleting = false;
+		}
+	}
 	const formatter = new Intl.DateTimeFormat('en-PH', {
 		timeZone: 'Asia/Manila',
 		dateStyle: 'medium'
@@ -41,7 +81,7 @@
 		['Student since', date(record?.createdAt)]
 	]);
 	async function resend() {
-		if (resending) return;
+		if (resending || deleting) return;
 		resending = true;
 		try {
 			await resendMagicLink({ email: student.email });
@@ -81,6 +121,16 @@
 				</div>
 			</div>
 			<div class="flex flex-wrap gap-2 sm:shrink-0">
+				{#if data.canDelete}
+					<button
+						type="button"
+						class="btn btn-outline btn-error btn-sm"
+						disabled={deleting || resending}
+						onclick={removeStudent}
+					>
+						<Trash2 class="size-4" aria-hidden="true" />Delete account
+					</button>
+				{/if}
 				{#if record}
 					<a
 						class="btn btn-primary btn-sm"

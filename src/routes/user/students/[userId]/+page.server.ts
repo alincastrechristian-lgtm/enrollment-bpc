@@ -5,6 +5,7 @@ import { db } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { canDeleteStudentAccount } from '#lib/students.js';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
@@ -30,5 +31,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		}
 	});
 	if (!student) error(404, 'Student not found.');
-	return { student };
+	return {
+		student,
+		canDelete: canDeleteStudentAccount({
+			setupComplete: student.setupComplete,
+			currentEnrollmentId: student.studentData?.currentEnrollmentId,
+			hasEnrollment: !!student.studentData?.enrollments.length
+		})
+	};
 };

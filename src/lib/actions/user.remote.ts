@@ -1,6 +1,13 @@
 import { Role } from '#lib/Roles.js';
-import { createStudentSchema } from '#lib/students.js';
-import { enrollment, enrollmentSubject, studentData, studentSequence, user } from '#lib/schema.js';
+import { canDeleteStudentAccount, createStudentSchema } from '#lib/students.js';
+import {
+	enrollment,
+	enrollmentSubject,
+	studentData,
+	studentSequence,
+	user,
+	verification
+} from '#lib/schema.js';
 import { auth, validateUser } from '#lib/server/auth.js';
 import { enrollStudentSchema, getEnrollmentPlan } from '#lib/server/enrollment.js';
 import { sendEmail } from '#lib/server/email.js';
@@ -10,9 +17,114 @@ import { command, getRequestEvent } from '$app/server';
 import { ORIGIN } from '$app/env/private';
 import { resolve } from '$app/paths';
 import { error, isHttpError } from '@sveltejs/kit';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, like, sql } from 'drizzle-orm';
+import { isAPIError } from 'better-auth/api';
 import { z } from 'zod';
 import { db } from '../server/db';
+
+export const deleteStudent = command(z.object({ userId: z.string().min(1) }), ({ userId }) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	try {
+		return db.transaction(
+			(tx) => {
+				const target = tx
+					.select({
+						setupComplete: user.setupComplete,
+						studentId: studentData.studentId,
+						currentEnrollmentId: studentData.currentEnrollmentId
+					})
+					.from(user)
+					.leftJoin(studentData, eq(studentData.userId, user.id))
+					.where(and(eq(user.id, userId), eq(user.role, Role.STUDENT)))
+					.get();
+				if (!target) error(404, 'Student not found.');
+				const hasEnrollment = !!(
+					target.studentId &&
+					tx
+						.select({ id: enrollment.id })
+						.from(enrollment)
+						.where(eq(enrollment.studentId, target.studentId))
+						.get()
+				);
+				if (!canDeleteStudentAccount({ ...target, hasEnrollment }))
+					error(
+						409,
+						'Only students with incomplete account setup and no enrollment history can be deleted.'
+					);
+
+				// Keep eligibility checks and deletion atomic against enrollment or setup completion.
+				tx.delete(studentData).where(eq(studentData.userId, userId)).run();
+				tx.delete(verification)
+					.where(
+						and(eq(verification.value, userId), like(verification.identifier, 'reset-password:%'))
+					)
+					.run();
+				// Auth accounts, sessions, two-factor data and addressed notifications cascade with the user.
+				tx.delete(user).where(eq(user.id, userId)).run();
+				return { success: true };
+			},
+			{ behavior: 'immediate' }
+		);
+	} catch (cause) {
+		if (isHttpError(cause)) throw cause;
+		console.error('Student deletion failed:', cause);
+		error(500, 'Failed to delete student. Please try again.');
+	}
+});
+
+export const setRegistrarDisabled = command(
+	z.object({ userId: z.string().min(1), disabled: z.boolean() }),
+	async ({ userId, disabled }) => {
+		const { locals, request } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN]);
+		const target = db
+			.select({ id: user.id })
+			.from(user)
+			.where(and(eq(user.id, userId), eq(user.role, Role.REGISTRAR)))
+			.get();
+		if (!target) error(404, 'Registrar account not found.');
+		try {
+			if (disabled) {
+				await auth.api.banUser({
+					body: { userId, banReason: 'Registrar account disabled by an administrator.' },
+					headers: request.headers
+				});
+			} else {
+				await auth.api.unbanUser({ body: { userId }, headers: request.headers });
+			}
+			return { success: true };
+		} catch (cause) {
+			if (isAPIError(cause) && (cause.statusCode === 401 || cause.statusCode === 403))
+				error(cause.statusCode, 'You do not have permission to change registrar access.');
+			if (isAPIError(cause) && cause.statusCode === 404) error(404, 'Registrar account not found.');
+			console.error('Registrar access update failed:', cause);
+			error(500, 'Failed to update registrar access. Please try again.');
+		}
+	}
+);
+
+export const revokeAccountSessions = command(
+	z.object({ userId: z.string().min(1) }),
+	async ({ userId }) => {
+		const { locals, request } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+		const target = db.select({ role: user.role }).from(user).where(eq(user.id, userId)).get();
+		if (!target || (target.role !== Role.STUDENT && target.role !== Role.REGISTRAR))
+			error(404, 'Student or registrar account not found.');
+		if (target.role === Role.REGISTRAR && locals.user.role !== Role.ADMIN)
+			error(403, 'Only administrators can revoke registrar sessions.');
+		try {
+			await auth.api.revokeUserSessions({ body: { userId }, headers: request.headers });
+			return { success: true };
+		} catch (cause) {
+			if (isAPIError(cause) && (cause.statusCode === 401 || cause.statusCode === 403))
+				error(cause.statusCode, 'You do not have permission to revoke these sessions.');
+			console.error('Account session revocation failed:', cause);
+			error(500, 'Failed to revoke sessions. Please try again.');
+		}
+	}
+);
 
 async function sendPasswordResetLink(email: string, headers: Headers) {
 	try {

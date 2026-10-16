@@ -23,7 +23,7 @@ test('registrar conflict appears in the real error popup from a wrapped SvelteKi
 				'export function beforeNavigate(){};export async function goto(){};export async function refreshAll(){};',
 			'state.svelte.js':
 				"export const page=$state({url:new URL('/user/registrars',window.location.origin)});",
-			'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';
+			'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';export async function revokeAccountSessions(){throw Error('Unexpected session revocation');}export async function deleteStudent(){throw Error('Unexpected deletion');}export async function setRegistrarDisabled(){throw Error('Unexpected access change');}
 				window.existingRole='student';
 				export async function createRegistrar(){if(window.failure==='native')throw new Error('SECRET smtp credentials');if(window.failure==='server')throw new HandledHttpError({status:500,message:'SECRET database credentials'});throw new HandledHttpError({status:409,message:'A '+window.existingRole+' account already exists with this email.'});}
 				export async function resendMagicLink(){}`,

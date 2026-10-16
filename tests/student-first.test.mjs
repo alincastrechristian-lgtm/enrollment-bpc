@@ -49,6 +49,116 @@ const personal = {
 	address: 'Malolos, Bulacan',
 	contactNumber: '09171234567'
 };
+
+test('staff delete only unfinished students without enrollment history and clean linked auth data', async (t) => {
+	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+		const f = fixture(t);
+		f.state.role = role;
+		const created = await f.createStudent(personal);
+		for (const denied of [Role.STUDENT, null]) {
+			f.state.role = denied;
+			await assert.rejects(f.deleteStudent({ userId: created.userId }), status(denied ? 403 : 401));
+		}
+		f.state.role = role;
+		await assert.rejects(f.deleteStudent({ userId: 'caller' }), status(404));
+		f.db
+			.insert(schema.account)
+			.values({
+				id: 'a',
+				accountId: created.userId,
+				providerId: 'credential',
+				userId: created.userId,
+				password: 'hash'
+			})
+			.run();
+		f.db
+			.insert(schema.session)
+			.values({
+				id: 's',
+				token: 'session-token',
+				userId: created.userId,
+				expiresAt: new Date(Date.now() + 60000)
+			})
+			.run();
+		f.db
+			.insert(schema.twoFactor)
+			.values({ id: 'two', userId: created.userId, secret: 'secret', backupCodes: 'codes' })
+			.run();
+		f.db
+			.insert(schema.verification)
+			.values([
+				{
+					id: 'v1',
+					identifier: 'reset-password:student-token',
+					value: created.userId,
+					expiresAt: new Date(Date.now() + 60000)
+				},
+				{
+					id: 'v2',
+					identifier: 'reset-password:other-token',
+					value: 'caller',
+					expiresAt: new Date(Date.now() + 60000)
+				}
+			])
+			.run();
+		f.db
+			.insert(schema.notification)
+			.values({
+				recipientId: created.userId,
+				actorId: 'caller',
+				type: 'account_setup',
+				title: 'Setup',
+				message: 'Setup requested'
+			})
+			.run();
+		await f.deleteStudent({ userId: created.userId });
+		assert.equal(f.db.select().from(schema.user).all().length, 1);
+		for (const table of [
+			schema.studentData,
+			schema.account,
+			schema.session,
+			schema.twoFactor,
+			schema.notification
+		])
+			assert.equal(f.db.select().from(table).all().length, 0);
+		assert.deepEqual(
+			f.db
+				.select()
+				.from(schema.verification)
+				.all()
+				.map((row) => row.id),
+			['v2']
+		);
+		assert.equal(f.db.select().from(schema.studentSequence).get().lastNumber, 1);
+		assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+	}
+});
+
+test('stale deletion requests preserve completed setup and all enrollment statuses, and failures roll back cleanup', async (t) => {
+	const f = fixture(t);
+	const created = await f.createStudent(personal);
+	f.sqlite.prepare('UPDATE user SET setup_complete=1 WHERE id=?').run(created.userId);
+	await assert.rejects(f.deleteStudent({ userId: created.userId }), status(409));
+	f.sqlite.prepare('UPDATE user SET setup_complete=0 WHERE id=?').run(created.userId);
+	const enrolled = await f.enrollStudent(f.input(created));
+	f.sqlite.prepare('UPDATE student SET enrollment_id=NULL WHERE user_id=?').run(created.userId);
+	for (const enrollmentStatus of ['enrolled', 'completed', 'dropped']) {
+		f.sqlite
+			.prepare('UPDATE enrollment SET status=? WHERE id=?')
+			.run(enrollmentStatus, enrolled.enrollmentId);
+		await assert.rejects(f.deleteStudent({ userId: created.userId }), status(409));
+	}
+	const fresh = await f.createStudent({ ...personal, email: 'fresh@example.com' });
+	f.sqlite.exec(
+		"CREATE TRIGGER fail_student_deletion BEFORE DELETE ON user BEGIN SELECT RAISE(ABORT, 'SECRET database detail'); END"
+	);
+	await assert.rejects(
+		f.deleteStudent({ userId: fresh.userId }),
+		(cause) => status(500)(cause) && !cause.body.message.includes('SECRET')
+	);
+	assert.ok(f.sqlite.prepare('SELECT id FROM student WHERE user_id=?').get(fresh.userId));
+	assert.ok(f.sqlite.prepare('SELECT id FROM user WHERE id=?').get(fresh.userId));
+});
 function fixture(t) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
@@ -1022,6 +1132,7 @@ test('student filters combine current enrollment fields without matching enrollm
 	});
 	const { load: page } = load('src/routes/user/students/+page.server.ts', {
 		'#lib/Roles.js': { Role },
+		'#lib/students.js': load('src/lib/students.ts'),
 		'#lib/schema.js': schema,
 		'#lib/server/auth.js': { validateUser },
 		'#lib/server/db/index.js': { db: f.db },

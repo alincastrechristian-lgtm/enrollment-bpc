@@ -6,3 +6,15 @@ export const createStudentSchema = z.object({
 	address: z.string().trim().min(1, 'Address is required').max(500),
 	contactNumber: z.string().trim().min(1, 'Contact number is required').max(30)
 });
+
+export function canDeleteStudentAccount({
+	setupComplete,
+	currentEnrollmentId,
+	hasEnrollment
+}: {
+	setupComplete: boolean;
+	currentEnrollmentId?: string | null;
+	hasEnrollment: boolean;
+}) {
+	return !setupComplete && !currentEnrollmentId && !hasEnrollment;
+}

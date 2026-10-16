@@ -1,13 +1,34 @@
 <script lang="ts">
-	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
+	import {
+		showError,
+		showLoading,
+		showSuccess,
+		showYesNo
+	} from '#lib/components/Popup/Popup.svelte.js';
 
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
+	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
+	import RevokeSessionsAction from '#lib/components/RevokeSessionsAction.svelte';
 	import { filterUserSchema } from '#lib/schema.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { refreshAll } from '$app/navigation';
-	import { Mail, MailCheck, Plus, User, UserPlus, X } from '@lucide/svelte';
-	import { createRegistrar, resendMagicLink } from '#lib/actions/user.remote.js';
+	import {
+		Ellipsis,
+		Mail,
+		MailCheck,
+		Plus,
+		User,
+		UserPlus,
+		UserCheck,
+		UserRoundX,
+		X
+	} from '@lucide/svelte';
+	import {
+		createRegistrar,
+		resendMagicLink,
+		setRegistrarDisabled
+	} from '#lib/actions/user.remote.js';
 
 	let { data } = $props();
 
@@ -16,6 +37,44 @@
 	let registrarForm: HTMLFormElement;
 	let creating = $state(false);
 	let resendingEmail = $state<string | null>(null);
+	let changingAccess = $state(false);
+	async function changeAccess(registrar: { id: string; name: string; banned: boolean | null }) {
+		if (changingAccess || resendingEmail) return;
+		changingAccess = true;
+		const disabled = !registrar.banned;
+		let updated = false;
+		try {
+			if (
+				!(await showYesNo({
+					title: disabled ? 'Disable registrar account?' : 'Enable registrar account?',
+					message: disabled
+						? `Disable ${registrar.name}'s access? They will be signed out and cannot sign in until re-enabled. Their account and activity history will be kept.`
+						: `Restore ${registrar.name}'s access? They can sign in again.`,
+					warning: disabled,
+					hintText: disabled ? 'You can enable this account again at any time.' : '',
+					yesText: disabled ? 'Disable account' : 'Enable account',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			showLoading(disabled ? 'Disabling registrar...' : 'Enabling registrar...');
+			await setRegistrarDisabled({ userId: registrar.id, disabled });
+			updated = true;
+			await refreshAll();
+			showSuccess(disabled ? 'Registrar account disabled.' : 'Registrar account enabled.');
+		} catch (cause) {
+			showError(
+				getErrorMessage(
+					cause,
+					updated
+						? 'Registrar access updated. Refresh the list to continue.'
+						: 'Failed to update registrar access. Please try again.'
+				)
+			);
+		} finally {
+			changingAccess = false;
+		}
+	}
 
 	function openRegistrarPopup() {
 		if (creating) return;
@@ -59,7 +118,7 @@
 	}
 
 	async function resend(email: string) {
-		if (resendingEmail) return;
+		if (resendingEmail || changingAccess) return;
 		resendingEmail = email;
 		showLoading();
 
@@ -106,6 +165,7 @@
 		>
 			<th class="py-4 pl-5">Registrar</th>
 			<th>Verification</th>
+			<th>Access</th>
 			<th class="pr-5 text-right">Actions</th>
 		</tr>
 	{/snippet}
@@ -147,22 +207,54 @@
 			</td>
 
 			<!-- Actions -->
+			<td>
+				<span class={`badge badge-sm ${registrar.banned ? 'badge-error' : 'badge-success'}`}>
+					{registrar.banned ? 'Disabled' : 'Enabled'}
+				</span>
+			</td>
 			<td class="pr-5">
 				<div class="flex justify-end pr-2">
-					{#if !registrar.setupComplete}
-						<button
-							type="button"
-							class="btn gap-2 border-base-300 btn-outline btn-sm"
-							disabled={!!resendingEmail}
-							onclick={() => resend(registrar.email)}
-						>
-							<MailCheck class="size-4" aria-hidden="true" />{resendingEmail === registrar.email
-								? 'Sending…'
-								: 'Resend setup link'}
-						</button>
-					{:else}
-						<span class="text-xs text-base-content/45">Account ready</span>
-					{/if}
+					<Dropdown id={`registrar-${registrar.id}`} label={`Actions for ${registrar.name}`}>
+						{#snippet trigger()}
+							<Ellipsis class="size-4" aria-hidden="true" />
+						{/snippet}
+						<ul class="menu w-full p-0">
+							{#if !registrar.setupComplete && !registrar.banned}
+								<li>
+									<button
+										type="button"
+										disabled={changingAccess || !!resendingEmail}
+										onclick={() => resend(registrar.email)}
+									>
+										<MailCheck class="size-4" aria-hidden="true" />{resendingEmail ===
+										registrar.email
+											? 'Sending…'
+											: 'Resend setup link'}
+									</button>
+								</li>
+							{/if}
+							<li>
+								<RevokeSessionsAction
+									userId={registrar.id}
+									name={registrar.name}
+									disabled={changingAccess || !!resendingEmail}
+								/>
+							</li>
+							<li class={registrar.banned ? 'text-success' : 'text-error'}>
+								<button
+									type="button"
+									disabled={changingAccess || !!resendingEmail}
+									onclick={() => changeAccess(registrar)}
+								>
+									{#if registrar.banned}
+										<UserCheck class="size-4" aria-hidden="true" />Enable account
+									{:else}
+										<UserRoundX class="size-4" aria-hidden="true" />Disable account
+									{/if}
+								</button>
+							</li>
+						</ul>
+					</Dropdown>
 				</div>
 			</td>
 		</tr>

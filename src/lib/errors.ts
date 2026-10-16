@@ -26,6 +26,7 @@ export function getPublicError({ kind, error }: CaughtError): App.Error {
 // Auth responses come from a separate API. Translate known codes, never provider messages.
 const authMessages: Record<string, string> = {
 	INVALID_EMAIL_OR_PASSWORD: 'Incorrect email or password.',
+	BANNED_USER: 'This account is disabled. Contact an administrator.',
 	EMAIL_NOT_VERIFIED: 'Verify your email before signing in.',
 	INVALID_EMAIL: 'Enter a valid email address.',
 	PASSWORD_TOO_SHORT: 'Use at least 8 characters for your password.',

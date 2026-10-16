@@ -3,7 +3,14 @@
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
-	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
+	import RevokeSessionsAction from '#lib/components/RevokeSessionsAction.svelte';
+	import {
+		showError,
+		showLoading,
+		showSuccess,
+		showYesNo
+	} from '#lib/components/Popup/Popup.svelte.js';
+	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { filterStudentSchema } from '#lib/schema.js';
 	import {
@@ -15,7 +22,7 @@
 		Trash2,
 		UserPlus
 	} from '@lucide/svelte';
-	import { resendMagicLink } from '#lib/actions/user.remote.js';
+	import { deleteStudent, resendMagicLink } from '#lib/actions/user.remote.js';
 
 	import StudentDialog from './StudentDialog.svelte';
 	let studentDialog = $state<StudentDialog>();
@@ -23,9 +30,44 @@
 
 	const students = $derived(data.users);
 	let resending = $state(false);
+	let deleting = $state(false);
+
+	async function removeStudent(student: { id: string; name: string }) {
+		if (deleting || resending) return;
+		deleting = true;
+		let deleted = false;
+		try {
+			if (
+				!(await showYesNo({
+					title: 'Delete student account?',
+					message: `Permanently delete ${student.name}'s account and personal details? This cannot be undone.`,
+					warning: true,
+					yesText: 'Delete account',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			showLoading('Deleting student account...');
+			await deleteStudent({ userId: student.id });
+			deleted = true;
+			await refreshAll();
+			showSuccess('Student account deleted successfully.');
+		} catch (cause) {
+			showError(
+				getErrorMessage(
+					cause,
+					deleted
+						? 'Student deleted. Refresh the student list to continue.'
+						: 'Failed to delete student account. Please try again.'
+				)
+			);
+		} finally {
+			deleting = false;
+		}
+	}
 
 	async function resend(email: string) {
-		if (resending) return;
+		if (resending || deleting) return;
 		resending = true;
 		showLoading();
 
@@ -180,12 +222,24 @@
 								</li>
 							{/if}
 
-							<li class="text-error">
-								<button type="button" disabled title="Deletion is not available yet">
-									<Trash2 class="h-4 w-4" />
-									Delete
-								</button>
+							<li>
+								<RevokeSessionsAction
+									userId={student.id}
+									name={student.name}
+									disabled={deleting || resending}
+								/>
 							</li>
+							{#if student.canDelete}
+								<li class="text-error">
+									<button
+										type="button"
+										disabled={deleting || resending}
+										onclick={() => removeStudent(student)}
+									>
+										<Trash2 class="h-4 w-4" aria-hidden="true" />Delete account
+									</button>
+								</li>
+							{/if}
 						</ul>
 					</Dropdown>
 				</div>

@@ -72,6 +72,9 @@ flowchart TD
 | ----------------------------------------- | ----------------------------------------- | --------------------------------- | ---------------------------- |
 | Create/view students; enroll students | Yes | Yes | No |
 | Create/list registrar accounts | Yes | No | No |
+| Delete unfinished students without enrollment history | Yes | Yes | No |
+| Disable/enable registrar accounts | Yes | No | No |
+| Revoke account sessions | Students and registrars | Students only | No |
 | Manage programs, subjects, curricula | Yes | View only | Own assigned curriculum only |
 | Edit grades | Current/historical, including finalized | Current, unfinalized only | No |
 | Finalize grades | Current/historical, not already finalized | Current, not already finalized | No |
@@ -574,8 +577,9 @@ Notifications use saved backend events. The table also identifies remaining unfi
 | Notifications: open row | Show safe message details and persist read status only for the student recipient |
 | Notifications: Mark all as read | Student recipients mark their own notifications read; staff have no read controls |
 | Reports                             | Coming-soon screen linking to live dashboard and records; no report generation                          |
-| Student Edit/Delete | Disabled; no personal-data edit/delete workflow |
-| Registrar Edit/Delete/View          | Not offered; the directory shows account details and supports setup-link resend for unfinished accounts |
+| Revoke sessions | Confirm sign-out on all devices. Better Auth revokes all target sessions without changing password or access; admins can target students/registrars, registrars can target students only |
+| Student Edit/Delete | Editing remains unavailable. Admin/registrar can confirm deletion only while setup is incomplete and no current or historical enrollment exists; server rechecks atomically and removes linked auth data and reset tokens |
+| Registrar access | Admin confirms Disable/Enable. Better Auth ban/unban APIs control sign-in; disabling revokes active sessions and retains account/history. Actions use the shared dropdown. Setup-link resend is available for enabled, unfinished accounts; admins can also confirm Revoke sessions |
 | Profile editing | Read-only page; no save action |
 | Two-factor account flow | Auth plugin exists, but no complete dedicated verification/enrollment UI in current pages |
 
@@ -589,6 +593,9 @@ All 26 exported remote commands are covered above. Source links are relative to 
 | --------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
 | [user.remote.ts](../src/lib/actions/user.remote.ts) | `createStudent` | Create personal record and account, assign student number, request setup email |
 | same | `createRegistrar` | Create registrar account and request setup email |
+| same | `deleteStudent` | Atomically delete an unfinished student only if no enrollment history exists; preserve student numbering |
+| same | `setRegistrarDisabled` | Admin-only Better Auth ban/unban for registrar accounts |
+| same | `revokeAccountSessions` | Role-scoped Better Auth session revocation for student/registrar accounts |
 | same | `resendMagicLink` | Request account setup/reset link |
 | same | `enrollStudent` | Validate and save enrollment, subjects, current pointer; attempt email |
 | [password.remote.ts](../src/lib/actions/password.remote.ts) | `resetPasswordAndSignIn` | Consume reset token, change password, attempt sign-in |
