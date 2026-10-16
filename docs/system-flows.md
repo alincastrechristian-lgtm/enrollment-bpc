@@ -1,6 +1,6 @@
 # Enrollment system: actions and flowcharts
 
-Traced from the application at commit `f07fb8a`, October 16, 2026. These charts describe current behavior, including unfinished controls. Open this file in a Mermaid-capable Markdown preview to render the diagrams.
+These charts describe current application behavior, including unfinished controls. Enrollment workflows were traced at commit `f07fb8a`; staff dashboard details were updated October 16, 2026. Open this file in a Mermaid-capable Markdown preview to render the diagrams.
 
 **Reading guide:** rectangles are actions/results; diamonds are checks. A confirmation's **Cancel/No** path stops without saving unless stated otherwise. Database updates and email delivery are separate steps.
 
@@ -418,6 +418,8 @@ Program active-curriculum selection uses the same publication/activation rules a
 
 ## 13. Student dashboard, enrollment, curriculum, and profile
 
+**Staff dashboards:** admin and registrar dashboards load live aggregates from `+page.server.ts`. Both show current-enrollment totals, six-month enrollment activity, active enrollment counts by program, released grade outcomes, recent enrollments, and worklists for grades, clearance, follow-ups, setup, and next-term readiness. Click a worklist category to switch its preview; click a row action to open the student or enrollment record. Counts cover all matching records; previews show up to six, oldest terms first. Follow-ups include unresolved historical terms. Create student opens the existing dialog. Program bars link to the student list filtered by program (all enrollment statuses). Admin additionally sees registrar-account and catalog health; registrar sees next-term readiness guidance. Data refreshes on page load; no dashboard action automatically sends email or changes academic records.
+
 ```mermaid
 flowchart TD
     Dashboard[Student opens dashboard] --> Read[Load only signed-in student's enrollment history]
@@ -547,8 +549,6 @@ These are visible UI, not working backend workflows:
 
 | Screen/control | What actually happens now |
 |---|---|
-| Admin dashboard | Static sample statistics and recent records |
-| Registrar dashboard | Placeholder text |
 | Student dashboard notification list | Sample notifications; read/filter actions affect component state only |
 | Notifications page | Hardcoded list; search has no backend behavior |
 | Notifications: compose | Opens compose dialog |

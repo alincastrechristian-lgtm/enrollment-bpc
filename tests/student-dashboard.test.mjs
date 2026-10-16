@@ -90,6 +90,10 @@ function fixture(t, finalized = true) {
 		'src/lib/server/student-dashboard.ts',
 		dependencies
 	);
+	dependencies['#lib/server/staff-dashboard.js'] = loadModule(
+		'src/lib/server/staff-dashboard.ts',
+		dependencies
+	);
 	const { load } = loadModule('src/routes/user/dashboard/+page.server.ts', dependencies);
 	const historyLoad = loadModule('src/routes/user/enrollment/+page.server.ts', dependencies).load;
 	const event = (id = 'u', role = Role.STUDENT) => ({
@@ -102,6 +106,8 @@ function fixture(t, finalized = true) {
 	});
 	return {
 		sqlite,
+		staff: (role, now) =>
+			dependencies['#lib/server/staff-dashboard.js'].getStaffDashboard(role, now),
 		load: (id, role) => load(event(id, role)),
 		history: (id) => historyLoad(event(id))
 	};
@@ -242,11 +248,97 @@ test('all-passing grades and completed enrollment status do not produce false co
 });
 
 for (const role of [Role.ADMIN, Role.REGISTRAR]) {
-	test(`${role} dashboard keeps its own view without loading student records`, async (t) => {
+	test(`${role} dashboard receives staff data instead of a student dashboard`, async (t) => {
 		const f = fixture(t);
-		assert.deepEqual(await f.load('u', role), { studentDashboard: null });
+		const result = await f.load('u', role);
+		assert.equal(result.studentDashboard, null);
+		assert.equal(result.staffDashboard.overview.totalStudents, 3);
+		assert.equal(result.staffDashboard.admin !== null, role === Role.ADMIN);
+		assert.equal(JSON.stringify(result.staffDashboard).includes('SECRET'), false);
 	});
 }
+
+test('staff totals follow current links and separate setup, completion, dropped records and historical follow-ups', (t) => {
+	const f = fixture(t);
+	const initial = f.staff(Role.REGISTRAR);
+	assert.equal(initial.overview.activeStudents, 2);
+	assert.equal(initial.programs[0].students, 2);
+	f.sqlite.exec(`
+		UPDATE user SET setup_complete=1 WHERE id IN ('u','other');
+		UPDATE enrollment SET status='completed', submitted_clearance=1, meeting_request_sent_at=1000 WHERE id='current';
+		UPDATE enrollment SET status='dropped' WHERE id='private';
+		UPDATE enrollment SET finalized_grades=1 WHERE id='newer';
+		INSERT INTO enrollment_subject (id,enrollment_id,subject_id,source,subject_code,subject_name,units,grade,added_by)
+		VALUES ('historical-concern','newer','s0','extra','S0','Subject',3,5,'u');
+	`);
+	let data = f.staff(Role.ADMIN);
+	assert.deepEqual(data.overview, {
+		totalStudents: 3,
+		activeStudents: 0,
+		completedStudents: 1,
+		droppedStudents: 1,
+		withoutEnrollment: 1,
+		awaitingGrades: 0,
+		awaitingClearance: 0,
+		readyForNextTerm: 1,
+		setupPending: 1
+	});
+	assert.deepEqual(data.gradeResults, { passed: 3, failed: 2, incomplete: 1 });
+	assert.deepEqual(data.followUpCount, { total: 2, sent: 1 });
+	assert.equal(data.queues.ready[0].enrollmentId, 'current');
+	assert.equal(data.admin.programs.missingCurriculum, 1);
+	f.sqlite.exec("UPDATE enrollment SET follow_up_completed_at=2000 WHERE id='current'");
+	data = f.staff(Role.REGISTRAR);
+	assert.equal(data.admin, null);
+	assert.equal(data.followUpCount.total, 1);
+	assert.equal(data.queues.followUp[0].enrollmentId, 'newer');
+	f.sqlite.exec("UPDATE enrollment_subject SET grade=3 WHERE enrollment_id='newer'");
+	assert.equal(f.staff(Role.REGISTRAR).followUpCount.total, 0);
+	f.sqlite.exec(
+		"UPDATE enrollment SET status='enrolled',finalized_grades=0,submitted_clearance=0 WHERE id='current'"
+	);
+	data = f.staff(Role.REGISTRAR);
+	assert.equal(data.overview.awaitingGrades, 1);
+	assert.equal(data.queues.grades[0].enrollmentId, 'current');
+	f.sqlite.exec("UPDATE user SET setup_complete=0 WHERE id='u'");
+	assert.equal(f.staff(Role.REGISTRAR).overview.awaitingGrades, 0);
+});
+
+test('staff activity groups six Manila calendar months, including dropped events, and handles empty data', (t) => {
+	const f = fixture(t);
+	for (const [id, timestamp] of [
+		['current', '2026-04-30T16:00:00Z'],
+		['newer', '2026-05-31T16:00:00Z'],
+		['private', '2026-09-30T16:00:00Z']
+	])
+		f.sqlite
+			.prepare('UPDATE enrollment SET enrolled_at=? WHERE id=?')
+			.run(Date.parse(timestamp), id);
+	f.sqlite.exec("UPDATE enrollment SET status='dropped' WHERE id='private'");
+	const now = new Date('2026-10-15T17:00:00Z');
+	let data = f.staff(Role.ADMIN, now);
+	assert.deepEqual(
+		data.trend.map(({ key, total }) => [key, total]),
+		[
+			['2026-05', 1],
+			['2026-06', 1],
+			['2026-07', 0],
+			['2026-08', 0],
+			['2026-09', 0],
+			['2026-10', 1]
+		]
+	);
+	f.sqlite.exec(
+		'UPDATE student SET enrollment_id=NULL; DELETE FROM enrollment_subject; DELETE FROM enrollment; DELETE FROM student; DELETE FROM user;'
+	);
+	data = f.staff(Role.ADMIN, now);
+	assert.equal(data.overview.totalStudents, 0);
+	assert.equal(data.overview.awaitingGrades, 0);
+	assert.deepEqual(data.gradeResults, { passed: 0, failed: 0, incomplete: 0 });
+	assert.ok(data.trend.every((entry) => entry.total === 0));
+	assert.deepEqual(data.queues.setup, []);
+	assert.deepEqual(data.recentEnrollments, []);
+});
 
 for (const role of [null, 'unknown']) {
 	test(`dashboard rejects ${role ?? 'anonymous'} access`, async (t) => {
