@@ -49,7 +49,17 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		: null;
 	if (record.student.currentEnrollmentId && !current)
 		error(409, 'Current enrollment is unavailable. Refresh and try again.');
-	const enrollmentLockReason = getEnrollmentLockReason(current);
+	const gradeConcerns = getGradeConcerns(
+		current
+			? db
+					.select({ grade: enrollmentSubject.grade })
+					.from(enrollmentSubject)
+					.where(eq(enrollmentSubject.enrollmentId, current.id))
+					.all()
+			: [],
+		!!current?.finalizedGrades && current.status !== 'dropped'
+	);
+	const enrollmentLockReason = getEnrollmentLockReason(current, gradeConcerns.failedCount);
 	const programs = db
 		.select({ code: program.code, name: program.name })
 		.from(program)
@@ -70,16 +80,7 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 	return {
 		restoringDropped: restoring,
 		enrollmentLockReason,
-		gradeConcerns: getGradeConcerns(
-			current
-				? db
-						.select({ grade: enrollmentSubject.grade })
-						.from(enrollmentSubject)
-						.where(eq(enrollmentSubject.enrollmentId, current.id))
-						.all()
-				: [],
-			!!current?.finalizedGrades && !restoring
-		),
+		gradeConcerns,
 		student: {
 			...record.student,
 			name: record.name,

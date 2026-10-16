@@ -1,6 +1,6 @@
 # Enrollment system: actions and flowcharts
 
-These charts describe current application behavior, including unfinished controls. Enrollment workflows were traced at commit `f07fb8a`; staff dashboard details were updated October 16, 2026. Open this file in a Mermaid-capable Markdown preview to render the diagrams.
+Updated October 16, 2026. These charts describe current application behavior, including the public landing page, `/login`, staff dashboards, and mandatory completed Registrar meetings before reenrollment for current failed grades. Unfinished controls are identified separately. Open this file in a Mermaid-capable Markdown preview to render the diagrams.
 
 **Reading guide:** rectangles are actions/results; diamonds are checks. A confirmation's **Cancel/No** path stops without saving unless stated otherwise. Database updates and email delivery are separate steps.
 
@@ -51,10 +51,17 @@ flowchart TD
     Enroll --> Grades[Save and finalize grades]
     Grades --> Clearance[Verify clearance]
     Clearance --> Complete[Enrollment completed]
-    Complete --> Next[Enroll for next term]
+    Complete --> MeetingRequired{Failed grades?}
+    MeetingRequired -->|No| Next[Enroll for next term]
+    MeetingRequired -->|Yes| MeetingDone{Registrar follow-up completed?}
+    MeetingDone -->|Yes| Next
+    MeetingDone -->|No| FollowUp
     Next --> Enroll
     Grades --> FollowUp[Send meeting request if failed or INC]
     FollowUp --> Close[Complete follow-up after meeting]
+    Close --> Recheck{Grades and clearance complete?}
+    Recheck -->|No| Clearance
+    Recheck -->|Yes| MeetingRequired
     Enroll --> Drop[Drop current active enrollment]
     Drop --> Again[Enroll again; prefill dropped term and subjects]
     Again --> Enroll
@@ -153,7 +160,13 @@ flowchart TD
     Dropped -->|Yes| Restore[Prefill same school year, semester, year, program, section, subjects, and units]
     Dropped -->|No| Ready{Grades finalized AND clearance verified?}
     Ready -->|No| Block[Show enrollment-on-hold panel and View current enrollment]
-    Ready -->|Yes| Advance[Default current program and section; advance semester]
+    Ready -->|Yes| Meeting{Failed grades without completed Registrar meeting?}
+    Meeting -->|Yes| MeetingBlock[Reenrollment blocked]
+    MeetingBlock --> Request[Send meeting request if not yet sent]
+    Request --> Conduct[Student meets with Registrar]
+    Conduct --> Finish[Staff confirms Complete follow-up]
+    Finish --> Ready
+    Meeting -->|No| Advance[Default current program and section; advance semester]
     Advance --> Last{Previous term was last semester?}
     Last -->|Yes| NewYear[Default semester 1; increment year level and school-year start]
     Last -->|No| SameYear[Keep year level and school year]
@@ -234,7 +247,7 @@ flowchart TD
     Draft --> Save[Saved only when Enroll Student is confirmed]
 ```
 
-This list can include earlier terms. The reenrollment confirmation warning specifically checks the current enrollment's finalized failed/INC grades. Completing a meeting does not clear those grades or remove the warning. Sending or completing a meeting request is not an additional reenrollment requirement.
+This list can include earlier terms. The reenrollment confirmation warning specifically checks the current enrollment's finalized failed/INC grades. Failed grades (above 3.00) in the current non-dropped enrollment require a completed Registrar follow-up before reenrollment; sending the meeting email alone is insufficient. Both staff roles must meet this requirement. INC-only grades retain the acknowledgment warning without requiring a completed meeting. Completing a meeting does not clear those grades or remove the warning.
 
 ## 7. Editing and finalizing grades
 
@@ -288,11 +301,15 @@ flowchart TD
     Check --> Commit[Transaction: submittedClearance=true; status=completed]
     Commit --> Complete
     Complete --> Current{This is current enrollment?}
-    Current -->|Yes| Next[Enroll for next term becomes available]
+    Current -->|Yes| Meeting{Failed grades with follow-up unfinished?}
+    Meeting -->|Yes| FollowUp[Complete Registrar meeting before reenrollment]
+    Meeting -->|No| Next[Enroll for next term becomes available]
     Current -->|No| History[Historical record updated]
 ```
 
 `completed` means grades finalized **and** clearance verified; it does not mean every subject passed. Failed/INC grades do not prevent clearance verification. Clearance verification sends no separate email. The current-enrollment pointer remains on this record until a new enrollment replaces it.
+
+For a current enrollment with failed grades, `completed` status alone does not make the student ready for reenrollment. The Registrar meeting must also be recorded as completed; both admin and registrar are subject to this check.
 
 ## 9. Meeting requests and completing follow-ups
 
@@ -324,6 +341,7 @@ flowchart TD
 - If delivery succeeds but the send claim changed before saving the result, the server asks staff to refresh rather than silently claim success.
 - Pending meeting prompts can include historical enrollments. They disappear when follow-up completes, enrollment is dropped, or its failed/INC concerns are resolved by corrected grades.
 - Completing follow-up changes only its timestamp. It does not change grades, clearance, or enrollment status, and sends no completion email.
+- Current enrollment failures block reenrollment until this completion is recorded. The Next term dashboard worklist and enrollment buttons follow the same requirement; the enrollment command rechecks it inside its transaction.
 - Meeting requests do not schedule a date/time automatically.
 
 ## 10. Dropping and reenrolling

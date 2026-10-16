@@ -1,5 +1,9 @@
 import { Role } from '#lib/Roles.js';
-import { getGradeConcerns, getGradeStatus } from '#lib/enrollment-grades.js';
+import {
+	getEnrollmentLockReason,
+	getGradeConcerns,
+	getGradeStatus
+} from '#lib/enrollment-grades.js';
 import {
 	user,
 	enrollment,
@@ -43,17 +47,7 @@ type EnrollmentSubjectValues = Omit<
 	'enrollmentId' | 'addedBy'
 >;
 
-export function getEnrollmentLockReason(
-	current: Pick<
-		typeof enrollment.$inferSelect,
-		'finalizedGrades' | 'submittedClearance' | 'status'
-	> | null
-) {
-	if (current?.status === 'dropped') return null;
-	if (current && (!current.finalizedGrades || !current.submittedClearance))
-		return 'Finalize grades and verify clearance for the current enrollment before enrolling this student again.';
-	return null;
-}
+export { getEnrollmentLockReason } from '#lib/enrollment-grades.js';
 
 export function getOutstandingEnrollmentSubjects(
 	database: typeof db | Transaction,
@@ -180,8 +174,6 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 			)
 			.get();
 		if (!current) error(409, 'Current enrollment is unavailable. Refresh and try again.');
-		const lockReason = getEnrollmentLockReason(current);
-		if (lockReason) error(409, lockReason);
 		const concerns = getGradeConcerns(
 			database
 				.select({ grade: enrollmentSubject.grade })
@@ -190,6 +182,8 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 				.all(),
 			current.finalizedGrades && current.status !== 'dropped'
 		);
+		const lockReason = getEnrollmentLockReason(current, concerns.failedCount);
+		if (lockReason) error(409, lockReason);
 		if ((concerns.failedCount || concerns.incompleteCount) && !data.acknowledgeGradeConcerns)
 			error(
 				409,

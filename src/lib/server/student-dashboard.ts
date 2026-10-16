@@ -74,7 +74,7 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 		nextSteps.push({
 			id: 'failed',
 			title: 'Get advice about your failing grades',
-			detail: `Visit the Registrar's Office to discuss ${failed.map((subject) => subject.code).join(', ')} and your enrollment options.`
+			detail: `Visit the Registrar's Office to discuss ${failed.map((subject) => subject.code).join(', ')} and your enrollment options.${current?.status !== 'dropped' && !current?.followUpCompletedAt ? ' Complete a meeting with the Registrar before your next enrollment.' : ''}`
 		});
 	if (!nextSteps.length)
 		nextSteps.push(

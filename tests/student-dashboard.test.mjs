@@ -280,18 +280,20 @@ test('staff totals follow current links and separate setup, completion, dropped 
 		withoutEnrollment: 1,
 		awaitingGrades: 0,
 		awaitingClearance: 0,
-		readyForNextTerm: 1,
+		readyForNextTerm: 0,
 		setupPending: 1
 	});
 	assert.deepEqual(data.gradeResults, { passed: 3, failed: 2, incomplete: 1 });
 	assert.deepEqual(data.followUpCount, { total: 2, sent: 1 });
-	assert.equal(data.queues.ready[0].enrollmentId, 'current');
+	assert.deepEqual(data.queues.ready, []);
 	assert.equal(data.admin.programs.missingCurriculum, 1);
 	f.sqlite.exec("UPDATE enrollment SET follow_up_completed_at=2000 WHERE id='current'");
 	data = f.staff(Role.REGISTRAR);
 	assert.equal(data.admin, null);
 	assert.equal(data.followUpCount.total, 1);
 	assert.equal(data.queues.followUp[0].enrollmentId, 'newer');
+	assert.equal(data.overview.readyForNextTerm, 1);
+	assert.equal(data.queues.ready[0].enrollmentId, 'current');
 	f.sqlite.exec("UPDATE enrollment_subject SET grade=3 WHERE enrollment_id='newer'");
 	assert.equal(f.staff(Role.REGISTRAR).followUpCount.total, 0);
 	f.sqlite.exec(

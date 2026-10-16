@@ -73,7 +73,7 @@
 					{
 						label: 'Ready for next term',
 						value: overview.readyForNextTerm,
-						detail: 'Grades finalized · clearance verified',
+						detail: 'Grades, clearance & required follow-up complete',
 						icon: CircleCheck,
 						color: 'bg-success/10 text-success',
 						href: '#worklist'
@@ -169,7 +169,7 @@
 			setup:
 				'These students need to finish account setup before staff can edit or finalize grades.',
 			ready:
-				'Current enrollment is complete. Review each student before enrolling them for the next term.'
+				'Grades and clearance are complete, including any required Registrar meeting for failed grades. Review each student before enrolling them for the next term.'
 		}[selectedQueue]
 	);
 	const trendTotal = $derived(data.trend.reduce((sum, entry) => sum + entry.total, 0));
@@ -820,8 +820,8 @@
 					</h2>
 					<p class="mt-1 text-xs leading-relaxed text-base-content/60">
 						{overview.readyForNextTerm
-							? 'Their current grades are finalized and clearance is verified. Review academic concerns before reenrolling.'
-							: 'Once grades are finalized and clearance is verified, students appear in your Next term worklist.'}
+							? 'Grades, clearance, and required Registrar follow-ups are complete. Review academic concerns before reenrolling.'
+							: 'Students appear here after grades, clearance, and any required Registrar meeting for failed grades are complete.'}
 					</p>
 				</div>
 			</div>

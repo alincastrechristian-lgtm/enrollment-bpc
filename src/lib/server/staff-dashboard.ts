@@ -39,6 +39,17 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 			status: enrollment.status,
 			finalized: enrollment.finalizedGrades,
 			clearance: enrollment.submittedClearance,
+			followUpCompletedAt: enrollment.followUpCompletedAt,
+			hasFailedGrades: exists(
+				db
+					.select({ id: enrollmentSubject.id })
+					.from(enrollmentSubject)
+					.where(
+						and(eq(enrollmentSubject.enrollmentId, enrollment.id), gt(enrollmentSubject.grade, 3))
+					)
+			)
+				.mapWith(Number)
+				.as('dashboard_has_failed_grades'),
 			programCode: curriculum.programCode,
 			schoolYearStart: enrollment.schoolYearStart,
 			semester: enrollment.semester,
@@ -73,7 +84,8 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 	const ready = and(
 		eq(students.status, 'completed'),
 		eq(students.finalized, true),
-		eq(students.clearance, true)
+		eq(students.clearance, true),
+		or(eq(students.hasFailedGrades, 0), isNotNull(students.followUpCompletedAt))
 	)!;
 	const setupDue = eq(students.setupComplete, false);
 	const overview = db

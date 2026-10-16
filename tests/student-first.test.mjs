@@ -337,6 +337,67 @@ test('reenrollment requires both finalized grades and verified clearance for adm
 	assert.equal(current.submittedClearance, false);
 });
 
+test('reenrollment with failed grades requires completed Registrar follow-up for both staff roles', async (t) => {
+	const f = fixture(t);
+	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+		f.state.role = role;
+		const created = await f.createStudent({ ...personal, email: `failed-${role}@example.com` });
+		const first = await f.enrollStudent(f.input(created));
+		const reference = { userId: created.userId, enrollmentId: first.enrollmentId };
+		f.sqlite.prepare('UPDATE user SET setup_complete=1 WHERE id=?').run(created.userId);
+		f.sqlite
+			.prepare(
+				"UPDATE enrollment SET finalized_grades=1,submitted_clearance=1,status='completed' WHERE id=?"
+			)
+			.run(first.enrollmentId);
+		f.sqlite
+			.prepare('UPDATE enrollment_subject SET grade=4 WHERE enrollment_id=?')
+			.run(first.enrollmentId);
+		const next = f.input(created, {
+			currentEnrollmentId: first.enrollmentId,
+			semester: 2,
+			acknowledgeGradeConcerns: true
+		});
+		const blocked = (cause) =>
+			status(409)(cause) && /Registrar.*meeting|meeting.*Registrar/i.test(cause.body.message);
+		await assert.rejects(f.enrollStudent(next), blocked);
+		const page = f.enrollmentPage(created.userId);
+		assert.match(page.enrollmentLockReason, /meeting/i);
+		assert.equal(page.plan, null);
+		await f.sendEnrollmentMeetingRequest(reference);
+		await assert.rejects(f.enrollStudent(next), blocked);
+		assert.equal(
+			f.sqlite
+				.prepare('SELECT count(*) n FROM enrollment WHERE student_id=?')
+				.get(created.studentId).n,
+			1
+		);
+		assert.equal(
+			f.sqlite.prepare('SELECT enrollment_id FROM student WHERE id=?').get(created.studentId)
+				.enrollment_id,
+			first.enrollmentId
+		);
+		await f.completeEnrollmentFollowUp(reference);
+		assert.equal(f.enrollmentPage(created.userId).enrollmentLockReason, null);
+		const reenrolled = await f.enrollStudent(next);
+		assert.notEqual(reenrolled.enrollmentId, first.enrollmentId);
+
+		const passing = await f.createStudent({ ...personal, email: `passing-${role}@example.com` });
+		const passingFirst = await f.enrollStudent(f.input(passing));
+		f.sqlite
+			.prepare(
+				"UPDATE enrollment SET finalized_grades=1,submitted_clearance=1,status='completed' WHERE id=?"
+			)
+			.run(passingFirst.enrollmentId);
+		f.sqlite
+			.prepare('UPDATE enrollment_subject SET grade=3 WHERE enrollment_id=?')
+			.run(passingFirst.enrollmentId);
+		await f.enrollStudent(
+			f.input(passing, { currentEnrollmentId: passingFirst.enrollmentId, semester: 2 })
+		);
+	}
+});
+
 test('staff can drop and reenroll in the same term without losing the dropped record or subject history', async (t) => {
 	const f = fixture(t);
 	f.sqlite.exec(

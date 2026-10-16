@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getErrorMessage } from '#lib/errors.js';
+	import { getEnrollmentLockReason, getGradeConcerns } from '#lib/enrollment-grades.js';
 	import EnrollmentHistory from '#lib/components/EnrollmentHistory.svelte';
 	import { resendMagicLink } from '#lib/actions/user.remote.js';
 	import { showError, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
@@ -15,6 +16,15 @@
 	const enrollments = $derived(record?.enrollments ?? []);
 	const current = $derived(
 		enrollments.find((entry) => entry.id === record?.currentEnrollmentId) ?? null
+	);
+	const enrollmentLockReason = $derived(
+		getEnrollmentLockReason(
+			current,
+			getGradeConcerns(
+				current?.subjects ?? [],
+				!!current?.finalizedGrades && current.status !== 'dropped'
+			).failedCount
+		)
 	);
 	let resending = $state(false);
 	const formatter = new Intl.DateTimeFormat('en-PH', {
@@ -129,7 +139,7 @@
 							>
 								<Eye class="size-4" aria-hidden="true" />View
 							</a>
-							{#if current.status === 'dropped' || (current.finalizedGrades && current.submittedClearance)}
+							{#if !enrollmentLockReason}
 								<a
 									class="btn gap-2 btn-primary btn-sm"
 									href={resolve('/user/students/[userId]/enroll', { userId: student.id })}
@@ -151,6 +161,14 @@
 							</div>
 						{/each}
 					</dl>
+					{#if enrollmentLockReason}
+						<p
+							class="mt-5 rounded-xl border border-warning/30 bg-warning/10 p-4 text-xs leading-relaxed text-base-content/70"
+							role="status"
+						>
+							{enrollmentLockReason}
+						</p>
+					{/if}
 				{:else}
 					<p class="text-sm text-base-content/60">No current enrollment assigned.</p>
 				{/if}

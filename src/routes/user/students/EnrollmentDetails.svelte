@@ -9,7 +9,7 @@
 		verifyEnrollmentClearance
 	} from '#lib/actions/grades.remote.js';
 	import { showYesNo } from '#lib/components/Popup/Popup.svelte.js';
-	import { getGradeConcerns } from '#lib/enrollment-grades.js';
+	import { getEnrollmentLockReason, getGradeConcerns } from '#lib/enrollment-grades.js';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
@@ -65,6 +65,17 @@
 		)
 	);
 	const hasGradeConcerns = $derived(!!(gradeConcerns.failedCount || gradeConcerns.incompleteCount));
+	const enrollmentLockReason = $derived(
+		getEnrollmentLockReason(
+			{
+				status: enrollmentStatus,
+				finalizedGrades: finalized,
+				submittedClearance: clearanceVerified,
+				followUpCompletedAt
+			},
+			gradeConcerns.failedCount
+		)
+	);
 	const gradeConcernSummary = $derived(
 		[
 			gradeConcerns.failedCount ? `${gradeConcerns.failedCount} failing` : '',
@@ -203,7 +214,7 @@
 			if (
 				!(await showYesNo({
 					title: 'Complete follow-up?',
-					message: `Confirm that the academic follow-up with ${data.student.name} has been completed. This closes the meeting request on the student dashboard; grades and clearance stay as recorded.`,
+					message: `Confirm that the academic follow-up with ${data.student.name} has been completed. This closes the meeting request on the student dashboard and satisfies the meeting requirement for failed grades. Grades and clearance stay as recorded.`,
 					yesText: 'Complete follow-up',
 					noText: 'Cancel'
 				}))
@@ -260,7 +271,7 @@
 			if (
 				!(await showYesNo({
 					title: 'Verify clearance?',
-					message: `Confirm that ${data.student.name} has submitted clearance for this enrollment. This will allow the student to be enrolled again.`,
+					message: `Confirm that ${data.student.name} has submitted clearance for this enrollment. Reenrollment also requires a completed Registrar meeting if the current enrollment has failed grades.`,
 					warning: true,
 					yesText: 'Verify clearance',
 					noText: 'Cancel'
@@ -421,7 +432,7 @@
 						{#if !clearanceVerified}
 							<p class="mt-1 text-xs text-base-content/55">
 								{finalized
-									? 'Verify submitted clearance to allow the next enrollment.'
+									? 'Verify submitted clearance for this enrollment.'
 									: 'Available after grade finalization.'}
 							</p>
 						{/if}
@@ -451,6 +462,11 @@
 						<div>
 							<h3 class="text-sm font-semibold">Academic follow-up</h3>
 							<p class="mt-1 text-xs text-base-content/60">{gradeConcernSummary}</p>
+							{#if gradeConcerns.failedCount && !followUpCompletedAt}
+								<p class="mt-1 text-xs font-medium text-base-content/70">
+									Complete the Registrar meeting before reenrolling.
+								</p>
+							{/if}
 							{#if followUpCompletedAt}
 								<p class="mt-1 text-xs text-base-content/50">
 									Completed {formatter.format(followUpCompletedAt)}
@@ -499,25 +515,33 @@
 			>
 				<div>
 					<p class="text-sm font-semibold">
-						{dropped ? 'Enrollment dropped' : 'Ready for the next term'}
+						{dropped
+							? 'Enrollment dropped'
+							: enrollmentLockReason
+								? 'Registrar meeting required'
+								: 'Ready for the next term'}
 					</p>
 					<p class="mt-1 text-xs text-base-content/55">
 						{dropped
 							? 'Enroll again using the same term and subjects.'
-							: hasGradeConcerns
-								? 'Review grade concerns before enrolling.'
-								: 'Grades and clearance are complete.'}
+							: enrollmentLockReason
+								? enrollmentLockReason
+								: hasGradeConcerns
+									? 'Review grade concerns before enrolling.'
+									: 'Grades and clearance are complete.'}
 					</p>
 				</div>
-				<a
-					class="btn gap-2 btn-primary btn-sm"
-					href={resolve('/user/students/[userId]/enroll', { userId: data.student.id })}
-				>
-					{dropped ? 'Enroll again' : 'Enroll for next term'}<ArrowRight
-						class="size-4"
-						aria-hidden="true"
-					/>
-				</a>
+				{#if !enrollmentLockReason}
+					<a
+						class="btn gap-2 btn-primary btn-sm"
+						href={resolve('/user/students/[userId]/enroll', { userId: data.student.id })}
+					>
+						{dropped ? 'Enroll again' : 'Enroll for next term'}<ArrowRight
+							class="size-4"
+							aria-hidden="true"
+						/>
+					</a>
+				{/if}
 			</div>
 		{/if}
 	</section>
