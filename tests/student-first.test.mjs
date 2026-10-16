@@ -129,6 +129,7 @@ function fixture(t) {
 			command: (validation, handler) => async (input) => handler(validation.parse(input))
 		}
 	};
+	deps['#lib/server/notifications.js'] = load('src/lib/server/notifications.ts', deps);
 	deps['#lib/server/enrollment.js'] = load('src/lib/server/enrollment.ts', deps);
 	deps['#lib/server/student-enrollment.js'] = load('src/lib/server/student-enrollment.ts', deps);
 	const commands = load('src/lib/actions/user.remote.ts', deps);
@@ -179,6 +180,11 @@ test('staff create a student without enrollment or academic columns, then enroll
 	const enrolled = await f.enrollStudent(f.input(created));
 	assert.equal(enrolled.userId, created.userId);
 	assert.equal(enrolled.studentId, created.studentId);
+	const notice = f.db.select().from(schema.notification).get();
+	assert.equal(notice.type, 'enrollment_confirmed');
+	assert.equal(notice.actorId, 'caller');
+	assert.equal(notice.recipientId, created.userId);
+	assert.equal(notice.enrollmentId, enrolled.enrollmentId);
 	assert.equal(f.state.creates, 1);
 	assert.equal(f.state.emails, 1);
 	assert.equal(
@@ -426,6 +432,14 @@ test('staff can drop and reenroll in the same term without losing the dropped re
 		await assert.rejects(f.dropEnrollment({ ...reference, userId: 'caller' }), status(404));
 		f.state.dropEmailFail = role === Role.REGISTRAR;
 		const dropped = await f.dropEnrollment(reference);
+		assert.equal(
+			f.sqlite
+				.prepare(
+					"SELECT count(*) n FROM notification WHERE type='enrollment_dropped' AND enrollment_id=? AND actor_id='caller'"
+				)
+				.get(first.enrollmentId).n,
+			1
+		);
 		assert.equal(dropped.notificationSent, role === Role.ADMIN);
 		assert.equal(f.state.dropEmails.at(-1)[0], role + '@example.com');
 		const saved = f.sqlite.prepare('SELECT * FROM enrollment WHERE id=?').get(first.enrollmentId);
@@ -612,6 +626,14 @@ test('grade finalization sends email after commit, avoids duplicate sends, and s
 		f.state.finishMeetingEmail();
 		const result = await pending;
 		assert.equal(result.finalizedGrades, true);
+		assert.equal(
+			f.sqlite
+				.prepare(
+					"SELECT count(*) n FROM notification WHERE type='grades_finalized' AND enrollment_id=? AND actor_id='caller'"
+				)
+				.get(first.enrollmentId).n,
+			1
+		);
 		assert.equal(result.notificationSent, role === Role.ADMIN);
 		assert.equal(
 			f.sqlite.prepare('SELECT status FROM enrollment WHERE id=?').get(first.enrollmentId).status,
@@ -662,6 +684,14 @@ test('meeting requests validate concerns and ownership, retry failed email, and 
 	f.state.finishMeetingEmail();
 	const result = await sending;
 	assert.ok(result.meetingRequestSentAt instanceof Date);
+	assert.equal(
+		f.sqlite
+			.prepare(
+				"SELECT count(*) n FROM notification WHERE type='meeting_request' AND enrollment_id=? AND actor_id='caller'"
+			)
+			.get(first.enrollmentId).n,
+		1
+	);
 	saved = f.db.select().from(schema.enrollment).get();
 	assert.ok(saved.meetingRequestSentAt instanceof Date);
 	assert.equal(saved.meetingRequestStartedAt, null);
@@ -677,6 +707,7 @@ test('meeting requests validate concerns and ownership, retry failed email, and 
 	assert.equal(f.state.meetingEmails.length, 3);
 	// The additive migration and rollback preserve student, enrollment and grade records.
 	const grades = f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all();
+	f.sqlite.exec(readFileSync('drizzle/rollback/0028_notifications.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0027_complete_enrollment_follow_up.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0026_enrollment_lifecycle.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0025_enrollment_meeting_request.sql', 'utf8'));

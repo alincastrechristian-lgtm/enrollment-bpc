@@ -80,6 +80,7 @@ CREATE TABLE two_factor (id TEXT PRIMARY KEY, secret TEXT NOT NULL, backup_codes
 		'better-auth/plugins/two-factor': { twoFactor },
 		'better-auth/svelte-kit': { sveltekitCookies },
 		'../auth-permissions': permissions,
+		'./notifications': { recordNotification: () => {} },
 		'./email': { sendEmail: async () => true },
 		'./email-templates': {
 			createFirstLoginEmail: () => ({ subject: 'Setup', text: 'Setup', html: '<p>Setup</p>' }),

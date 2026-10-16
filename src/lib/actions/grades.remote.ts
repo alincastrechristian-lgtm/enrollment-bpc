@@ -4,6 +4,7 @@ import { curriculum, enrollment, enrollmentSubject, program } from '#lib/schema.
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { sendEmail } from '#lib/server/email.js';
+import { recordNotification } from '#lib/server/notifications.js';
 import {
 	createGradesFinalizedEmail,
 	createEnrollmentDroppedEmail,
@@ -45,18 +46,25 @@ export const dropEnrollment = command(enrollmentReferenceSchema, async (data) =>
 				.set({ status: 'dropped', droppedAt: new Date() })
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
-			return record;
+			const message = createEnrollmentDroppedEmail(
+				record.user.name,
+				record.enrollment.schoolYearStart,
+				record.enrollment.semester,
+				enrollmentEmailUrl()
+			);
+			recordNotification(tx, {
+				...message.notification,
+				recipientId: record.user.id,
+				actorId: locals.user.id,
+				enrollmentId: record.enrollment.id
+			});
+			return { ...record, message };
 		},
 		{ behavior: 'immediate' }
 	);
 	let notificationSent = false;
 	try {
-		const message = createEnrollmentDroppedEmail(
-			record.user.name,
-			record.enrollment.schoolYearStart,
-			record.enrollment.semester,
-			enrollmentEmailUrl()
-		);
+		const message = record.message;
 		notificationSent = await sendEmail(
 			record.user.email,
 			message.subject,
@@ -107,8 +115,9 @@ export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, a
 	);
 
 	let sent = false;
+	let message: ReturnType<typeof createMeetingRequestEmail> | undefined;
 	try {
-		const message = createMeetingRequestEmail(
+		message = createMeetingRequestEmail(
 			record.user.name,
 			record.enrollment.schoolYearStart,
 			record.enrollment.semester,
@@ -122,22 +131,34 @@ export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, a
 		eq(enrollment.id, record.enrollment.id),
 		eq(enrollment.meetingRequestStartedAt, startedAt)
 	);
-	if (!sent) {
+	if (!sent || !message) {
 		db.update(enrollment).set({ meetingRequestStartedAt: null }).where(claim).run();
 		error(502, 'Failed to send the meeting request email. Please try again.');
 	}
 	const sentAt = new Date();
-	const updated = db
-		.update(enrollment)
-		.set({ meetingRequestSentAt: sentAt, meetingRequestStartedAt: null })
-		.where(claim)
-		.returning({ id: enrollment.id })
-		.get();
-	if (!updated)
-		error(
-			409,
-			'The email was sent, but its status changed. Refresh the enrollment before continuing.'
-		);
+	const notice = message.notification;
+	db.transaction(
+		(tx) => {
+			const updated = tx
+				.update(enrollment)
+				.set({ meetingRequestSentAt: sentAt, meetingRequestStartedAt: null })
+				.where(claim)
+				.returning({ id: enrollment.id })
+				.get();
+			if (!updated)
+				error(
+					409,
+					'The email was sent, but its status changed. Refresh the enrollment before continuing.'
+				);
+			recordNotification(tx, {
+				...notice,
+				recipientId: record.user.id,
+				actorId: locals.user.id,
+				enrollmentId: record.enrollment.id
+			});
+		},
+		{ behavior: 'immediate' }
+	);
 	return { success: true, meetingRequestSentAt: sentAt };
 });
 
@@ -306,7 +327,20 @@ export const finalizeEnrollmentGrades = command(finalizeGradesSchema, async (dat
 				})
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
-			return { ...record, program: enrolledProgram };
+			const message = createGradesFinalizedEmail(
+				record.user.name,
+				record.enrollment.schoolYearStart,
+				record.enrollment.semester,
+				enrollmentEmailUrl(),
+				enrolledProgram
+			);
+			recordNotification(tx, {
+				...message.notification,
+				recipientId: record.user.id,
+				actorId: locals.user.id,
+				enrollmentId: record.enrollment.id
+			});
+			return { ...record, program: enrolledProgram, message };
 		},
 		{ behavior: 'immediate' }
 	);
@@ -314,13 +348,7 @@ export const finalizeEnrollmentGrades = command(finalizeGradesSchema, async (dat
 	// The grade change is committed before contacting the email provider.
 	let notificationSent = false;
 	try {
-		const message = createGradesFinalizedEmail(
-			record.user.name,
-			record.enrollment.schoolYearStart,
-			record.enrollment.semester,
-			enrollmentEmailUrl(),
-			record.program
-		);
+		const message = record.message;
 		notificationSent = await sendEmail(
 			record.user.email,
 			message.subject,

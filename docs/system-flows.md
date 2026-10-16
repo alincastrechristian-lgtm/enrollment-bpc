@@ -458,11 +458,11 @@ flowchart TD
     Assigned -->|Yes| View[Read-only curriculum, subjects, terms, and units]
     Dashboard --> Profile[Click Settings / Profile]
     Profile --> Info[Show own account, personal details, and enrollment information; no editing]
-    Dashboard --> Samples[Notification list uses sample data]
-    Samples --> Local[Filter All/Unread or mark notifications read locally]
+    Dashboard --> Inbox[Load recent saved notifications for the signed-in student]
+    Inbox --> Read[Filter recent updates or mark notifications read for this viewer]
 ```
 
-Student data is scoped to the session. Students cannot open another curriculum ID; it returns not found. Unfinalized grades are hidden from student enrollment history and dashboard data, not merely hidden by CSS. Sample notification read/unread changes are not stored and reset when the component is recreated.
+Student data is scoped to the session. Students cannot open another curriculum ID; it returns not found. Unfinalized grades are hidden from student enrollment history and dashboard data, not merely hidden by CSS. Notifications persist from account setup, password reset, enrollment confirmation, finalized grades, meeting requests, and dropped enrollment events. Students see their addressed messages, registrars see events they performed, and admins see all events. Read state belongs only to student recipients. Staff see an activity log without unread counts or read controls, and cannot mark student notifications read. Password reset tokens and one-time URLs are never stored in notifications.
 
 Staff **View student** opens personal details, current enrollment, and history. **View enrollment** on a card/history record opens the separate staff details page with the actions allowed for that staff role.
 
@@ -563,23 +563,23 @@ flowchart TD
 | Confirmation No/Cancel | Stop pending operation; no save |
 | Curriculum/enrollment/grade unsaved-work prompt | Keep draft on cancel; discard and navigate on confirmation |
 
-## 17. Unfinished screens and controls
+## 17. Notification inbox and unfinished controls
 
-These are visible UI, not working backend workflows:
+Notifications use saved backend events. The table also identifies remaining unfinished controls:
 
 | Screen/control | What actually happens now |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Student dashboard notification list | Sample notifications; read/filter actions affect component state only |
-| Notifications page                  | Labeled sample inbox with local search and All/Unread filters                                           |
-| Notifications: open row             | Shows message details and marks that sample message read locally                                        |
-| Notifications: Mark all as read     | Updates sample read state for this component session; no backend write                                  |
+| Student dashboard notification list | Recent saved messages addressed to the student; recipient read state persists |
+| Notifications page | Saved events with search, email-type filters, pagination and All/Unread views |
+| Notifications: open row | Show safe message details and persist read status only for the student recipient |
+| Notifications: Mark all as read | Student recipients mark their own notifications read; staff have no read controls |
 | Reports                             | Coming-soon screen linking to live dashboard and records; no report generation                          |
 | Student Edit/Delete | Disabled; no personal-data edit/delete workflow |
 | Registrar Edit/Delete/View          | Not offered; the directory shows account details and supports setup-link resend for unfinished accounts |
 | Profile editing | Read-only page; no save action |
 | Two-factor account flow | Auth plugin exists, but no complete dedicated verification/enrollment UI in current pages |
 
-The real enrollment/grade/meeting/drop notices described above are separate from the sample Notifications screens.
+The inbox and student dashboard use saved events matching outgoing email types. Academic event notifications are saved with their state changes even if email delivery fails; meeting-request events are saved after successful delivery. Account notifications contain safe setup/reset text only, never one-time links or tokens. The top-bar badge uses the same server-enforced visibility; unread badges are shown only for student recipients. Historical events are not backfilled.
 
 ## 18. Backend action index
 

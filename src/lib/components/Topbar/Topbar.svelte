@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { ArrowLeft, ChevronRight, Menu, Moon, Sun } from '@lucide/svelte';
+	import { ArrowLeft, Bell, ChevronRight, Menu, Moon, Sun } from '@lucide/svelte';
 	import { getSidebarItems, isActiveLink } from '../Sidebar/navigation';
 	import ThemeController from '../ThemeController/ThemeController.svelte';
 	const session = authClient.useSession();
@@ -12,12 +12,14 @@
 		pageTitle,
 		pageDescription,
 		backHref,
+		unreadNotifications = 0,
 		sidebarOpen = false
 	}: {
 		drawerToggleId?: string;
 		pageTitle?: string;
 		pageDescription?: string;
 		backHref?: string;
+		unreadNotifications?: number;
 		sidebarOpen?: boolean;
 	} = $props();
 	const links = $derived(
@@ -94,6 +96,23 @@
 			</div>
 		</div>
 		<div class="flex shrink-0 items-center gap-2 sm:gap-4">
+			<a
+				href={resolve('/user/notifications')}
+				class="btn relative btn-square btn-ghost btn-sm"
+				aria-label={unreadNotifications > 0
+					? `Notifications (${unreadNotifications} unread)`
+					: 'Notifications'}
+			>
+				<Bell class="size-4" aria-hidden="true" />
+				{#if unreadNotifications > 0}
+					<span
+						class="absolute -top-1 -right-1 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-primary-content"
+						aria-hidden="true"
+					>
+						{unreadNotifications > 99 ? '99+' : unreadNotifications}
+					</span>
+				{/if}
+			</a>
 			<ThemeController>
 				{#snippet children({ isDark, toggleTheme })}
 					<button

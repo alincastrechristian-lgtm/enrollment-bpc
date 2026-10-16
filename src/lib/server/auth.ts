@@ -11,6 +11,7 @@ import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { ac, adminRole, registrarRole, studentRole } from '../auth-permissions';
 import { sendEmail } from './email';
 import { createFirstLoginEmail, createResetPasswordEmail } from './email-templates';
+import { recordNotification } from './notifications';
 
 const RESET_PASSWORD_EXPIRY_SECONDS = 24 * 60 * 60;
 
@@ -32,6 +33,14 @@ export const auth = betterAuth({
 			const message = account?.password
 				? createResetPasswordEmail(url, RESET_PASSWORD_EXPIRY_SECONDS, user.name)
 				: createFirstLoginEmail(url, RESET_PASSWORD_EXPIRY_SECONDS, user.name);
+			let actorId: string | null = null;
+			try {
+				const actor = getRequestEvent().locals?.user;
+				if (actor?.role === Role.ADMIN || actor?.role === Role.REGISTRAR) actorId = actor.id;
+			} catch {
+				// Auth can also be called outside a SvelteKit request, without a staff actor.
+			}
+			recordNotification(db, { ...message.notification, recipientId: user.id, actorId });
 			await sendEmail(user.email, message.subject, message.text, message.html);
 		}
 	},

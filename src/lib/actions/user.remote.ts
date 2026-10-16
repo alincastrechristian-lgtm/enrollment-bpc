@@ -5,6 +5,7 @@ import { auth, validateUser } from '#lib/server/auth.js';
 import { enrollStudentSchema, getEnrollmentPlan } from '#lib/server/enrollment.js';
 import { sendEmail } from '#lib/server/email.js';
 import { createEnrollmentConfirmationEmail } from '#lib/server/email-templates.js';
+import { recordNotification } from '#lib/server/notifications.js';
 import { command, getRequestEvent } from '$app/server';
 import { ORIGIN } from '$app/env/private';
 import { resolve } from '$app/paths';
@@ -198,7 +199,7 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 	try {
-		const { recipient, ...result } = db.transaction((tx) => {
+		const { recipient, message, ...result } = db.transaction((tx) => {
 			const plan = getEnrollmentPlan(tx, data);
 			const result = tx
 				.insert(enrollment)
@@ -228,8 +229,24 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 				.set({ currentEnrollmentId: result.id })
 				.where(eq(studentData.studentId, plan.student.studentId))
 				.run();
+			const message = createEnrollmentConfirmationEmail({
+				name: plan.user.name,
+				schoolYearStart: data.schoolYearStart,
+				semester: data.semester,
+				programCode: data.programCode,
+				yearLevel: data.yearLevel,
+				section: data.section,
+				url: new URL(resolve('/user/enrollment'), ORIGIN).href
+			});
+			recordNotification(tx, {
+				...message.notification,
+				recipientId: plan.user.id,
+				actorId: locals.user.id,
+				enrollmentId: result.id
+			});
 			return {
 				recipient: plan.user,
+				message,
 				success: true,
 				userId: plan.user.id,
 				studentId: plan.student.studentId,
@@ -239,15 +256,6 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 		// Email delivery happens only after enrollment, subjects and the current link commit.
 		let notificationSent = false;
 		try {
-			const message = createEnrollmentConfirmationEmail({
-				name: recipient.name,
-				schoolYearStart: data.schoolYearStart,
-				semester: data.semester,
-				programCode: data.programCode,
-				yearLevel: data.yearLevel,
-				section: data.section,
-				url: new URL(resolve('/user/enrollment'), ORIGIN).href
-			});
 			notificationSent = await sendEmail(
 				recipient.email,
 				message.subject,

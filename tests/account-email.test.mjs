@@ -93,6 +93,7 @@ function fixture(
 		}
 	};
 	const dependencies = {
+		'#lib/server/notifications.js': { recordNotification: () => {} },
 		'#lib/server/email.js': { sendEmail: async () => true },
 		'#lib/server/email-templates.js': {
 			createEnrollmentConfirmationEmail: () => ({

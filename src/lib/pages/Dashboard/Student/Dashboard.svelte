@@ -17,8 +17,17 @@
 	} from '@lucide/svelte';
 
 	import type { StudentDashboardData } from '#lib/server/student-dashboard.js';
+	import type { NotificationItem } from '#lib/server/notifications.js';
+	import { readNotifications } from '#lib/actions/notifications.remote.js';
+	import { refreshAll } from '$app/navigation';
+	import { showError } from '#lib/components/Popup/Popup.svelte.js';
+	import { getErrorMessage } from '#lib/errors.js';
 
-	let { data }: { data: StudentDashboardData } = $props();
+	let {
+		data,
+		inbox
+	}: { data: StudentDashboardData; inbox?: { items: NotificationItem[]; unread: number } } =
+		$props();
 	const semester = $derived(data.enrollment);
 	const subjects = $derived(data.subjects);
 	const passedCount = $derived(data.passedCount);
@@ -29,51 +38,31 @@
 		dateStyle: 'medium'
 	});
 
-	// Notifications remain sample data until the notification system is implemented.
-	let notifications = $state([
-		{
-			id: 'grades',
-			title: 'Your grades have been finalized',
-			message: 'Final grades for the 1st Semester are now available in your enrollment record.',
-			time: 'Today · 9:30 AM',
-			kind: 'grades',
-			unread: true
-		},
-		{
-			id: 'failed',
-			title: 'A subject needs your attention',
-			message:
-				'IS102 received a failing grade. Contact the Registrar’s Office to discuss your next steps.',
-			time: 'Today · 9:30 AM',
-			kind: 'failed',
-			unread: true
-		},
-		{
-			id: 'incomplete',
-			title: 'Incomplete grade in GE103',
-			message:
-				'Your grade is marked INC. Check with your instructor about outstanding requirements.',
-			time: 'Today · 9:30 AM',
-			kind: 'incomplete',
-			unread: true
-		},
-		{
-			id: 'enrollment',
-			title: 'You’re officially enrolled',
-			message: 'Your enrollment for SY 2026–2027, 1st Semester has been confirmed.',
-			time: 'Oct 5 · 10:15 AM',
-			kind: 'enrollment',
-			unread: false
-		}
-	]);
+	const notifications = $derived(
+		(inbox?.items ?? []).map((item) => ({
+			...item,
+			kind: item.type,
+			unread: !item.readAt,
+			time: dateFormatter.format(item.createdAt)
+		}))
+	);
 	let notificationFilter = $state<'all' | 'unread'>('all');
-	const unreadCount = $derived(notifications.filter((item) => item.unread).length);
+	let notificationBusy = $state(false);
+	const unreadCount = $derived(inbox?.unread ?? 0);
 	const visibleNotifications = $derived(
 		notifications.filter((item) => notificationFilter === 'all' || item.unread)
 	);
-
-	function markAllRead() {
-		for (const item of notifications) item.unread = false;
+	async function markRead(id?: string) {
+		if (notificationBusy) return;
+		notificationBusy = true;
+		try {
+			await readNotifications(id ? { id } : {});
+			await refreshAll();
+		} catch (cause) {
+			showError(getErrorMessage(cause, 'Could not update notifications. Please try again.'));
+		} finally {
+			notificationBusy = false;
+		}
 	}
 </script>
 
@@ -196,7 +185,7 @@
 	{/each}
 
 	<section class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label="Semester summary">
-		{#each [{ label: 'Current subjects', value: subjects.length, detail: semester ? `${totalUnits} units this semester` : 'No current enrollment', icon: BookOpen, tone: 'bg-primary/10 text-primary' }, { label: 'Subjects passed', value: passedCount ?? '\u2014', detail: semester?.finalizedGrades ? 'Final grades released' : 'Awaiting final grades', icon: CircleCheck, tone: 'bg-success/20 text-base-content' }, { label: 'Need attention', value: attentionCount, detail: `${data.failedCount} failed \u00b7 ${data.incompleteCount} incomplete`, icon: CircleAlert, tone: 'bg-warning/35 text-warning-content' }, { label: 'Unread updates', value: unreadCount, detail: 'Sample notifications', icon: BellRing, tone: 'bg-secondary/10 text-secondary' }] as item (item.label)}
+		{#each [{ label: 'Current subjects', value: subjects.length, detail: semester ? `${totalUnits} units this semester` : 'No current enrollment', icon: BookOpen, tone: 'bg-primary/10 text-primary' }, { label: 'Subjects passed', value: passedCount ?? '\u2014', detail: semester?.finalizedGrades ? 'Final grades released' : 'Awaiting final grades', icon: CircleCheck, tone: 'bg-success/20 text-base-content' }, { label: 'Need attention', value: attentionCount, detail: `${data.failedCount} failed \u00b7 ${data.incompleteCount} incomplete`, icon: CircleAlert, tone: 'bg-warning/35 text-warning-content' }, { label: 'Unread updates', value: unreadCount, detail: 'Account and enrollment updates', icon: BellRing, tone: 'bg-secondary/10 text-secondary' }] as item (item.label)}
 			<article class="portal-panel p-4 shadow-sm sm:p-5">
 				<div class="flex items-start justify-between gap-2">
 					<p class="text-xs font-medium text-base-content/65 sm:text-sm">{item.label}</p>
@@ -340,11 +329,6 @@
 						<h2 id="notifications-heading" class="flex items-center gap-2 text-lg font-bold">
 							<Bell class="size-5 text-primary" aria-hidden="true" />Notifications
 							<span
-								class="rounded-full border border-base-300 px-2 py-0.5 text-[10px] font-medium text-base-content/50"
-							>
-								Sample updates
-							</span>
-							<span
 								class="badge border-0 bg-primary/10 badge-sm text-primary"
 								aria-label={`${unreadCount} unread notifications`}
 							>
@@ -354,13 +338,20 @@
 						<button
 							type="button"
 							class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline disabled:cursor-default disabled:text-base-content/35 disabled:no-underline"
-							disabled={!unreadCount}
-							onclick={markAllRead}
+							disabled={notificationBusy || !unreadCount}
+							onclick={() => markRead()}
 						>
 							<CheckCheck class="size-3.5" aria-hidden="true" />Mark all read
 						</button>
 					</div>
-					<p class="mt-2 text-xs text-base-content/55">Sample notifications for preview.</p>
+					<p class="mt-2 text-xs text-base-content/55">
+						Recent account and enrollment updates. <a
+							href={resolve('/user/notifications')}
+							class="font-semibold text-primary hover:underline"
+						>
+							View all notifications
+						</a>
+					</p>
 					<div class="mt-5 flex gap-5 border-b border-base-300" aria-label="Notification filters">
 						{#each [{ value: 'all', label: 'All updates' }, { value: 'unread', label: 'Unread' }] as filter (filter.value)}
 							<button
@@ -378,13 +369,13 @@
 					{#each visibleNotifications as item (item.id)}
 						<li class={`flex gap-3 p-5 sm:px-6 ${item.unread ? 'bg-primary/[0.025]' : ''}`}>
 							<span
-								class={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl ${item.kind === 'failed' ? 'bg-error/15' : item.kind === 'incomplete' ? 'bg-warning/30' : 'bg-primary/10 text-primary'}`}
+								class={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl ${item.kind === 'enrollment_dropped' ? 'bg-error/15' : item.kind === 'meeting_request' ? 'bg-warning/30' : 'bg-primary/10 text-primary'}`}
 							>
-								{#if item.kind === 'grades'}
+								{#if item.kind === 'grades_finalized'}
 									<ShieldCheck class="size-4" aria-hidden="true" />
-								{:else if item.kind === 'failed'}
+								{:else if item.kind === 'enrollment_dropped'}
 									<CircleAlert class="size-4" aria-hidden="true" />
-								{:else if item.kind === 'incomplete'}
+								{:else if item.kind === 'meeting_request'}
 									<Clock3 class="size-4" aria-hidden="true" />
 								{:else}
 									<GraduationCap class="size-4" aria-hidden="true" />
@@ -408,7 +399,8 @@
 											type="button"
 											aria-label={`Mark ${item.title} as read`}
 											class="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-											onclick={() => (item.unread = false)}
+											disabled={notificationBusy}
+											onclick={() => markRead(item.id)}
 										>
 											<Check class="size-3" aria-hidden="true" />Mark as read
 										</button>
@@ -424,7 +416,9 @@
 								<CheckCheck class="size-6" aria-hidden="true" />
 							</span>
 							<p class="mt-3 text-sm font-semibold">You’re all caught up</p>
-							<p class="mt-1 text-xs text-base-content/60">No unread notifications right now.</p>
+							<p class="mt-1 text-xs text-base-content/60">
+								No recent notifications match this view.
+							</p>
 						</li>
 					{/each}
 				</ul>

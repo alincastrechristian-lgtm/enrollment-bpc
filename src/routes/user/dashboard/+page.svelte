@@ -15,7 +15,7 @@
 	{#if ($session.data.user.role === Role.ADMIN || $session.data.user.role === Role.REGISTRAR) && data.staffDashboard}
 		<StaffDashboard data={data.staffDashboard} name={data.staffName ?? $session.data.user.name} />
 	{:else if $session.data.user.role === Role.STUDENT && data.studentDashboard}
-		<StudentDashboard data={data.studentDashboard} />
+		<StudentDashboard data={data.studentDashboard} inbox={data.notificationInbox} />
 	{:else}
 		<ErrorPage
 			message="You do not have permission to access this page."

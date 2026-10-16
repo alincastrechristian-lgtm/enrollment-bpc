@@ -1,5 +1,6 @@
 import { escapeHtml } from './email-html';
 import { emailTheme as colors } from './email-theme';
+import type { EmailEventType } from '../email';
 
 const brand = 'BPC Enrollment System';
 
@@ -27,6 +28,7 @@ function expiryLabel(seconds: number): string {
 }
 
 function renderAuthEmail({
+	type,
 	url,
 	expiresInSeconds,
 	title,
@@ -35,6 +37,7 @@ function renderAuthEmail({
 	category,
 	name
 }: {
+	type: EmailEventType;
 	url: string;
 	expiresInSeconds: number;
 	title: string;
@@ -105,11 +108,22 @@ function renderAuthEmail({
 </table>
 </td></tr></table>
 </body></html>`;
-	return { subject, text, html };
+	// Safe portal content excludes one-time links and security tokens.
+	return {
+		subject,
+		text,
+		html,
+		notification: {
+			type,
+			title,
+			message: message.replace('Use the button below', 'Use the link in your email')
+		}
+	};
 }
 
 export function createResetPasswordEmail(url: string, expiresInSeconds: number, name?: string) {
 	return renderAuthEmail({
+		type: 'password_reset',
 		url,
 		expiresInSeconds,
 		name,
@@ -123,6 +137,7 @@ export function createResetPasswordEmail(url: string, expiresInSeconds: number, 
 
 export function createFirstLoginEmail(url: string, expiresInSeconds: number, name?: string) {
 	return renderAuthEmail({
+		type: 'account_setup',
 		url,
 		expiresInSeconds,
 		name,
@@ -135,6 +150,7 @@ export function createFirstLoginEmail(url: string, expiresInSeconds: number, nam
 }
 
 function renderAcademicEmail({
+	type,
 	name,
 	schoolYearStart,
 	semester,
@@ -146,6 +162,7 @@ function renderAcademicEmail({
 	note,
 	program
 }: {
+	type: EmailEventType;
 	name: string;
 	schoolYearStart: number;
 	semester: number;
@@ -215,7 +232,20 @@ ${
 </td></tr>
 <tr><td style="padding:20px 28px;border-top:1px solid ${colors.border};font-size:12px;line-height:1.8;"><strong>Registrar's Office</strong><br>Bulacan Polytechnic College<br><span style="font-size:11px;">This is an academic update from ${brand}.</span></td></tr>
 </table></td></tr></table></body></html>`;
-	return { subject, text, html };
+	return {
+		subject,
+		text,
+		html,
+		notification: {
+			type,
+			title,
+			message: [
+				message,
+				term,
+				...(program ? [`Program: ${program.name} (${program.code})`] : [])
+			].join('\n\n')
+		}
+	};
 }
 
 export function createMeetingRequestEmail(
@@ -225,6 +255,7 @@ export function createMeetingRequestEmail(
 	url?: string
 ) {
 	return renderAcademicEmail({
+		type: 'meeting_request',
 		name,
 		schoolYearStart,
 		semester,
@@ -249,6 +280,7 @@ export function createGradesFinalizedEmail(
 	program?: { code: string; name: string }
 ) {
 	return renderAcademicEmail({
+		type: 'grades_finalized',
 		name,
 		schoolYearStart,
 		semester,
@@ -284,6 +316,7 @@ export function createEnrollmentConfirmationEmail({
 	url?: string;
 }) {
 	return renderAcademicEmail({
+		type: 'enrollment_confirmed',
 		name,
 		schoolYearStart,
 		semester,
@@ -306,6 +339,7 @@ export function createEnrollmentDroppedEmail(
 	url?: string
 ) {
 	return renderAcademicEmail({
+		type: 'enrollment_dropped',
 		name,
 		schoolYearStart,
 		semester,

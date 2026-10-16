@@ -1,137 +1,151 @@
 <script lang="ts">
-	import { Bell, Check, CheckCheck, ChevronRight, Inbox, Mail, Search, X } from '@lucide/svelte';
-	const samples = [
-		{
-			id: 'grades',
-			title: 'Your grades are ready to view',
-			message:
-				'Final grades have been released for your enrollment. Open your academic record to review your results and any next steps.',
-			category: 'Academic update',
-			date: 'Today',
-			unread: true
-		},
-		{
-			id: 'meeting',
-			title: 'A conversation about your next step',
-			message:
-				'The Registrar’s Office would like to discuss your academic progress. Contact the office to arrange a meeting and review your enrollment options.',
-			category: 'Follow-up',
-			date: 'Today',
-			unread: true
-		},
-		{
-			id: 'enrollment',
-			title: 'Your enrollment is confirmed',
-			message:
-				'Your program, section, and subject list are ready to review. You can find the details in your enrollment record.',
-			category: 'Enrollment',
-			date: 'Yesterday',
-			unread: false
-		},
-		{
-			id: 'account',
-			title: 'Welcome to your BPC portal',
-			message:
-				'Your account is ready. Explore your dashboard, enrollment history, and assigned curriculum. If you need assistance, the Registrar’s Office is here to help.',
-			category: 'Account',
-			date: 'Earlier',
-			unread: false
-		}
-	];
-	let notifications = $state(samples.map((item) => ({ ...item })));
-	let query = $state('');
-	let filter = $state<'all' | 'unread'>('all');
+	import {
+		Bell,
+		Check,
+		CheckCheck,
+		ChevronLeft,
+		ChevronRight,
+		Inbox,
+		Mail,
+		Search,
+		X
+	} from '@lucide/svelte';
+	import { goto, refreshAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { emailEventLabels, emailEventTypes } from '#lib/email.js';
+	import { readNotifications } from '#lib/actions/notifications.remote.js';
+	import { showError } from '#lib/components/Popup/Popup.svelte.js';
+	import { getErrorMessage } from '#lib/errors.js';
+	import type { PageProps } from './$types';
+	let { data }: PageProps = $props();
 	let selected = $state<string | null>(null);
-	const unread = $derived(notifications.filter((item) => item.unread).length);
-	const visible = $derived(
-		notifications.filter(
-			(item) =>
-				(filter === 'all' || item.unread) &&
-				`${item.title} ${item.message} ${item.category}`
-					.toLowerCase()
-					.includes(query.trim().toLowerCase())
-		)
+	let busy = $state(false);
+	const canRead = $derived(data.role === 'student');
+	const formatter = new Intl.DateTimeFormat('en-PH', {
+		timeZone: 'Asia/Manila',
+		dateStyle: 'medium',
+		timeStyle: 'short'
+	});
+	const notifications = $derived(
+		data.items.map((item) => ({
+			...item,
+			category: emailEventLabels[item.type],
+			date: formatter.format(item.createdAt),
+			unread: canRead && !item.readAt
+		}))
 	);
+	const unread = $derived(data.counts.unread);
+	const filter = $derived(data.status);
 	const current = $derived(notifications.find((item) => item.id === selected));
-	function open(id: string) {
+	function navigate(changes: Record<string, string>) {
+		const url = new URL(page.url.href);
+		url.searchParams.delete('page');
+		for (const [key, value] of Object.entries(changes)) url.searchParams.set(key, value);
+		return goto(url);
+	}
+	async function markRead(id?: string) {
+		if (!canRead || busy) return;
+		busy = true;
+		try {
+			await readNotifications(id ? { id } : {});
+			await refreshAll();
+		} catch (cause) {
+			showError(getErrorMessage(cause, 'Could not update notifications. Please try again.'));
+		} finally {
+			busy = false;
+		}
+	}
+	async function open(id: string) {
 		selected = id;
-		const item = notifications.find((item) => item.id === id);
-		if (item) item.unread = false;
+		if (notifications.find((item) => item.id === id)?.unread) await markRead(id);
 	}
 </script>
 
 <svelte:head><title>Notifications | BPC Enrollment Portal</title></svelte:head>
-<section class="w-full space-y-5" aria-label="Notifications">
-	<div class="portal-panel flex flex-wrap items-center gap-x-4 gap-y-3 p-4 sm:p-5">
-		<span
-			class="shrink-0 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary"
-		>
-			Sample inbox
-		</span>
-		<p class="min-w-0 flex-1 basis-64 text-xs leading-relaxed text-base-content/60">
-			These are sample messages. Real academic and enrollment notices are available on your
-			dashboard and sent by email. Read status here is temporary.
-		</p>
-	</div>
-	<div class="portal-panel overflow-hidden">
-		<div
-			class="flex flex-col justify-between gap-4 border-b border-base-300 p-4 sm:flex-row sm:items-center sm:p-5"
-		>
+<section class="flex w-full flex-1 flex-col gap-5" aria-label="Notifications">
+	<p class="text-xs text-base-content/60">
+		{data.role === 'admin'
+			? 'All system notifications, including actions performed by registrars.'
+			: data.role === 'registrar'
+				? 'Notifications from actions you performed for students.'
+				: 'Account and enrollment updates addressed to you.'}
+	</p>
+	<div class="portal-panel flex flex-1 flex-col overflow-hidden">
+		{#if canRead}
 			<div
-				class="flex gap-1 rounded-xl bg-base-200 p-1"
-				role="group"
-				aria-label="Notification filter"
+				class="flex flex-col justify-between gap-4 border-b border-base-300 p-4 sm:flex-row sm:items-center sm:p-5"
 			>
-				<button
-					type="button"
-					aria-pressed={filter === 'all'}
-					onclick={() => (filter = 'all')}
-					class="rounded-lg px-4 py-2 text-xs font-semibold {filter === 'all'
-						? 'bg-base-100 text-primary shadow-sm'
-						: 'text-base-content/55'}"
+				<div
+					class="flex gap-1 rounded-xl bg-base-200 p-1"
+					role="group"
+					aria-label="Notification filter"
 				>
-					All updates <span class="ml-1 tabular-nums">{notifications.length}</span>
-				</button>
+					<button
+						type="button"
+						aria-pressed={filter === 'all'}
+						onclick={() => navigate({ status: 'all' })}
+						class="rounded-lg px-4 py-2 text-xs font-semibold {filter === 'all'
+							? 'bg-base-100 text-primary shadow-sm'
+							: 'text-base-content/55'}"
+					>
+						All updates <span class="ml-1 tabular-nums">{data.counts.total}</span>
+					</button>
+					<button
+						type="button"
+						aria-pressed={filter === 'unread'}
+						onclick={() => navigate({ status: 'unread' })}
+						class="rounded-lg px-4 py-2 text-xs font-semibold {filter === 'unread'
+							? 'bg-base-100 text-primary shadow-sm'
+							: 'text-base-content/55'}"
+					>
+						Unread <span class="ml-1 tabular-nums">{unread}</span>
+					</button>
+				</div>
 				<button
+					class="btn gap-2 border-base-300 btn-outline btn-sm"
 					type="button"
-					aria-pressed={filter === 'unread'}
-					onclick={() => (filter = 'unread')}
-					class="rounded-lg px-4 py-2 text-xs font-semibold {filter === 'unread'
-						? 'bg-base-100 text-primary shadow-sm'
-						: 'text-base-content/55'}"
+					disabled={busy || !unread}
+					onclick={() => markRead()}
 				>
-					Unread <span class="ml-1 tabular-nums">{unread}</span>
+					<CheckCheck class="size-4" aria-hidden="true" />Mark all as read
 				</button>
 			</div>
-			<button
-				class="btn gap-2 border-base-300 btn-outline btn-sm"
-				type="button"
-				disabled={!unread}
-				onclick={() => {
-					for (const item of notifications) item.unread = false;
-				}}
-			>
-				<CheckCheck class="size-4" aria-hidden="true" />Mark all as read
-			</button>
-		</div>
-		<div class="border-b border-base-300 p-4 sm:p-5">
+		{/if}
+		<form method="GET" class="flex flex-col gap-3 border-b border-base-300 p-4 sm:flex-row sm:p-5">
+			<input type="hidden" name="status" value={data.status} />
 			<label class="input flex w-full items-center gap-3">
 				<Search class="size-4 shrink-0 text-base-content/45" aria-hidden="true" />
 				<input
 					type="search"
 					aria-label="Search notifications"
 					placeholder="Search updates…"
-					bind:value={query}
+					name="q"
+					value={data.search}
 					class="min-w-0 grow text-sm"
 				/>
 			</label>
-		</div>
-		<div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
-			<div class="min-w-0 lg:border-r lg:border-base-300">
-				{#each visible as item (item.id)}
+			<select
+				name="type"
+				aria-label="Notification type"
+				value={data.type}
+				class="select w-full sm:w-56"
+				onchange={(event) => event.currentTarget.form?.requestSubmit()}
+			>
+				<option value="">All email types</option>
+				{#each emailEventTypes as type (type)}
+					<option value={type}>{emailEventLabels[type]}</option>
+				{/each}
+			</select>
+			<button class="btn btn-primary" type="submit">Search</button>
+		</form>
+		<div class="grid flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+			<div class="flex min-w-0 flex-col lg:border-r lg:border-base-300">
+				{#each notifications as item (item.id)}
 					<button
 						type="button"
 						onclick={() => open(item.id)}
+						disabled={busy}
 						aria-pressed={selected === item.id}
 						class="flex w-full items-start gap-3 border-b border-base-200 p-5 text-left transition-colors last:border-b-0 hover:bg-base-200/50 sm:px-6 {selected ===
 						item.id
@@ -160,6 +174,11 @@
 									></span>
 								{/if}
 							</span>
+							{#if data.role !== 'student'}
+								<span class="mt-1 block text-xs font-medium text-base-content/65">
+									To {item.recipientName}
+								</span>
+							{/if}
 							<span class="mt-2 line-clamp-2 block text-xs leading-relaxed text-base-content/55">
 								{item.message}
 							</span>
@@ -167,11 +186,14 @@
 						<ChevronRight class="mt-6 size-4 shrink-0 text-base-content/30" aria-hidden="true" />
 					</button>
 				{:else}
-					<div class="px-6 py-16 text-center" role="status">
+					<div
+						class="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center"
+						role="status"
+					>
 						<Inbox class="mx-auto size-8 text-primary/50" aria-hidden="true" />
 						<h3 class="mt-4 text-sm font-semibold">You’re all caught up</h3>
 						<p class="mt-2 text-xs text-base-content/55">
-							No messages match this view. Try All updates or clear your search.
+							No notifications match this view. Try All updates or clear your filters.
 						</p>
 					</div>
 				{/each}
@@ -198,15 +220,43 @@
 						<Bell class="size-5" aria-hidden="true" />
 					</span>
 					<h3 class="mt-5 text-xl font-bold tracking-tight">{current.title}</h3>
-					<p class="mt-2 text-xs text-base-content/45">{current.date} · Sample notification</p>
-					<p class="mt-6 text-sm leading-relaxed text-base-content/70">{current.message}</p>
-					<p
-						class="mt-8 flex items-center gap-2 border-t border-base-300 pt-4 text-xs text-base-content/50"
-					>
-						<Check class="size-4 text-primary" aria-hidden="true" />Marked as read in this preview
+					<p class="mt-2 text-xs text-base-content/45">{current.date}</p>
+					{#if data.role !== 'student'}
+						<p class="mt-4 text-xs text-base-content/60">
+							To {current.recipientName} · {current.actorName
+								? `By ${current.actorName}`
+								: 'System event'}
+						</p>
+					{/if}
+					<p class="mt-6 text-sm leading-relaxed whitespace-pre-line text-base-content/70">
+						{current.message}
 					</p>
+					{#if current.enrollmentId}
+						<a
+							class="btn mt-5 btn-primary btn-sm"
+							href={data.role === 'student'
+								? resolve('/user/enrollment')
+								: resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
+										userId: current.recipientId,
+										enrollmentId: current.enrollmentId
+									})}
+						>
+							View enrollment
+						</a>
+					{/if}
+					{#if canRead}
+						<p
+							class="mt-8 flex items-center gap-2 border-t border-base-300 pt-4 text-xs text-base-content/50"
+						>
+							<Check class="size-4 text-primary" aria-hidden="true" />{busy
+								? 'Saving read status…'
+								: current.unread
+									? 'Unread'
+									: 'Read'}
+						</p>
+					{/if}
 				{:else}
-					<div class="flex min-h-64 flex-col items-center justify-center text-center">
+					<div class="flex h-full min-h-64 flex-col items-center justify-center text-center">
 						<span
 							class="grid size-14 place-items-center rounded-2xl border border-base-300 bg-base-100 text-primary"
 						>
@@ -220,5 +270,36 @@
 				{/if}
 			</aside>
 		</div>
+		<footer
+			class="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 px-5 py-4 text-xs text-base-content/60"
+		>
+			<p>
+				Showing {data.total ? (data.page - 1) * data.pageSize + 1 : 0}–{Math.min(
+					data.page * data.pageSize,
+					data.total
+				)} of {data.total} notifications
+			</p>
+			{#if data.pages > 1}
+				<nav class="flex items-center gap-2" aria-label="Notification pages">
+					<button
+						class="btn btn-square btn-sm"
+						aria-label="Previous page"
+						disabled={data.page <= 1}
+						onclick={() => navigate({ page: String(data.page - 1) })}
+					>
+						<ChevronLeft class="size-4" />
+					</button>
+					<span>{data.page} / {data.pages}</span>
+					<button
+						class="btn btn-square btn-sm"
+						aria-label="Next page"
+						disabled={data.page >= data.pages}
+						onclick={() => navigate({ page: String(data.page + 1) })}
+					>
+						<ChevronRight class="size-4" />
+					</button>
+				</nav>
+			{/if}
+		</footer>
 	</div>
 </section>

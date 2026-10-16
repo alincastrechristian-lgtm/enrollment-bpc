@@ -13,7 +13,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import z from 'zod';
-import { EmailApiType } from './email';
+import { EmailApiType, emailEventTypes } from './email';
 
 const uuid = () =>
 	text('id')
@@ -330,6 +330,29 @@ export const user = sqliteTable('user', {
 	banExpires: integer('ban_expires', { mode: 'timestamp_ms' }),
 	twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' }).default(false)
 });
+
+export const notification = sqliteTable(
+	'notification',
+	{
+		id: uuid(),
+		recipientId: text('recipient_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
+		enrollmentId: text('enrollment_id').references(() => enrollment.id, { onDelete: 'set null' }),
+		type: text('type', { enum: emailEventTypes }).notNull(),
+		readAt: integer('read_at', { mode: 'timestamp_ms' }),
+		title: text('title').notNull(),
+		message: text('message').notNull(),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+			.notNull()
+	},
+	(table) => [
+		index('notification_recipient_created_idx').on(table.recipientId, table.createdAt),
+		index('notification_actor_created_idx').on(table.actorId, table.createdAt)
+	]
+);
 
 export const session = sqliteTable(
 	'session',

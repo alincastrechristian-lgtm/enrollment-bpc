@@ -94,6 +94,10 @@ function fixture(t, finalized = true) {
 		'src/lib/server/staff-dashboard.ts',
 		dependencies
 	);
+	dependencies['#lib/server/notifications.js'] = loadModule(
+		'src/lib/server/notifications.ts',
+		dependencies
+	);
 	const { load } = loadModule('src/routes/user/dashboard/+page.server.ts', dependencies);
 	const historyLoad = loadModule('src/routes/user/enrollment/+page.server.ts', dependencies).load;
 	const event = (id = 'u', role = Role.STUDENT) => ({

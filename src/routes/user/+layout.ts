@@ -81,7 +81,7 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	}
 };
 
-export const load: LayoutLoad = ({ url, route, params }) => {
+export const load: LayoutLoad = ({ url, route, params, data }) => {
 	const path = url.pathname.replace(/\/$/, '') || '/user/dashboard';
 	const meta =
 		routeMeta[route.id ?? ''] ??
@@ -89,6 +89,7 @@ export const load: LayoutLoad = ({ url, route, params }) => {
 		(path.startsWith('/user/curriculum/') ? routeMeta['/user/curriculum/*'] : undefined) ??
 		{};
 	return {
+		...data,
 		backHref:
 			(route.id === '/user/students/[userId]/enrollments/[enrollmentId]' ||
 				route.id === '/user/students/[userId]/enroll') &&

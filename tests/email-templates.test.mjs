@@ -174,6 +174,7 @@ test('auth callbacks send templates with the expiration configured in Better Aut
 		'better-auth/plugins/two-factor': { twoFactor: () => ({}) },
 		'better-auth/svelte-kit': { sveltekitCookies: () => ({}) },
 		'../auth-permissions': {},
+		'./notifications': { recordNotification: () => {} },
 		'./email': {
 			sendEmail: async (...message) => {
 				sent.push(message);
