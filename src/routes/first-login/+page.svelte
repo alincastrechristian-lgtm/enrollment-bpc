@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { showError, showLoading } from '#lib/components/Popup/Popup.svelte.js';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import { Check, Eye, EyeOff, LockKeyhole, ShieldCheck } from '@lucide/svelte';
 
 	const token = $derived(page.url.searchParams.get('token'));
@@ -68,7 +69,7 @@
 				showConfirmation = false;
 				if (result.status === 'sign-in-required') {
 					showError(result.message, () => {
-						window.location.href = '/';
+						window.location.href = resolve('/login');
 					});
 					return;
 				}

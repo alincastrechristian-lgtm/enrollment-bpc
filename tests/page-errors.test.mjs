@@ -27,6 +27,7 @@ test('page-load errors keep statuses, use shared boundaries, and offer working r
 		'src/routes/+layout.server.js': `import {error} from '@sveltejs/kit';export const load=({url})=>{if(url.searchParams.has('root-error'))error(503,'SECRET provider credentials');return {theme:url.searchParams.get('theme')||'light'};};`,
 		'src/routes/+page.svelte':
 			'<script>import {onMount} from "svelte";onMount(()=>{window.pageReady=true;});</script><h1>Sign in</h1><a href="/portal/user/failure/404">Open unavailable enrollment</a>',
+		'src/routes/login/+page.svelte': '<h1>Sign in</h1>',
 		'src/routes/user/+layout.svelte':
 			'<script>let {children}=$props();</script><aside aria-label="Portal sidebar">Portal navigation</aside><main>{@render children()}</main>',
 		'src/routes/user/+layout.server.js': `import {error} from '@sveltejs/kit';export const load=({url})=>{if(url.searchParams.has('layout-error'))error(403,'Forbidden');};`,
@@ -75,7 +76,7 @@ test('page-load errors keep statuses, use shared boundaries, and offer working r
 					name: status === 401 ? 'Sign in' : 'Back to dashboard',
 					exact: true
 				})
-			).toHaveJSProperty('href', url(status === 401 ? '/' : '/user/dashboard'));
+			).toHaveJSProperty('href', url(status === 401 ? '/login' : '/user/dashboard'));
 			assert.ok(!(await page.content()).includes('SECRET database credentials'));
 			if (status === 404)
 				await expect(

@@ -29,8 +29,10 @@ These charts describe current application behavior, including unfinished control
 
 ```mermaid
 flowchart TD
-    Open[Open website] --> Session{Signed in?}
-    Session -->|No| Login[Sign-in page]
+    Open[Open website] --> Landing[Public landing page]
+    Landing --> Portal[Click Sign in or Open dashboard]
+    Portal --> Session{Signed in?}
+    Session -->|No| Login[Sign-in page at /login]
     Login --> Credentials[Submit email and password]
     Credentials --> Valid{Authentication succeeds?}
     Valid -->|No| LoginError[Show safe error; remain on sign-in page]
@@ -138,7 +140,7 @@ flowchart TD
     Confirm -->|Yes| End[Sign out; return to sign-in page]
 ```
 
-Setup/reset links expire after 24 hours. Both password pages call the same reset/sign-in and setup-completion commands. If password reset succeeds but sign-in fails, the UI directs the user to sign in with the new password rather than reuse the consumed token.
+Setup/reset links expire after 24 hours. Both password pages call the same reset/sign-in and setup-completion commands. If password reset succeeds but sign-in fails, the UI directs the user to `/login` with the new password rather than reuse the consumed token. `/` is a public landing page, including for signed-in users; opening `/login` while signed in redirects to the dashboard. Logout returns to `/login`.
 
 ## 4. Enrollment eligibility and defaults
 
@@ -526,7 +528,7 @@ flowchart TD
 
 | Control or case | Current effect |
 |---|---|
-| Open `/user/*` without sign-in | User layout redirects to sign-in; individual protected loads/commands also enforce authentication |
+| Open `/user/*` without sign-in | User layout redirects to `/login`; individual protected loads/commands also enforce authentication |
 | Unauthorized protected action | 401; no database mutation |
 | Wrong role | 403; no database mutation |
 | Missing record or student's unauthorized curriculum ID | 404 |

@@ -1,5 +1,6 @@
 ﻿<script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
+	import { resolve } from '$app/paths';
 	import { getAuthErrorMessage, getErrorMessage } from '#lib/errors.js';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { ArrowLeft, Mail, ShieldCheck } from '@lucide/svelte';
@@ -132,7 +133,7 @@
 					</form>
 
 					<a
-						href="/"
+						href={resolve('/login')}
 						class="flex link items-center justify-center gap-2 text-sm font-semibold text-primary link-hover"
 					>
 						<ArrowLeft class="size-4" aria-hidden="true" />

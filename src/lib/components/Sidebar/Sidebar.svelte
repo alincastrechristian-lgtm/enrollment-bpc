@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
+	import { resolve } from '$app/paths';
 	import { LogOut, Moon, Sun } from '@lucide/svelte';
 	import SidebarNavigation from './SidebarNavigation.svelte';
 	import { getSidebarItems } from './navigation';
@@ -16,7 +17,7 @@
 		}
 
 		await authClient.signOut();
-		window.location.href = '/';
+		window.location.href = resolve('/login');
 	}
 </script>
 
@@ -64,7 +65,7 @@
 							<Moon class="h-5 w-5 swap-off text-base-content/70" />
 						</div>
 
-						<span class="text-sm font-semibold text-base-content"> Theme </span>
+						<span class="text-sm font-semibold text-base-content">Theme</span>
 					</label>
 				</div>
 			{/snippet}

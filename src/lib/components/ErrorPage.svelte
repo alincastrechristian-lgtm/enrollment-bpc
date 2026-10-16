@@ -71,7 +71,7 @@
 			: details.description
 	);
 	const home = $derived(
-		embedded && page.status !== 401 ? resolve('/user/dashboard') : resolve('/')
+		page.status === 401 ? resolve('/login') : embedded ? resolve('/user/dashboard') : resolve('/')
 	);
 	const homeLabel = $derived(
 		page.status === 401 ? 'Sign in' : embedded ? 'Back to dashboard' : 'Back to home'
