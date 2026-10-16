@@ -1,4 +1,5 @@
 import type { getStudentEnrollmentHistory } from './student-enrollment';
+import { getGradeStatus, getGradeConcerns } from '#lib/enrollment-grades.js';
 
 type EnrollmentHistory = Awaited<ReturnType<typeof getStudentEnrollmentHistory>>;
 
@@ -9,13 +10,7 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 	const subjects = (current?.subjects ?? []).map((subject) => {
 		// Never expose provisional grades or derive results from them.
 		const grade = finalized ? subject.grade : null;
-		const status = !finalized
-			? 'Pending'
-			: grade === null
-				? 'Incomplete'
-				: grade > 3
-					? 'Failed'
-					: 'Passed';
+		const status = getGradeStatus(grade, finalized);
 		return {
 			id: subject.id,
 			code: subject.subjectCode,
@@ -28,6 +23,26 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 	const failed = subjects.filter((subject) => subject.status === 'Failed');
 	const incomplete = subjects.filter((subject) => subject.status === 'Incomplete');
 	const nextSteps: { id: string; title: string; detail: string }[] = [];
+	const meetingRequests = (record?.enrollments ?? []).flatMap((entry) => {
+		if (!entry.meetingRequestSentAt || !entry.finalizedGrades) return [];
+		const concerns = getGradeConcerns(entry.subjects, true);
+		if (!concerns.failedCount && !concerns.incompleteCount) return [];
+		return [
+			{
+				id: entry.id,
+				sentAt: entry.meetingRequestSentAt,
+				term: `Semester ${entry.semester}, SY ${entry.schoolYearStart}–${entry.schoolYearStart + 1}`,
+				...concerns
+			}
+		];
+	});
+	if (meetingRequests.length)
+		nextSteps.push({
+			id: 'meeting',
+			title: "Arrange a meeting with the Registrar's Office",
+			detail:
+				'A meeting request was sent to your email. Contact the office to agree on a time and discuss your grades and enrollment options.'
+		});
 	if (incomplete.length)
 		nextSteps.push({
 			id: 'incomplete',
@@ -64,6 +79,7 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 						}
 		);
 	return {
+		meetingRequests,
 		studentName: name.trim().split(/\s+/)[0] || 'Student',
 		studentNumber: record?.studentId ?? null,
 		enrollment: current

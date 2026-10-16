@@ -75,6 +75,7 @@ function fixture(t, finalized = true) {
 		)
 		.run();
 	const dependencies = {
+		'#lib/enrollment-grades.js': loadModule('src/lib/enrollment-grades.ts'),
 		'#lib/Roles.js': { Role },
 		'#lib/schema.js': schema,
 		'#lib/server/db/index.js': { db },
@@ -134,6 +135,24 @@ test('dashboard loads only the signed-in current enrollment and applies passing 
 	assert.equal(JSON.stringify(data).includes('SECRET'), false);
 	assert.equal('notifications' in data, false);
 	assert.equal((await f.load('other')).studentDashboard.subjects[0].code, 'SECRET');
+});
+
+test('dashboard shows only the signed-in student meeting requests and keeps historical requests visible', async (t) => {
+	const f = fixture(t);
+	f.sqlite.exec(
+		"UPDATE enrollment SET meeting_request_sent_at=1000 WHERE id IN ('current','private')"
+	);
+	let data = (await f.load()).studentDashboard;
+	assert.equal(data.meetingRequests.length, 1);
+	assert.equal(data.meetingRequests[0].id, 'current');
+	assert.equal(data.meetingRequests[0].failedCount, 2);
+	assert.equal(data.meetingRequests[0].incompleteCount, 1);
+	assert.ok(data.nextSteps.some((step) => step.id === 'meeting'));
+	f.sqlite.exec("UPDATE student SET enrollment_id='newer' WHERE user_id='u'");
+	data = (await f.load()).studentDashboard;
+	assert.equal(data.meetingRequests[0].id, 'current');
+	f.sqlite.exec("UPDATE enrollment_subject SET grade=3 WHERE enrollment_id='current'");
+	assert.deepEqual((await f.load()).studentDashboard.meetingRequests, []);
 });
 
 test('unfinalized grades are hidden from dashboard and history responses and produce no failure or INC alerts', async (t) => {

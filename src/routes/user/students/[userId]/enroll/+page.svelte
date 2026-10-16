@@ -4,67 +4,130 @@
 	import { resolve } from '$app/paths';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { showError } from '#lib/components/Popup/Popup.svelte.js';
-	import { BookOpen } from '@lucide/svelte';
+	import { BookOpen, Eye, LockKeyhole } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 	let { data }: PageProps = $props();
-	async function chooseProgram(event: SubmitEvent) {
-		event.preventDefault();
-		const values = new FormData(event.currentTarget as HTMLFormElement);
+	let loadingProgram = $state(false);
+	async function chooseProgram(event: Event) {
+		const select = event.currentTarget as HTMLSelectElement;
+		if (loadingProgram || select.value === data.programCode) return;
 		const destination =
 			resolve('/user/students/[userId]/enroll', { userId: data.student.userId }) +
 			'?' +
-			new URLSearchParams({ programCode: String(values.get('programCode')) });
+			new URLSearchParams({ programCode: select.value });
+		loadingProgram = true;
 		try {
 			await goto(destination);
 		} catch (cause) {
 			showError(getErrorMessage(cause, 'Failed to load curriculum. Please try again.'));
+		} finally {
+			// A canceled draft-discard prompt must restore the original selection.
+			select.value = data.programCode;
+			loadingProgram = false;
 		}
 	}
 </script>
 
 <svelte:head><title>Enroll {data.student.name} | BPC Enrollment System</title></svelte:head>
 <div class="mx-auto max-w-7xl space-y-6">
-	<section class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-		<div class="h-1.5 bg-primary" aria-hidden="true"></div>
-		<form class="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:p-6" onsubmit={chooseProgram}>
-			<label class="flex-1 space-y-2">
-				<span class="text-sm font-bold">Program for this enrollment</span>
-				<select
-					class="select w-full bg-base-200"
-					name="programCode"
-					value={data.programCode}
-					required
+	{#if data.enrollmentLockReason}
+		<section
+			class="flex min-h-[60vh] w-full items-center justify-center px-4 py-12 sm:px-6"
+			aria-labelledby="enrollment-blocked-title"
+		>
+			<div
+				class="w-full max-w-xl overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+			>
+				<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+				<div class="p-6 text-center sm:p-10">
+					<div
+						class="mx-auto mb-6 grid size-20 place-items-center rounded-2xl bg-primary/10 text-primary"
+					>
+						<LockKeyhole class="size-9" aria-hidden="true" />
+					</div>
+					<p class="mb-3 text-xs font-bold tracking-widest text-base-content/50 uppercase">
+						Enrollment on hold
+					</p>
+					<h1 id="enrollment-blocked-title" class="text-2xl font-black tracking-tight sm:text-3xl">
+						Complete current enrollment
+					</h1>
+					<p class="mt-4 text-sm leading-relaxed break-words text-base-content/70 sm:text-base">
+						{data.enrollmentLockReason}
+					</p>
+					<div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+						<a
+							class="btn gap-2 btn-primary"
+							href={resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
+								userId: data.student.userId,
+								enrollmentId: data.student.currentEnrollmentId!
+							})}
+						>
+							<Eye class="size-4" aria-hidden="true" />View current enrollment
+						</a>
+					</div>
+				</div>
+				<div
+					class="border-t border-base-300 bg-base-200/50 px-6 py-4 text-center text-xs leading-relaxed break-words text-base-content/60"
 				>
-					<option value="" disabled>Choose a program</option>
-					{#each data.programs as program (program.code)}
-						<option value={program.code}>{program.code} — {program.name}</option>
-					{/each}
-				</select>
-			</label>
-			<button type="submit" class="btn btn-primary" disabled={!data.programs.length}>
-				<BookOpen class="size-4" aria-hidden="true" />Load curriculum
-			</button>
-		</form>
-	</section>
-	{#if data.plan}
-		{#key data.plan.curriculum.id}
-			<EnrollmentEditor
-				data={{ ...data.plan, student: data.student, schoolYearStart: data.schoolYearStart }}
-			/>
-		{/key}
+					<span class="font-semibold text-base-content/80">{data.student.name}</span>
+					<span class="mx-1" aria-hidden="true">·</span>
+					<span class="font-mono">{data.student.studentId}</span>
+				</div>
+			</div>
+		</section>
 	{:else}
-		<div class="rounded-2xl border border-base-300 bg-base-100 p-10 text-center">
-			<BookOpen class="mx-auto mb-4 size-10 text-primary/40" aria-hidden="true" />
-			<h1 class="text-xl font-bold">Choose a program to enroll {data.student.name}</h1>
-			<p class="mt-3 text-sm text-base-content/60">
-				Load the active curriculum, then choose the year, semester, section, and subjects. The
-				student account is already saved.
-			</p>
-			{#if !data.programs.length}
+		<section class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+			<div class="h-1.5 bg-primary" aria-hidden="true"></div>
+			<div class="space-y-2 p-5 sm:p-6">
+				<label class="block space-y-2">
+					<span class="text-sm font-bold">Program for this enrollment</span>
+					<select
+						class="select w-full bg-base-200"
+						name="programCode"
+						value={data.programCode}
+						onchange={chooseProgram}
+						disabled={loadingProgram || !data.programs.length}
+						required
+					>
+						<option value="" disabled>Choose a program</option>
+						{#each data.programs as program (program.code)}
+							<option value={program.code}>{program.code} — {program.name}</option>
+						{/each}
+					</select>
+				</label>
+				{#if loadingProgram}
+					<p class="flex items-center gap-2 text-xs text-base-content/60" role="status">
+						<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
+						Loading curriculum…
+					</p>
+				{/if}
+			</div>
+		</section>
+		{#if data.plan}
+			{#key `${data.student.userId}:${data.student.currentEnrollmentId ?? ''}:${data.plan.curriculum.id}`}
+				<EnrollmentEditor
+					data={{
+						...data.plan,
+						student: data.student,
+						schoolYearStart: data.schoolYearStart,
+						gradeConcerns: data.gradeConcerns
+					}}
+				/>
+			{/key}
+		{:else}
+			<div class="rounded-2xl border border-base-300 bg-base-100 p-10 text-center">
+				<BookOpen class="mx-auto mb-4 size-10 text-primary/40" aria-hidden="true" />
+				<h1 class="text-xl font-bold">Choose a program to enroll {data.student.name}</h1>
 				<p class="mt-3 text-sm text-base-content/60">
-					Ask an administrator to add an active program first.
+					Select a program to load its active curriculum, then review the year, semester, section,
+					and subjects. The student account is already saved.
 				</p>
-			{/if}
-		</div>
+				{#if !data.programs.length}
+					<p class="mt-3 text-sm text-base-content/60">
+						Ask an administrator to add an active program first.
+					</p>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 </div>

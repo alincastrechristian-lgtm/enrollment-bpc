@@ -1,7 +1,13 @@
 import { Role } from '#lib/Roles.js';
-import { enrollment, enrollmentSubject } from '#lib/schema.js';
+import { getGradeConcerns } from '#lib/enrollment-grades.js';
+import { curriculum, enrollment, enrollmentSubject, program } from '#lib/schema.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
+import { sendEmail } from '#lib/server/email.js';
+import {
+	createGradesFinalizedEmail,
+	createMeetingRequestEmail
+} from '#lib/server/email-templates.js';
 import {
 	canEditEnrollmentGrades,
 	canFinalizeEnrollmentGrades,
@@ -9,11 +15,113 @@ import {
 	getStudentEnrollment
 } from '#lib/server/student-enrollment.js';
 import { command, getRequestEvent } from '$app/server';
+import { resolve } from '$app/paths';
+import { ORIGIN } from '$app/env/private';
 import { error } from '@sveltejs/kit';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 const grade = z.number().min(1).max(5).nullable();
+function enrollmentEmailUrl() {
+	return new URL(resolve('/user/enrollment'), ORIGIN).href;
+}
+
+const enrollmentReferenceSchema = z.object({
+	userId: z.string().min(1),
+	enrollmentId: z.string().min(1)
+});
+
+export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, async (data) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	const startedAt = new Date();
+	const record = db.transaction(
+		(tx) => {
+			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+			if (!record.enrollment.finalizedGrades)
+				error(409, 'Finalize grades before sending a meeting request.');
+			if (record.enrollment.meetingRequestSentAt)
+				error(409, 'A meeting request has already been sent for this enrollment.');
+			// Expired claims can be retried after a server interruption.
+			if (
+				record.enrollment.meetingRequestStartedAt &&
+				startedAt.getTime() - record.enrollment.meetingRequestStartedAt.getTime() < 15 * 60 * 1000
+			)
+				error(409, 'A meeting request is already being sent. Try again shortly.');
+			const concerns = getGradeConcerns(
+				tx
+					.select({ grade: enrollmentSubject.grade })
+					.from(enrollmentSubject)
+					.where(eq(enrollmentSubject.enrollmentId, record.enrollment.id))
+					.all(),
+				true
+			);
+			if (!concerns.failedCount && !concerns.incompleteCount)
+				error(409, 'This enrollment has no failing or incomplete grades.');
+			tx.update(enrollment)
+				.set({ meetingRequestStartedAt: startedAt })
+				.where(eq(enrollment.id, record.enrollment.id))
+				.run();
+			return record;
+		},
+		{ behavior: 'immediate' }
+	);
+
+	let sent = false;
+	try {
+		const message = createMeetingRequestEmail(
+			record.user.name,
+			record.enrollment.schoolYearStart,
+			record.enrollment.semester,
+			enrollmentEmailUrl()
+		);
+		sent = await sendEmail(record.user.email, message.subject, message.text, message.html);
+	} catch (cause) {
+		console.error('Meeting request email failed:', cause);
+	}
+	const claim = and(
+		eq(enrollment.id, record.enrollment.id),
+		eq(enrollment.meetingRequestStartedAt, startedAt)
+	);
+	if (!sent) {
+		db.update(enrollment).set({ meetingRequestStartedAt: null }).where(claim).run();
+		error(502, 'Failed to send the meeting request email. Please try again.');
+	}
+	const sentAt = new Date();
+	const updated = db
+		.update(enrollment)
+		.set({ meetingRequestSentAt: sentAt, meetingRequestStartedAt: null })
+		.where(claim)
+		.returning({ id: enrollment.id })
+		.get();
+	if (!updated)
+		error(
+			409,
+			'The email was sent, but its status changed. Refresh the enrollment before continuing.'
+		);
+	return { success: true, meetingRequestSentAt: sentAt };
+});
+
+export const verifyEnrollmentClearance = command(enrollmentReferenceSchema, (data) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	return db.transaction(
+		(tx) => {
+			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+			if (!record.enrollment.finalizedGrades)
+				error(409, 'Finalize grades before verifying clearance.');
+			if (record.enrollment.submittedClearance)
+				error(409, 'Clearance has already been verified. Refresh the page.');
+			tx.update(enrollment)
+				.set({ submittedClearance: true })
+				.where(eq(enrollment.id, record.enrollment.id))
+				.run();
+			return { success: true, submittedClearance: true };
+		},
+		{ behavior: 'immediate' }
+	);
+});
+
 const updateGradesSchema = z.object({
 	userId: z.string().min(1),
 	enrollmentId: z.string().min(1),
@@ -83,13 +191,13 @@ const finalizeGradesSchema = z.object({
 	grades: z.array(z.object({ id: z.string().min(1), grade })).min(1)
 });
 
-export const finalizeEnrollmentGrades = command(finalizeGradesSchema, (data) => {
+export const finalizeEnrollmentGrades = command(finalizeGradesSchema, async (data) => {
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 	if (new Set(data.grades.map((subject) => subject.id)).size !== data.grades.length)
 		error(400, 'Each subject can only appear once.');
 
-	return db.transaction(
+	const record = db.transaction(
 		(tx) => {
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
 			if (record.enrollment.finalizedGrades) error(409, 'Grades are already finalized.');
@@ -122,13 +230,41 @@ export const finalizeEnrollmentGrades = command(finalizeGradesSchema, (data) => 
 					409,
 					'Grades or subjects have changed. Reload the enrollment and review before finalizing.'
 				);
+			const enrolledProgram = tx
+				.select({ code: program.code, name: program.name })
+				.from(curriculum)
+				.innerJoin(program, eq(program.code, curriculum.programCode))
+				.where(eq(curriculum.id, record.enrollment.curriculumId))
+				.get();
+			if (!enrolledProgram) error(404, 'Enrollment program not found.');
 			// Null grades in a finalized enrollment represent INC (Incomplete).
 			tx.update(enrollment)
 				.set({ finalizedGrades: true })
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
-			return { success: true, finalizedGrades: true };
+			return { ...record, program: enrolledProgram };
 		},
 		{ behavior: 'immediate' }
 	);
+
+	// The grade change is committed before contacting the email provider.
+	let notificationSent = false;
+	try {
+		const message = createGradesFinalizedEmail(
+			record.user.name,
+			record.enrollment.schoolYearStart,
+			record.enrollment.semester,
+			enrollmentEmailUrl(),
+			record.program
+		);
+		notificationSent = await sendEmail(
+			record.user.email,
+			message.subject,
+			message.text,
+			message.html
+		);
+	} catch (cause) {
+		console.error('Grade finalization email failed:', cause);
+	}
+	return { success: true, finalizedGrades: true, notificationSent };
 });

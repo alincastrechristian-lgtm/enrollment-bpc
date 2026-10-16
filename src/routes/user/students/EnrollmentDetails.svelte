@@ -1,9 +1,25 @@
 <script lang="ts">
 	import { getErrorMessage } from '#lib/errors.js';
-	import { finalizeEnrollmentGrades, updateEnrollmentGrades } from '#lib/actions/grades.remote.js';
+	import {
+		finalizeEnrollmentGrades,
+		sendEnrollmentMeetingRequest,
+		updateEnrollmentGrades,
+		verifyEnrollmentClearance
+	} from '#lib/actions/grades.remote.js';
 	import { showYesNo } from '#lib/components/Popup/Popup.svelte.js';
+	import { getGradeConcerns } from '#lib/enrollment-grades.js';
 	import { beforeNavigate, goto } from '$app/navigation';
-	import { BookOpen, LockKeyhole, Pencil, Save } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
+	import {
+		ArrowRight,
+		BookOpen,
+		Check,
+		ClipboardCheck,
+		LockKeyhole,
+		Mail,
+		Pencil,
+		Save
+	} from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { semesterLabel } from '../curriculum/SubjectLayout.svelte';
 	import type { PageData } from './[userId]/enrollments/[enrollmentId]/$types';
@@ -22,10 +38,29 @@
 	let message = $state('');
 	let success = $state('');
 	let finalizedHere = $state(false);
+	let meetingSentHere = $state<Date | null>(null);
+	const meetingSentAt = $derived(meetingSentHere ?? data.enrollment.meetingRequestSentAt);
+	let clearanceVerifiedHere = $state(false);
+	const clearanceVerified = $derived(clearanceVerifiedHere || data.enrollment.submittedClearance);
 	const finalized = $derived(finalizedHere || data.enrollment.finalizedGrades);
 	const canEdit = $derived(data.canEdit && (!finalized || data.canEditFinalized));
 	const canFinalize = $derived(data.canFinalize && !finalized);
 	const incompleteCount = $derived(rows.filter((row) => row.savedGrade === null).length);
+	const gradeConcerns = $derived(
+		getGradeConcerns(
+			rows.map((row) => ({ grade: row.savedGrade })),
+			finalized
+		)
+	);
+	const hasGradeConcerns = $derived(!!(gradeConcerns.failedCount || gradeConcerns.incompleteCount));
+	const gradeConcernSummary = $derived(
+		[
+			gradeConcerns.failedCount ? `${gradeConcerns.failedCount} failing` : '',
+			gradeConcerns.incompleteCount ? `${gradeConcerns.incompleteCount} incomplete (INC)` : ''
+		]
+			.filter(Boolean)
+			.join(' · ') || 'No failing or incomplete grades'
+	);
 	const savedGradesValid = $derived(
 		rows.length > 0 &&
 			rows.every(
@@ -113,6 +148,63 @@
 		}
 	}
 
+	async function requestMeeting() {
+		if (busy || editing || dirty || !finalized || !hasGradeConcerns || meetingSentAt) return;
+		busy = true;
+		message = '';
+		success = '';
+		try {
+			if (
+				!(await showYesNo({
+					title: 'Send meeting request?',
+					message: `Send an email to ${data.student.name} at ${data.student.email} asking them to arrange a meeting with the Registrar's Office about failing or incomplete grades?`,
+					yesText: 'Send meeting request',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			const result = await sendEnrollmentMeetingRequest({
+				userId: data.student.id,
+				enrollmentId: data.enrollment.id
+			});
+			meetingSentHere = result.meetingRequestSentAt;
+			success = 'Meeting request email sent successfully.';
+		} catch (cause) {
+			message = getErrorMessage(cause, 'Failed to send the meeting request. Please try again.');
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function verifyClearance() {
+		if (busy || editing || dirty || !finalized || clearanceVerified) return;
+		busy = true;
+		message = '';
+		success = '';
+		try {
+			if (
+				!(await showYesNo({
+					title: 'Verify clearance?',
+					message: `Confirm that ${data.student.name} has submitted clearance for this enrollment. This will allow the student to be enrolled again.`,
+					warning: true,
+					yesText: 'Verify clearance',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			await verifyEnrollmentClearance({
+				userId: data.student.id,
+				enrollmentId: data.enrollment.id
+			});
+			clearanceVerifiedHere = true;
+			success = 'Clearance verified successfully.';
+		} catch (cause) {
+			message = getErrorMessage(cause, 'Failed to verify clearance. Please try again.');
+		} finally {
+			busy = false;
+		}
+	}
+
 	async function finalize() {
 		if (busy || editing || dirty || !canFinalize || !savedGradesValid) return;
 		message = '';
@@ -129,13 +221,15 @@
 				}))
 			)
 				return;
-			await finalizeEnrollmentGrades({
+			const result = await finalizeEnrollmentGrades({
 				userId: data.student.id,
 				enrollmentId: data.enrollment.id,
 				grades: rows.map((row) => ({ id: row.id, grade: row.savedGrade }))
 			});
 			finalizedHere = true;
-			success = 'Grades finalized successfully.';
+			success = result.notificationSent
+				? 'Grades finalized and notification email sent.'
+				: 'Grades finalized. The notification email could not be sent.';
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to finalize grades. Please try again.');
 		} finally {
@@ -149,25 +243,25 @@
 <form class="mx-auto max-w-7xl space-y-6" onsubmit={save}>
 	<header class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
 		<div class="h-1.5 bg-primary" aria-hidden="true"></div>
-		<div class="flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
-			<div class="min-w-0">
-				<h1 class="text-2xl font-bold wrap-break-word">{data.student.name}</h1>
-				<p class="mt-1 font-mono text-sm text-base-content/60">{data.student.studentId}</p>
-				<p class="mt-3 text-sm text-base-content/70">
-					{data.enrollment.schoolYearStart}–{data.enrollment.schoolYearStart + 1} · {semesterLabel(
-						data.enrollment.semester
-					)} · Year {data.enrollment.yearLevel} · Section {data.enrollment.section}
-				</p>
-			</div>
-			<div class="flex flex-wrap items-center gap-2">
-				<span class:badge-primary={data.isCurrent} class="badge badge-outline">
+		<div class="p-5 sm:p-6">
+			<div class="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+				<span class="flex items-center gap-2 text-primary">
+					<span class="size-1.5 rounded-full bg-primary" aria-hidden="true"></span>
 					{data.isCurrent ? 'Current enrollment' : 'Historical enrollment'}
 				</span>
-				<span class="badge badge-outline capitalize">{data.enrollment.status}</span>
-				{#if finalized}
-					<span class="badge badge-success">Grades finalized</span>
+				{#if data.enrollment.status !== 'enrolled'}
+					<span class="badge badge-outline badge-sm capitalize">{data.enrollment.status}</span>
 				{/if}
 			</div>
+			<div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+				<h1 class="text-2xl font-bold wrap-break-word">{data.student.name}</h1>
+				<p class="font-mono text-xs text-base-content/50">{data.student.studentId}</p>
+			</div>
+			<p class="mt-3 text-sm text-base-content/65">
+				{data.enrollment.schoolYearStart}–{data.enrollment.schoolYearStart + 1} · {semesterLabel(
+					data.enrollment.semester
+				)} · Year {data.enrollment.yearLevel} · Section {data.enrollment.section}
+			</p>
 		</div>
 		<dl
 			class="grid gap-5 border-t border-base-300 bg-base-200/40 p-5 text-sm sm:grid-cols-3 sm:p-6"
@@ -214,6 +308,112 @@
 
 	<section
 		class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+		aria-labelledby="progress-heading"
+	>
+		<div
+			class="flex flex-wrap items-center justify-between gap-2 border-b border-base-300/70 px-5 py-3.5 sm:px-6"
+		>
+			<h2
+				id="progress-heading"
+				class="text-xs font-semibold tracking-wider text-base-content/55 uppercase"
+			>
+				Enrollment progress
+			</h2>
+			<span class="flex items-center gap-1.5 text-xs font-medium text-base-content/65">
+				{#if finalized}
+					<Check class="size-3.5 text-success" aria-hidden="true" />Grades finalized
+				{:else}
+					Awaiting finalization
+				{/if}
+			</span>
+		</div>
+		<div class={`grid ${finalized && (hasGradeConcerns || meetingSentAt) ? 'md:grid-cols-2' : ''}`}>
+			<div class="flex flex-wrap items-center justify-between gap-3 p-5 sm:px-6">
+				<div class="flex items-start gap-3">
+					<ClipboardCheck class="mt-0.5 size-4 shrink-0 text-base-content/45" aria-hidden="true" />
+					<div>
+						<h3 class="text-sm font-semibold">Clearance</h3>
+						{#if !clearanceVerified}
+							<p class="mt-1 text-xs text-base-content/55">
+								{finalized
+									? 'Verify submitted clearance to allow the next enrollment.'
+									: 'Available after grade finalization.'}
+							</p>
+						{/if}
+					</div>
+				</div>
+				{#if clearanceVerified}
+					<span class="flex items-center gap-1.5 text-xs font-medium text-base-content/65">
+						<Check class="size-3.5 text-success" aria-hidden="true" />Clearance verified
+					</span>
+				{:else}
+					<button
+						type="button"
+						class="btn gap-2 border-base-300 btn-outline btn-sm"
+						disabled={busy || editing || dirty || !finalized}
+						onclick={verifyClearance}
+					>
+						Verify clearance
+					</button>
+				{/if}
+			</div>
+			{#if finalized && (hasGradeConcerns || meetingSentAt)}
+				<div
+					class="flex flex-wrap items-center justify-between gap-3 border-t border-base-300/60 p-5 sm:px-6 md:border-t-0 md:border-l"
+				>
+					<div class="flex min-w-0 flex-1 items-start gap-3">
+						<Mail class="mt-0.5 size-4 shrink-0 text-base-content/45" aria-hidden="true" />
+						<div>
+							<h3 class="text-sm font-semibold">Academic follow-up</h3>
+							<p class="mt-1 text-xs text-base-content/60">{gradeConcernSummary}</p>
+							{#if meetingSentAt}
+								<p class="mt-1 text-xs text-base-content/50">
+									Request emailed {formatter.format(meetingSentAt)}
+								</p>
+							{/if}
+						</div>
+					</div>
+					{#if meetingSentAt}
+						<span class="flex items-center gap-1.5 text-xs font-medium text-base-content/65">
+							<Check class="size-3.5 text-success" aria-hidden="true" />Meeting request sent
+						</span>
+					{:else}
+						<button
+							type="button"
+							class="btn gap-2 border-base-300 btn-outline btn-sm"
+							disabled={busy || editing || dirty}
+							onclick={requestMeeting}
+						>
+							Send meeting request
+						</button>
+					{/if}
+				</div>
+			{/if}
+		</div>
+		{#if data.isCurrent && finalized && clearanceVerified}
+			<div
+				class="flex flex-wrap items-center justify-between gap-4 border-t border-base-300 bg-base-200/35 px-5 py-4 sm:px-6"
+			>
+				<div>
+					<p class="text-sm font-semibold">Ready for the next term</p>
+					<p class="mt-1 text-xs text-base-content/55">
+						{hasGradeConcerns
+							? 'Review grade concerns before enrolling.'
+							: 'Grades and clearance are complete.'}
+					</p>
+				</div>
+				<a
+					class="btn gap-2 btn-primary btn-sm"
+					href={resolve('/user/students/[userId]/enroll', { userId: data.student.id })}
+				>
+					Enroll for next term<ArrowRight class="size-4" aria-hidden="true" />
+				</a>
+			</div>
+		{/if}
+	</section>
+
+	<section
+		class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
 		aria-labelledby="enrollment-subjects-heading"
 	>
 		<header
@@ -249,7 +449,7 @@
 					{:else}
 						<button
 							type="button"
-							class="btn btn-primary btn-sm"
+							class="btn border-base-300 btn-outline btn-sm"
 							disabled={busy || !rows.length}
 							onclick={() => {
 								editing = true;
@@ -262,7 +462,7 @@
 						{#if canFinalize}
 							<button
 								type="button"
-								class="btn border-base-300 btn-outline btn-sm"
+								class="btn btn-primary btn-sm"
 								disabled={busy || !savedGradesValid}
 								onclick={finalize}
 							>
@@ -309,7 +509,7 @@
 								<td class="font-mono text-xs">{subject.subjectCode}</td>
 								<td class="min-w-48 font-semibold">{subject.subjectName}</td>
 								<td>
-									<span class="badge badge-outline badge-sm">
+									<span class="text-xs text-base-content/55">
 										{subject.source === 'curriculum' ? 'Curriculum' : 'Extra'}
 									</span>
 								</td>

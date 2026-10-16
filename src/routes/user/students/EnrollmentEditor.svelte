@@ -5,15 +5,28 @@
 	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { BookOpen, GraduationCap, Plus, Trash2, UserPlus } from '@lucide/svelte';
+	import {
+		BookOpen,
+		Check,
+		Eye,
+		GraduationCap,
+		Plus,
+		RotateCcw,
+		Trash2,
+		UserPlus,
+		X
+	} from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { levelOptions, semesterLabel } from '../curriculum/SubjectLayout.svelte';
 	import type { PageData } from './[userId]/enroll/$types';
 
 	let {
 		data
-	}: { data: NonNullable<PageData['plan']> & Pick<PageData, 'student' | 'schoolYearStart'> } =
-		$props();
+	}: {
+		data: NonNullable<PageData['plan']> &
+			Pick<PageData, 'student' | 'schoolYearStart'> &
+			Partial<Pick<PageData, 'gradeConcerns'>>;
+	} = $props();
 	type SubjectRow = { key: string; subjectId: string; units: number | undefined };
 	let yearLevel = $state(
 		untrack(() => Math.min(data.student.yearLevel ?? 1, data.curriculum.yearLevels))
@@ -22,7 +35,8 @@
 		untrack(() => Math.min(data.student.semester ?? 1, data.curriculum.semesters))
 	);
 	let schoolYearStart = $state<number | undefined>(untrack(() => data.schoolYearStart));
-	let section = $state('');
+	let section = $state(untrack(() => data.student.section ?? ''));
+	let outstandingDialog: HTMLDialogElement;
 
 	function termRows(year: number, term: number): SubjectRow[] {
 		return data.entries
@@ -30,6 +44,10 @@
 			.map((entry) => ({ key: entry.id, subjectId: entry.subjectId, units: entry.units }));
 	}
 	let rows = $state<SubjectRow[]>(untrack(() => termRows(yearLevel, semester)));
+	const outstandingSubjects = $derived(data.outstandingSubjects ?? []);
+	const remainingSubjects = $derived(
+		outstandingSubjects.filter((subject) => !rows.some((row) => row.subjectId === subject.id))
+	);
 	const termEntries = $derived(
 		data.entries.filter((entry) => entry.yearLevel === yearLevel && entry.semester === semester)
 	);
@@ -46,6 +64,14 @@
 	let enrolledUserId = $state<string | null>(null);
 	let confirmingDiscard = false;
 	let discardAllowed = false;
+	const hasGradeConcerns = $derived(
+		!!(data.gradeConcerns?.failedCount || data.gradeConcerns?.incompleteCount)
+	);
+	const gradeWarning = $derived(
+		hasGradeConcerns
+			? `The current enrollment has ${data.gradeConcerns!.failedCount} failing and ${data.gradeConcerns!.incompleteCount} incomplete (INC) grades. Review the student's academic standing before continuing.`
+			: ''
+	);
 
 	beforeNavigate(async ({ cancel, willUnload, to }) => {
 		if (saved || discardAllowed || (!dirty && !busy)) return;
@@ -67,8 +93,23 @@
 	function addSubject() {
 		if (!busy && !saved) rows.push({ key: crypto.randomUUID(), subjectId: '', units: 3 });
 	}
+	function addOutstandingSubject(
+		subject: NonNullable<PageData['plan']>['outstandingSubjects'][number]
+	) {
+		if (busy || saved || rows.some((row) => row.subjectId === subject.id)) return;
+		const matching = termEntries.find((entry) => entry.subjectId === subject.id);
+		rows.push({
+			key: crypto.randomUUID(),
+			subjectId: subject.id,
+			units: matching?.units ?? subject.units
+		});
+	}
 	function removeSubject(key: string) {
 		if (!busy && !saved) rows = rows.filter((entry) => entry.key !== key);
+	}
+	function addAllOutstandingSubjects() {
+		if (busy || saved) return;
+		for (const subject of remainingSubjects) addOutstandingSubject(subject);
 	}
 	async function useTermSubjects() {
 		if (busy || saved) return;
@@ -112,8 +153,9 @@
 		try {
 			if (
 				!(await showYesNo({
-					title: 'Enroll student?',
-					message: `Enroll ${data.student.name} for ${schoolYearStart}–${Number(schoolYearStart) + 1}, year ${yearLevel}, ${semesterLabel(semester)}, section ${section.trim()}, with ${rows.length} subjects?`,
+					title: hasGradeConcerns ? 'Enroll with grade concerns?' : 'Enroll student?',
+					message: `${gradeWarning}${gradeWarning ? ' ' : ''}Enroll ${data.student.name} for ${schoolYearStart}–${Number(schoolYearStart) + 1}, year ${yearLevel}, ${semesterLabel(semester)}, section ${section.trim()}, with ${rows.length} subjects?`,
+					warning: hasGradeConcerns,
 					yesText: 'Enroll Student',
 					noText: 'Cancel'
 				}))
@@ -124,6 +166,7 @@
 				programCode: data.program.code,
 				curriculumId: data.curriculum.id,
 				currentEnrollmentId: data.student.currentEnrollmentId,
+				acknowledgeGradeConcerns: hasGradeConcerns,
 				section: section.trim(),
 				schoolYearStart: Number(schoolYearStart),
 				yearLevel,
@@ -136,7 +179,12 @@
 			await goto(resolve('/user/students/[userId]', { userId: result.userId }), {
 				refreshAll: true
 			});
-			showSuccess('Student enrolled successfully');
+			if (result.notificationSent) showSuccess('Student enrolled and confirmation email sent.');
+			else
+				showError({
+					title: 'Student enrolled',
+					message: 'Enrollment was saved, but the confirmation email could not be sent.'
+				});
 		} catch (cause) {
 			message = saved
 				? 'Student enrolled. Open the student record below to continue.'
@@ -149,6 +197,11 @@
 </script>
 
 <form class="mx-auto max-w-7xl space-y-6" onsubmit={save}>
+	{#if hasGradeConcerns}
+		<p class="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm" role="status">
+			{gradeWarning}
+		</p>
+	{/if}
 	{#if message}
 		<p role="alert" class="rounded-xl border border-error/20 bg-error/10 p-4 text-sm text-error">
 			{message}
@@ -247,6 +300,49 @@
 					</label>
 				</fieldset>
 			</section>
+			{#if outstandingSubjects.length}
+				<section
+					class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm"
+					aria-labelledby="outstanding-subjects-heading"
+				>
+					<div class="flex flex-wrap items-center justify-between gap-4">
+						<div>
+							<h2 id="outstanding-subjects-heading" class="flex items-center gap-2 font-bold">
+								<RotateCcw class="size-5 text-primary" aria-hidden="true" />Failed / incomplete
+								subjects
+								<span class="badge badge-outline badge-sm">{outstandingSubjects.length}</span>
+							</h2>
+							<p class="mt-2 text-xs leading-relaxed text-base-content/60">
+								Review previous failed or INC subjects and add them to this enrollment.
+							</p>
+						</div>
+						<div class="flex flex-wrap gap-2">
+							<button
+								type="button"
+								class="btn gap-2 border-base-300 btn-outline btn-sm"
+								disabled={busy || saved}
+								onclick={() => outstandingDialog.showModal()}
+							>
+								<Eye class="size-4" aria-hidden="true" />View failed / INC subjects
+							</button>
+							<button
+								type="button"
+								class="btn gap-2 border-base-300 btn-outline btn-sm"
+								disabled={busy || saved || !remainingSubjects.length}
+								onclick={addAllOutstandingSubjects}
+							>
+								<Plus class="size-4" aria-hidden="true" />{remainingSubjects.length
+									? 'Add all to enrollment'
+									: 'All subjects added'}
+							</button>
+						</div>
+					</div>
+					<p class="mt-3 text-xs text-base-content/50" role="status">
+						{outstandingSubjects.length - remainingSubjects.length} of {outstandingSubjects.length} already
+						selected.
+					</p>
+				</section>
+			{/if}
 			<section
 				class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
 				aria-labelledby="subjects-heading"
@@ -395,3 +491,85 @@
 		</aside>
 	</div>
 </form>
+
+<dialog
+	bind:this={outstandingDialog}
+	class="modal"
+	aria-labelledby="outstanding-dialog-title"
+	aria-describedby="outstanding-dialog-description"
+>
+	<div
+		class="modal-box flex max-h-[85dvh] max-w-3xl flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 p-0 shadow-xl"
+	>
+		<div class="h-1.5 shrink-0 bg-primary" aria-hidden="true"></div>
+		<header
+			class="flex items-start justify-between gap-4 border-b border-base-300 bg-base-200/40 p-5 sm:p-6"
+		>
+			<div>
+				<h2 id="outstanding-dialog-title" class="text-xl font-bold">
+					Failed and incomplete subjects
+				</h2>
+				<p id="outstanding-dialog-description" class="mt-2 text-sm text-base-content/60">
+					Latest finalized results from enrollment history. Subjects passed on a later attempt are
+					excluded.
+				</p>
+			</div>
+			<button
+				type="button"
+				class="btn btn-square shrink-0 btn-ghost btn-sm"
+				aria-label="Close subject history"
+				onclick={() => outstandingDialog.close()}
+			>
+				<X class="size-5" aria-hidden="true" />
+			</button>
+		</header>
+		<ul class="min-h-0 divide-y divide-base-300/60 overflow-y-auto">
+			{#each outstandingSubjects as subject (subject.id)}
+				{@const selected = rows.some((row) => row.subjectId === subject.id)}
+				<li class="flex flex-wrap items-center justify-between gap-4 p-5 sm:px-6">
+					<div class="min-w-0 flex-1">
+						<p class="text-sm font-semibold wrap-break-word">{subject.name}</p>
+						<p class="mt-1 text-xs text-base-content/55">
+							<span class="font-mono">{subject.code}</span>
+							&middot; {subject.units} units
+						</p>
+						<p class="mt-1 text-xs text-base-content/50">
+							SY {subject.schoolYearStart}&ndash;{subject.schoolYearStart + 1} &middot; {semesterLabel(
+								subject.semester
+							)}
+						</p>
+						<span
+							class={`mt-2 badge border-0 badge-sm ${subject.grade === null ? 'bg-warning/15 text-base-content' : 'bg-error/10 text-base-content'}`}
+						>
+							{subject.grade === null ? 'INC (Incomplete)' : `Failed (${subject.grade.toFixed(2)})`}
+						</span>
+					</div>
+					<button
+						type="button"
+						class="btn gap-2 border-base-300 btn-outline btn-sm"
+						disabled={busy || saved || selected}
+						aria-label={selected
+							? `${subject.code} already selected`
+							: `Add ${subject.code} to enrollment`}
+						onclick={() => addOutstandingSubject(subject)}
+					>
+						{#if selected}
+							<Check class="size-4" aria-hidden="true" />Added
+						{:else}
+							<Plus class="size-4" aria-hidden="true" />Add to enrollment
+						{/if}
+					</button>
+				</li>
+			{/each}
+		</ul>
+		<footer class="flex shrink-0 justify-end border-t border-base-300 bg-base-200/30 p-4 sm:px-6">
+			<button
+				type="button"
+				class="btn btn-primary btn-sm"
+				onclick={() => outstandingDialog.close()}
+			>
+				Done
+			</button>
+		</footer>
+	</div>
+</dialog>

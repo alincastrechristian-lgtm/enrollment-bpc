@@ -201,6 +201,12 @@ export const enrollment = sqliteTable(
 			.notNull(),
 
 		finalizedGrades: integer('finalized_grades', { mode: 'boolean' }).default(false).notNull(),
+		submittedClearance: integer('submitted_clearance', { mode: 'boolean' })
+			.default(false)
+			.notNull(),
+		meetingRequestSentAt: integer('meeting_request_sent_at', { mode: 'timestamp_ms' }),
+		// Claim a send without holding a database transaction open during email delivery.
+		meetingRequestStartedAt: integer('meeting_request_started_at', { mode: 'timestamp_ms' }),
 
 		enrolledAt: integer('enrolled_at', { mode: 'timestamp_ms' })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)

@@ -4,7 +4,7 @@
 	import { resendMagicLink } from '#lib/actions/user.remote.js';
 	import { showError, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { resolve } from '$app/paths';
-	import { Eye, GraduationCap, MailCheck } from '@lucide/svelte';
+	import { ArrowRight, Eye, GraduationCap, MailCheck } from '@lucide/svelte';
 	import { semesterLabel } from '../../curriculum/SubjectLayout.svelte';
 	import type { PageProps } from './$types';
 
@@ -119,15 +119,25 @@
 						<GraduationCap class="size-5 text-primary" aria-hidden="true" />Current enrollment
 					</h2>
 					{#if current}
-						<a
-							class="btn border-base-300 btn-outline btn-sm"
-							href={resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
-								userId: student.id,
-								enrollmentId: current.id
-							})}
-						>
-							<Eye class="size-4" aria-hidden="true" />View
-						</a>
+						<div class="flex flex-wrap items-center gap-2">
+							<a
+								class="btn border-base-300 btn-outline btn-sm"
+								href={resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
+									userId: student.id,
+									enrollmentId: current.id
+								})}
+							>
+								<Eye class="size-4" aria-hidden="true" />View
+							</a>
+							{#if current.finalizedGrades && current.submittedClearance}
+								<a
+									class="btn gap-2 btn-primary btn-sm"
+									href={resolve('/user/students/[userId]/enroll', { userId: student.id })}
+								>
+									Enroll for next term<ArrowRight class="size-4" aria-hidden="true" />
+								</a>
+							{/if}
+						</div>
 					{/if}
 				</div>
 				{#if current}

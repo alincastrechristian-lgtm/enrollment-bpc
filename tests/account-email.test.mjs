@@ -93,6 +93,16 @@ function fixture(
 		}
 	};
 	const dependencies = {
+		'#lib/server/email.js': { sendEmail: async () => true },
+		'#lib/server/email-templates.js': {
+			createEnrollmentConfirmationEmail: () => ({
+				subject: 'Enrollment confirmed',
+				text: 'Enrollment confirmed'
+			})
+		},
+		'$app/env/private': { ORIGIN: 'https://example.com' },
+		'$app/paths': { resolve: (path) => path },
+		'#lib/enrollment-grades.js': loadModule('src/lib/enrollment-grades.ts'),
 		'#lib/Roles.js': { Role },
 		'#lib/schema.js': schema,
 		'#lib/errors.js': errorHelpers,

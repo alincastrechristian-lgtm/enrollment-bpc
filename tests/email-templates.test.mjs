@@ -35,6 +35,62 @@ function templatesFor(styles = css) {
 const templates = templatesFor();
 const url = 'https://enrollment.example.com/auth?token=test-token&callbackURL=%2Fuser';
 
+test('meeting request email explains follow-up without inventing an appointment and escapes names', () => {
+	const message = templates.createMeetingRequestEmail('<img src=x onerror=alert(1)>', 2026, 2);
+	assert.match(message.text, /Semester 2, SY 2026–2027/);
+	assert.match(message.text, /failing or incomplete \(INC\)/);
+	assert.match(message.text, /No appointment has been scheduled/);
+	assert.match(message.html, /&lt;img/);
+	assert.doesNotMatch(message.html, /<img/);
+});
+
+test('academic emails share a branded design, term details, safe portal links and plain text', () => {
+	const portal = 'https://example.com/portal/user/enrollment?view=grades&term=2';
+	for (const create of [
+		templates.createMeetingRequestEmail,
+		templates.createGradesFinalizedEmail
+	]) {
+		const message = create('Student <script>alert(1)</script>', 2026, 2, portal);
+		assert.match(message.text, /Semester 2, SY 2026–2027/);
+		assert.ok(message.text.includes(portal));
+		assert.ok(message.html.includes(`href="${htmlHelpers.escapeHtml(portal)}"`));
+		assert.match(message.html, /Your next steps/);
+		assert.match(message.html, /View enrollment/);
+		assert.match(message.html, /&lt;script&gt;/);
+		assert.doesNotMatch(message.html, /<script|var\(--|oklch\(/);
+		for (const invalid of ['javascript:alert(1)', 'https://user:pass@example.com'])
+			assert.throws(() => create('Student', 2026, 2, invalid), /Email links must/);
+	}
+	const finalized = templates.createGradesFinalizedEmail('Student', 2026, 2, portal, {
+		code: 'BSIS',
+		name: 'Information <Systems>'
+	});
+	assert.match(finalized.text, /Program: Information <Systems> \(BSIS\)/);
+	assert.match(finalized.html, /Information &lt;Systems&gt; \(BSIS\)/);
+	assert.match(finalized.subject, /grades have been finalized/);
+	assert.match(finalized.text, /INC means Incomplete/);
+	assert.doesNotMatch(finalized.text, /include failing/);
+});
+
+test('enrollment confirmation includes academic details, safe links and escaped personal data', () => {
+	const message = templates.createEnrollmentConfirmationEmail({
+		name: '<script>Student</script>',
+		schoolYearStart: 2026,
+		semester: 2,
+		programCode: 'BSIS',
+		yearLevel: 3,
+		section: '<b>A</b>',
+		url: 'https://example.com/user/enrollment'
+	});
+	assert.match(message.subject, /enrollment is confirmed/);
+	assert.match(message.text, /Semester 2, SY 2026–2027/);
+	assert.match(message.text, /BSIS, Year 3, Section/);
+	assert.match(message.html, /&lt;script&gt;Student/);
+	assert.match(message.html, /&lt;b&gt;A/);
+	assert.match(message.html, /href="https:\/\/example.com\/user\/enrollment"/);
+	assert.doesNotMatch(message.html, /<script>|<b>A/);
+});
+
 test('both templates contain the correct action, original link, and plain text alternative', () => {
 	const magic = templates.createMagicLinkEmail(url, 7 * 24 * 60 * 60);
 	const reset = templates.createResetPasswordEmail(url, 3600, 'Student');

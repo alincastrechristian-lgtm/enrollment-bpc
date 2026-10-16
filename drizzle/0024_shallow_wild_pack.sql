@@ -1,0 +1,1 @@
+ALTER TABLE `enrollment` ADD `submitted_clearance` integer DEFAULT false NOT NULL;

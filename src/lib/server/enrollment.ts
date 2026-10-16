@@ -1,4 +1,5 @@
 import { Role } from '#lib/Roles.js';
+import { getGradeConcerns, getGradeStatus } from '#lib/enrollment-grades.js';
 import {
 	user,
 	enrollment,
@@ -12,7 +13,7 @@ import {
 } from '#lib/schema.js';
 import type { db, Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const enrollStudentSchema = z.object({
@@ -20,6 +21,7 @@ export const enrollStudentSchema = z.object({
 	programCode: z.string().trim().min(1, 'Program is required'),
 	curriculumId: z.string().trim().min(1, 'Curriculum is required'),
 	currentEnrollmentId: z.string().nullable(),
+	acknowledgeGradeConcerns: z.boolean().default(false),
 	section: z.string().trim().min(1, 'Section is required'),
 	schoolYearStart: z.number().int().positive('School year start must be a positive integer'),
 	semester: z.number().int().positive('Semester must be a positive integer'),
@@ -40,6 +42,46 @@ type EnrollmentSubjectValues = Omit<
 	typeof enrollmentSubject.$inferInsert,
 	'enrollmentId' | 'addedBy'
 >;
+
+export function getEnrollmentLockReason(
+	current: Pick<typeof enrollment.$inferSelect, 'finalizedGrades' | 'submittedClearance'> | null
+) {
+	if (current && (!current.finalizedGrades || !current.submittedClearance))
+		return 'Finalize grades and verify clearance for the current enrollment before enrolling this student again.';
+	return null;
+}
+
+export function getOutstandingEnrollmentSubjects(
+	database: typeof db | Transaction,
+	studentId: string
+) {
+	const attempts = database
+		.select({
+			id: enrollmentSubject.subjectId,
+			code: enrollmentSubject.subjectCode,
+			name: enrollmentSubject.subjectName,
+			units: enrollmentSubject.units,
+			grade: enrollmentSubject.grade,
+			schoolYearStart: enrollment.schoolYearStart,
+			semester: enrollment.semester
+		})
+		.from(enrollmentSubject)
+		.innerJoin(enrollment, eq(enrollment.id, enrollmentSubject.enrollmentId))
+		.where(and(eq(enrollment.studentId, studentId), eq(enrollment.finalizedGrades, true)))
+		.orderBy(
+			desc(enrollment.schoolYearStart),
+			desc(enrollment.semester),
+			desc(enrollment.enrolledAt),
+			desc(enrollment.id)
+		)
+		.all();
+	// A later finalized result replaces an earlier failure or INC for the same subject.
+	const latest = new Map<string, (typeof attempts)[number]>();
+	for (const attempt of attempts) if (!latest.has(attempt.id)) latest.set(attempt.id, attempt);
+	return [...latest.values()].filter(
+		(attempt) => attempt.grade === null || getGradeStatus(attempt.grade, true) === 'Failed'
+	);
+}
 
 // Share eligibility and curriculum checks between enrollment pages and the command.
 export function getEnrollmentContext(
@@ -105,12 +147,32 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 		const current = database
 			.select()
 			.from(enrollment)
-			.where(eq(enrollment.id, context.student.currentEnrollmentId))
+			.where(
+				and(
+					eq(enrollment.id, context.student.currentEnrollmentId),
+					eq(enrollment.studentId, context.student.studentId)
+				)
+			)
 			.get();
+		if (!current) error(409, 'Current enrollment is unavailable. Refresh and try again.');
+		const lockReason = getEnrollmentLockReason(current);
+		if (lockReason) error(409, lockReason);
+		const concerns = getGradeConcerns(
+			database
+				.select({ grade: enrollmentSubject.grade })
+				.from(enrollmentSubject)
+				.where(eq(enrollmentSubject.enrollmentId, current.id))
+				.all(),
+			current.finalizedGrades
+		);
+		if ((concerns.failedCount || concerns.incompleteCount) && !data.acknowledgeGradeConcerns)
+			error(
+				409,
+				'This student has failing or incomplete grades. Review the current enrollment and acknowledge the warning before enrolling.'
+			);
 		if (
-			current &&
-			(data.schoolYearStart < current.schoolYearStart ||
-				(data.schoolYearStart === current.schoolYearStart && data.semester <= current.semester))
+			data.schoolYearStart < current.schoolYearStart ||
+			(data.schoolYearStart === current.schoolYearStart && data.semester <= current.semester)
 		)
 			error(400, 'Select a term after the current enrollment.');
 	}

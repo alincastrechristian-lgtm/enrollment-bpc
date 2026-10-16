@@ -169,6 +169,20 @@
       "when": 1792095309005,
       "tag": "0023_student_first",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1792104924658,
+      "tag": "0024_shallow_wild_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1792106217199,
+      "tag": "0025_enrollment_meeting_request",
+      "breakpoints": true
     }
   ]
 }

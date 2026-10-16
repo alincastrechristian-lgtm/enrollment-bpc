@@ -5,6 +5,7 @@
 		Bell,
 		BellRing,
 		BookOpen,
+		CalendarClock,
 		Check,
 		CheckCheck,
 		CircleAlert,
@@ -23,6 +24,10 @@
 	const passedCount = $derived(data.passedCount);
 	const attentionCount = $derived(data.attentionCount);
 	const totalUnits = $derived(data.totalUnits);
+	const dateFormatter = new Intl.DateTimeFormat('en-PH', {
+		timeZone: 'Asia/Manila',
+		dateStyle: 'medium'
+	});
 
 	// Notifications remain sample data until the notification system is implemented.
 	let notifications = $state([
@@ -126,6 +131,39 @@
 			</div>
 		</div>
 	</header>
+
+	{#each data.meetingRequests as meeting (meeting.id)}
+		<section
+			class="overflow-hidden rounded-2xl border border-warning/40 bg-base-100 shadow-sm"
+			aria-labelledby={`meeting-${meeting.id}`}
+		>
+			<div class="flex items-start gap-4 p-5 sm:p-6">
+				<span class="grid size-11 shrink-0 place-items-center rounded-xl bg-warning/20">
+					<CalendarClock class="size-5" aria-hidden="true" />
+				</span>
+				<div class="min-w-0 flex-1">
+					<p class="text-xs font-semibold text-base-content/60">{meeting.term}</p>
+					<h2 id={`meeting-${meeting.id}`} class="mt-1 text-lg font-bold">
+						A meeting has been requested
+					</h2>
+					<p class="mt-2 text-sm leading-relaxed text-base-content/70">
+						Please contact the Registrar's Office to arrange a time to discuss your failing or
+						incomplete grades and enrollment options. Check your email for the request.
+					</p>
+					<p class="mt-3 text-xs text-base-content/55">
+						Request sent {dateFormatter.format(meeting.sentAt)} · {meeting.failedCount} failing · {meeting.incompleteCount}
+						incomplete
+					</p>
+					<a
+						href={resolve('/user/enrollment')}
+						class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+					>
+						Review enrollment history <ArrowRight class="size-4" aria-hidden="true" />
+					</a>
+				</div>
+			</div>
+		</section>
+	{/each}
 
 	<section class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label="Semester summary">
 		{#each [{ label: 'Current subjects', value: subjects.length, detail: semester ? `${totalUnits} units this semester` : 'No current enrollment', icon: BookOpen, tone: 'bg-primary/10 text-primary' }, { label: 'Subjects passed', value: passedCount ?? '\u2014', detail: semester?.finalizedGrades ? 'Final grades released' : 'Awaiting final grades', icon: CircleCheck, tone: 'bg-success/20 text-base-content' }, { label: 'Need attention', value: attentionCount, detail: `${data.failedCount} failed \u00b7 ${data.incompleteCount} incomplete`, icon: CircleAlert, tone: 'bg-warning/35 text-warning-content' }, { label: 'Unread updates', value: unreadCount, detail: 'Sample notifications', icon: BellRing, tone: 'bg-secondary/10 text-secondary' }] as item (item.label)}

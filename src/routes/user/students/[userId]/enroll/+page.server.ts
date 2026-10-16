@@ -1,10 +1,24 @@
 import { Role } from '#lib/Roles.js';
-import { curriculumSubject, enrollment, program, studentData, subject, user } from '#lib/schema.js';
+import {
+	curriculumSubject,
+	curriculum,
+	enrollment,
+	enrollmentSubject,
+	program,
+	studentData,
+	subject,
+	user
+} from '#lib/schema.js';
+import { getGradeConcerns } from '#lib/enrollment-grades.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
-import { getEnrollmentContext } from '#lib/server/enrollment.js';
+import {
+	getEnrollmentContext,
+	getEnrollmentLockReason,
+	getOutstandingEnrollmentSubjects
+} from '#lib/server/enrollment.js';
 import { error } from '@sveltejs/kit';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
@@ -17,34 +31,62 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		.get();
 	if (!record) error(404, 'Student not found.');
 	const current = record.student.currentEnrollmentId
-		? db
-				.select()
+		? (db
+				.select({
+					...getTableColumns(enrollment),
+					programCode: curriculum.programCode,
+					curriculumSemesters: curriculum.semesters
+				})
 				.from(enrollment)
+				.innerJoin(curriculum, eq(curriculum.id, enrollment.curriculumId))
 				.where(
 					and(
 						eq(enrollment.id, record.student.currentEnrollmentId),
 						eq(enrollment.studentId, record.student.studentId)
 					)
 				)
-				.get()
+				.get() ?? null)
 		: null;
-	const programCode = url.searchParams.get('programCode')?.trim();
-	const context = programCode ? getEnrollmentContext(db, params.userId, programCode) : null;
-	const nextYear = !!current && current.semester >= (context?.curriculum.semesters ?? 2);
+	if (record.student.currentEnrollmentId && !current)
+		error(409, 'Current enrollment is unavailable. Refresh and try again.');
+	const enrollmentLockReason = getEnrollmentLockReason(current);
+	const programs = db
+		.select({ code: program.code, name: program.name })
+		.from(program)
+		.where(eq(program.isActive, true))
+		.orderBy(asc(program.code))
+		.all();
+	const programCode =
+		url.searchParams.get('programCode')?.trim() ||
+		programs.find((entry) => entry.code === current?.programCode)?.code ||
+		'';
+	const context =
+		programCode && !enrollmentLockReason
+			? getEnrollmentContext(db, params.userId, programCode)
+			: null;
+	// Advance using the enrolled curriculum's calendar, even if the program changes.
+	const nextYear = !!current && current.semester >= current.curriculumSemesters;
 	return {
+		enrollmentLockReason,
+		gradeConcerns: getGradeConcerns(
+			current
+				? db
+						.select({ grade: enrollmentSubject.grade })
+						.from(enrollmentSubject)
+						.where(eq(enrollmentSubject.enrollmentId, current.id))
+						.all()
+				: [],
+			current?.finalizedGrades ?? false
+		),
 		student: {
 			...record.student,
 			name: record.name,
 			email: record.email,
 			yearLevel: current ? current.yearLevel + (nextYear ? 1 : 0) : 1,
-			semester: current && !nextYear ? current.semester + 1 : 1
+			semester: current && !nextYear ? current.semester + 1 : 1,
+			section: current?.section ?? ''
 		},
-		programs: db
-			.select({ code: program.code, name: program.name })
-			.from(program)
-			.where(eq(program.isActive, true))
-			.orderBy(asc(program.code))
-			.all(),
+		programs,
 		programCode: programCode ?? '',
 		schoolYearStart:
 			(current ? current.schoolYearStart + (nextYear ? 1 : 0) : undefined) ??
@@ -55,6 +97,7 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 			),
 		plan: context
 			? {
+					outstandingSubjects: getOutstandingEnrollmentSubjects(db, record.student.studentId),
 					curriculum: context.curriculum,
 					program: context.program,
 					entries: db

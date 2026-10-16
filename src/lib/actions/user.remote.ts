@@ -3,7 +3,11 @@ import { createStudentSchema } from '#lib/students.js';
 import { enrollment, enrollmentSubject, studentData, studentSequence, user } from '#lib/schema.js';
 import { auth, validateUser } from '#lib/server/auth.js';
 import { enrollStudentSchema, getEnrollmentPlan } from '#lib/server/enrollment.js';
+import { sendEmail } from '#lib/server/email.js';
+import { createEnrollmentConfirmationEmail } from '#lib/server/email-templates.js';
 import { command, getRequestEvent } from '$app/server';
+import { ORIGIN } from '$app/env/private';
+import { resolve } from '$app/paths';
 import { error, isHttpError } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -194,7 +198,7 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 	try {
-		return db.transaction((tx) => {
+		const { recipient, ...result } = db.transaction((tx) => {
 			const plan = getEnrollmentPlan(tx, data);
 			const result = tx
 				.insert(enrollment)
@@ -225,12 +229,35 @@ export const enrollStudent = command(enrollStudentSchema, async (data) => {
 				.where(eq(studentData.studentId, plan.student.studentId))
 				.run();
 			return {
+				recipient: plan.user,
 				success: true,
 				userId: plan.user.id,
 				studentId: plan.student.studentId,
 				enrollmentId: result.id
 			};
 		});
+		// Email delivery happens only after enrollment, subjects and the current link commit.
+		let notificationSent = false;
+		try {
+			const message = createEnrollmentConfirmationEmail({
+				name: recipient.name,
+				schoolYearStart: data.schoolYearStart,
+				semester: data.semester,
+				programCode: data.programCode,
+				yearLevel: data.yearLevel,
+				section: data.section,
+				url: new URL(resolve('/user/enrollment'), ORIGIN).href
+			});
+			notificationSent = await sendEmail(
+				recipient.email,
+				message.subject,
+				message.text,
+				message.html
+			);
+		} catch (cause) {
+			console.error('Enrollment confirmation email failed:', cause);
+		}
+		return { ...result, notificationSent };
 	} catch (cause) {
 		if (isHttpError(cause)) throw cause;
 		console.error('Enrollment failed:', cause);
