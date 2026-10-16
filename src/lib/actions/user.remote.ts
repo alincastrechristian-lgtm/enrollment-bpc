@@ -73,6 +73,37 @@ export const deleteStudent = command(z.object({ userId: z.string().min(1) }), ({
 	}
 });
 
+export const deleteRegistrar = command(z.object({ userId: z.string().min(1) }), ({ userId }) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN]);
+	try {
+		return db.transaction(
+			(tx) => {
+				const target = tx
+					.select({ id: user.id })
+					.from(user)
+					.where(and(eq(user.id, userId), eq(user.role, Role.REGISTRAR)))
+					.get();
+				if (!target) error(404, 'Registrar account not found.');
+
+				tx.delete(verification)
+					.where(
+						and(eq(verification.value, userId), like(verification.identifier, 'reset-password:%'))
+					)
+					.run();
+				// Auth data cascades; academic records and student notifications keep nullable author links.
+				tx.delete(user).where(eq(user.id, userId)).run();
+				return { success: true };
+			},
+			{ behavior: 'immediate' }
+		);
+	} catch (cause) {
+		if (isHttpError(cause)) throw cause;
+		console.error('Registrar deletion failed:', cause);
+		error(500, 'Failed to delete registrar. Please try again.');
+	}
+});
+
 export const setRegistrarDisabled = command(
 	z.object({ userId: z.string().min(1), disabled: z.boolean() }),
 	async ({ userId, disabled }) => {

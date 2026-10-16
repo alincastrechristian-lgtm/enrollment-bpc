@@ -30,7 +30,7 @@ const schema = load('src/lib/schema.ts', {
 });
 const permissions = load('src/lib/auth-permissions.ts');
 
-test('account access actions enforce role boundaries, revoke sessions, and ban/unban through Better Auth', async (t) => {
+test('account actions enforce role boundaries, revoke sessions, ban/unban, and preserve records on deletion', async (t) => {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
 	const db = drizzle(sqlite, { schema });
@@ -101,7 +101,7 @@ test('account access actions enforce role boundaries, revoke sessions, and ban/u
 			command: (validation, fn) => (data) => fn(validation.parse(data))
 		}
 	};
-	const { setRegistrarDisabled, revokeAccountSessions } = load(
+	const { deleteRegistrar, setRegistrarDisabled, revokeAccountSessions } = load(
 		'src/lib/actions/user.remote.ts',
 		dependencies
 	);
@@ -186,4 +186,124 @@ test('account access actions enforce role boundaries, revoke sessions, and ban/u
 		getAuthErrorMessage({ code: 'BANNED_USER', message: 'PRIVATE ban reason' }, 'Failed'),
 		'This account is disabled. Contact an administrator.'
 	);
+
+	// Registrar deletion must preserve student records, including grades and notifications.
+	db.update(schema.user)
+		.set({ setupComplete: true })
+		.where(eq(schema.user.id, target.user.id))
+		.run();
+	sqlite.exec(`
+		INSERT INTO student(id,user_id) VALUES('MA','${student.user.id}');
+		INSERT INTO program(id,code,name) VALUES('p','BSIS','Information Systems');
+		INSERT INTO curriculum(id,program_code,name) VALUES('c','BSIS','Curriculum');
+		INSERT INTO subject(id,code,name) VALUES('s','IS101','Introduction');
+		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level)
+		VALUES('e','MA','c','A',2026,1,1);
+		UPDATE student SET enrollment_id='e';
+		INSERT INTO enrollment_subject(id,enrollment_id,subject_id,source,subject_code,subject_name,units,grade,added_by)
+		VALUES('es','e','s','extra','IS101','Introduction',3,2.5,'${target.user.id}');
+	`);
+	db.insert(schema.notification)
+		.values({
+			id: 'student-event',
+			recipientId: student.user.id,
+			actorId: target.user.id,
+			enrollmentId: 'e',
+			type: 'enrollment_confirmed',
+			title: 'Enrollment confirmed',
+			message: 'Keep this'
+		})
+		.run();
+	db.insert(schema.twoFactor)
+		.values({
+			id: 'registrar-2fa',
+			userId: target.user.id,
+			secret: 'secret',
+			backupCodes: 'codes'
+		})
+		.run();
+	db.insert(schema.verification)
+		.values([
+			{
+				id: 'reset',
+				identifier: 'reset-password:registrar',
+				value: target.user.id,
+				expiresAt: new Date(Date.now() + 60000)
+			},
+			{
+				id: 'other-reset',
+				identifier: 'reset-password:student',
+				value: student.user.id,
+				expiresAt: new Date(Date.now() + 60000)
+			}
+		])
+		.run();
+	for (const role of [null, 'student', 'registrar']) {
+		locals = role ? { user: { id: target.user.id, role }, session: {} } : {};
+		assert.throws(
+			() => deleteRegistrar({ userId: target.user.id }),
+			(cause) => isHttpError(cause) && cause.status === (role ? 403 : 401)
+		);
+	}
+	locals = { user: { id: owner.user.id, role: 'admin' }, session: {} };
+	for (const userId of [owner.user.id, student.user.id, 'missing'])
+		assert.throws(
+			() => deleteRegistrar({ userId }),
+			(cause) => isHttpError(cause) && cause.status === 404
+		);
+
+	// Failure after token cleanup must roll the entire deletion back without leaking diagnostics.
+	sqlite.exec(`CREATE TRIGGER fail_registrar_delete BEFORE DELETE ON user
+		WHEN OLD.id='${target.user.id}' BEGIN SELECT RAISE(ABORT,'SECRET database failure'); END;`);
+	assert.throws(
+		() => deleteRegistrar({ userId: target.user.id }),
+		(cause) => isHttpError(cause) && cause.status === 500 && !cause.body.message.includes('SECRET')
+	);
+	assert.ok(db.select().from(schema.verification).where(eq(schema.verification.id, 'reset')).get());
+	assert.equal(db.select().from(schema.enrollmentSubject).get().addedBy, target.user.id);
+	sqlite.exec('DROP TRIGGER fail_registrar_delete');
+	const activeRegistrarHeaders = await signIn('registrar@example.com');
+	const before = db.select().from(schema.enrollmentSubject).get();
+	assert.deepEqual(deleteRegistrar({ userId: target.user.id }), { success: true });
+	assert.equal(
+		db.select().from(schema.user).where(eq(schema.user.id, target.user.id)).get(),
+		undefined
+	);
+	for (const table of [schema.session, schema.account, schema.twoFactor])
+		assert.equal(db.select().from(table).where(eq(table.userId, target.user.id)).all().length, 0);
+	assert.equal(await auth.api.getSession({ headers: activeRegistrarHeaders }), null);
+	await assert.rejects(
+		auth.api.signInEmail({ body: { email: 'registrar@example.com', password } })
+	);
+	assert.equal(
+		db.select().from(schema.verification).where(eq(schema.verification.id, 'reset')).get(),
+		undefined
+	);
+	assert.ok(
+		db.select().from(schema.verification).where(eq(schema.verification.id, 'other-reset')).get()
+	);
+	assert.deepEqual(db.select().from(schema.enrollmentSubject).get(), { ...before, addedBy: null });
+	assert.equal(db.select().from(schema.studentData).get().currentEnrollmentId, 'e');
+	assert.equal(db.select().from(schema.enrollment).get().id, 'e');
+	const event = db
+		.select()
+		.from(schema.notification)
+		.where(eq(schema.notification.id, 'student-event'))
+		.get();
+	assert.equal(event.actorId, null);
+	assert.equal(event.message, 'Keep this');
+	assert.equal(event.recipientId, student.user.id);
+	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
+
+	// Unfinished and disabled registrars are eligible too.
+	db.insert(schema.user)
+		.values({
+			id: 'unfinished',
+			name: 'Pending',
+			email: 'pending@example.com',
+			role: 'registrar',
+			banned: true
+		})
+		.run();
+	assert.deepEqual(deleteRegistrar({ userId: 'unfinished' }), { success: true });
 });

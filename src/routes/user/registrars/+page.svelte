@@ -18,6 +18,7 @@
 		Mail,
 		MailCheck,
 		Plus,
+		Trash2,
 		User,
 		UserPlus,
 		UserCheck,
@@ -26,6 +27,7 @@
 	} from '@lucide/svelte';
 	import {
 		createRegistrar,
+		deleteRegistrar,
 		resendMagicLink,
 		setRegistrarDisabled
 	} from '#lib/actions/user.remote.js';
@@ -38,8 +40,45 @@
 	let creating = $state(false);
 	let resendingEmail = $state<string | null>(null);
 	let changingAccess = $state(false);
+	let deleting = $state(false);
+
+	async function removeRegistrar(registrar: { id: string; name: string }) {
+		if (deleting || changingAccess || resendingEmail) return;
+		deleting = true;
+		let deleted = false;
+		try {
+			if (
+				!(await showYesNo({
+					title: 'Delete registrar account?',
+					message: `Permanently delete ${registrar.name}'s account? They will be signed out and lose access. Student enrollments, subjects, grades, and notifications will be kept.`,
+					warning: true,
+					hintText: 'This cannot be undone. Use Disable account to suspend access temporarily.',
+					yesText: 'Delete account',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			showLoading('Deleting registrar...');
+			await deleteRegistrar({ userId: registrar.id });
+			deleted = true;
+			await refreshAll();
+			showSuccess('Registrar account deleted.');
+		} catch (cause) {
+			showError(
+				getErrorMessage(
+					cause,
+					deleted
+						? 'Registrar deleted. Refresh the list to continue.'
+						: 'Failed to delete registrar. Please try again.'
+				)
+			);
+		} finally {
+			deleting = false;
+		}
+	}
+
 	async function changeAccess(registrar: { id: string; name: string; banned: boolean | null }) {
-		if (changingAccess || resendingEmail) return;
+		if (deleting || changingAccess || resendingEmail) return;
 		changingAccess = true;
 		const disabled = !registrar.banned;
 		let updated = false;
@@ -118,7 +157,7 @@
 	}
 
 	async function resend(email: string) {
-		if (resendingEmail || changingAccess) return;
+		if (deleting || resendingEmail || changingAccess) return;
 		resendingEmail = email;
 		showLoading();
 
@@ -223,7 +262,7 @@
 								<li>
 									<button
 										type="button"
-										disabled={changingAccess || !!resendingEmail}
+										disabled={deleting || changingAccess || !!resendingEmail}
 										onclick={() => resend(registrar.email)}
 									>
 										<MailCheck class="size-4" aria-hidden="true" />{resendingEmail ===
@@ -237,13 +276,13 @@
 								<RevokeSessionsAction
 									userId={registrar.id}
 									name={registrar.name}
-									disabled={changingAccess || !!resendingEmail}
+									disabled={deleting || changingAccess || !!resendingEmail}
 								/>
 							</li>
 							<li class={registrar.banned ? 'text-success' : 'text-error'}>
 								<button
 									type="button"
-									disabled={changingAccess || !!resendingEmail}
+									disabled={deleting || changingAccess || !!resendingEmail}
 									onclick={() => changeAccess(registrar)}
 								>
 									{#if registrar.banned}
@@ -251,6 +290,15 @@
 									{:else}
 										<UserRoundX class="size-4" aria-hidden="true" />Disable account
 									{/if}
+								</button>
+							</li>
+							<li class="text-error">
+								<button
+									type="button"
+									disabled={deleting || changingAccess || !!resendingEmail}
+									onclick={() => removeRegistrar(registrar)}
+								>
+									<Trash2 class="size-4" aria-hidden="true" />Delete account
 								</button>
 							</li>
 						</ul>

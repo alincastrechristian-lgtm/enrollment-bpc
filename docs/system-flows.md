@@ -74,6 +74,7 @@ flowchart TD
 | Create/list registrar accounts | Yes | No | No |
 | Delete unfinished students without enrollment history | Yes | Yes | No |
 | Disable/enable registrar accounts | Yes | No | No |
+| Delete registrar accounts | Yes | No | No |
 | Revoke account sessions | Students and registrars | Students only | No |
 | Manage programs, subjects, curricula | Yes | View only | Own assigned curriculum only |
 | Edit grades | Current/historical, including finalized | Current, unfinalized only | No |
@@ -579,6 +580,7 @@ Notifications use saved backend events. The table also identifies remaining unfi
 | Reports                             | Coming-soon screen linking to live dashboard and records; no report generation                          |
 | Revoke sessions | Confirm sign-out on all devices. Better Auth revokes all target sessions without changing password or access; admins can target students/registrars, registrars can target students only |
 | Student Edit/Delete | Editing remains unavailable. Admin/registrar can confirm deletion only while setup is incomplete and no current or historical enrollment exists; server rechecks atomically and removes linked auth data and reset tokens |
+| Registrar Delete account | Admin confirms permanent deletion; login data and reset tokens are removed atomically. Student enrollments, subjects, grades, and notifications remain; deleted staff author references become null. Disable account remains available for temporary suspension |
 | Registrar access | Admin confirms Disable/Enable. Better Auth ban/unban APIs control sign-in; disabling revokes active sessions and retains account/history. Actions use the shared dropdown. Setup-link resend is available for enabled, unfinished accounts; admins can also confirm Revoke sessions |
 | Profile editing | Read-only page; no save action |
 | Two-factor account flow | Auth plugin exists, but no complete dedicated verification/enrollment UI in current pages |
@@ -595,6 +597,7 @@ All 26 exported remote commands are covered above. Source links are relative to 
 | same | `createRegistrar` | Create registrar account and request setup email |
 | same | `deleteStudent` | Atomically delete an unfinished student only if no enrollment history exists; preserve student numbering |
 | same | `setRegistrarDisabled` | Admin-only Better Auth ban/unban for registrar accounts |
+| same | `deleteRegistrar` | Admin-only permanent registrar deletion; preserve academic records and student notifications |
 | same | `revokeAccountSessions` | Role-scoped Better Auth session revocation for student/registrar accounts |
 | same | `resendMagicLink` | Request account setup/reset link |
 | same | `enrollStudent` | Validate and save enrollment, subjects, current pointer; attempt email |

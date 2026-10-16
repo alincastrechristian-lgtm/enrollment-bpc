@@ -270,9 +270,8 @@ export const enrollmentSubject = sqliteTable(
 		subjectName: text('subject_name').notNull(),
 		units: real('units').notNull(),
 
-		addedBy: text('added_by')
-			.notNull()
-			.references(() => user.id, { onDelete: 'restrict' }),
+		// Keep the subject attempt when its staff account is deleted.
+		addedBy: text('added_by').references(() => user.id, { onDelete: 'set null' }),
 		addedAt: integer('added_at', { mode: 'timestamp_ms' })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 			.notNull()

@@ -9,7 +9,7 @@ import { createServer } from 'vite';
 
 const sourcePath = (file) => path.resolve(file).replaceAll('\\', '/');
 
-test('registrar conflict appears in the real error popup from a wrapped SvelteKit error', async () => {
+test('registrar errors stay safe and account deletion requires confirmation', async () => {
 	const root = mkdtempSync(path.resolve('.tmp-registrar-email-'));
 	let server, browser;
 	try {
@@ -23,14 +23,14 @@ test('registrar conflict appears in the real error popup from a wrapped SvelteKi
 				'export function beforeNavigate(){};export async function goto(){};export async function refreshAll(){};',
 			'state.svelte.js':
 				"export const page=$state({url:new URL('/user/registrars',window.location.origin)});",
-			'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';export async function revokeAccountSessions(){throw Error('Unexpected session revocation');}export async function deleteStudent(){throw Error('Unexpected deletion');}export async function setRegistrarDisabled(){throw Error('Unexpected access change');}
+			'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';export async function revokeAccountSessions(){throw Error('Unexpected session revocation');}export async function deleteStudent(){throw Error('Unexpected deletion');}export async function deleteRegistrar(data){window.deletedRegistrar=data.userId;}export async function setRegistrarDisabled(){throw Error('Unexpected access change');}
 				window.existingRole='student';
 				export async function createRegistrar(){if(window.failure==='native')throw new Error('SECRET smtp credentials');if(window.failure==='server')throw new HandledHttpError({status:500,message:'SECRET database credentials'});throw new HandledHttpError({status:409,message:'A '+window.existingRole+' account already exists with this email.'});}
 				export async function resendMagicLink(){}`,
 			'Harness.svelte': `<script>
 				import Registrars from '${sourcePath('src/routes/user/registrars/+page.svelte')}';
 				import PopupHost from '${sourcePath('src/lib/components/Popup/PopupHost.svelte')}';
-			</script><Registrars data={{users:[],total:0,search:'',status:'all',filters:{}}}/><PopupHost/>`
+			</script><Registrars data={{users:[{id:'r',name:'Test Registrar',email:'r@example.com',setupComplete:true,banned:false}],total:1,search:'',status:'all',filters:{}}}/><PopupHost/>`
 		};
 		for (const [file, content] of Object.entries(files))
 			writeFileSync(path.join(root, file), content);
@@ -86,6 +86,28 @@ test('registrar conflict appears in the real error popup from a wrapped SvelteKi
 			await popup.getByRole('button', { name: 'Close', exact: true }).click();
 			await expect(form).toHaveJSProperty('open', true);
 		}
+		await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(
+			page.getByRole('button', { name: 'Delete account', exact: true })
+		).not.toBeVisible();
+		await page.getByRole('button', { name: 'Actions for Test Registrar', exact: true }).click();
+		await page.getByRole('button', { name: 'Delete account', exact: true }).click();
+		const confirmation = page.getByRole('dialog', {
+			name: 'Delete registrar account?',
+			exact: true
+		});
+		await expect(
+			confirmation.getByText(
+				/Student enrollments, subjects, grades, and notifications will be kept/
+			)
+		).toBeVisible();
+		await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+		assert.equal(await page.evaluate(() => window.deletedRegistrar), undefined);
+		await page.getByRole('button', { name: 'Actions for Test Registrar', exact: true }).click();
+		await page.getByRole('button', { name: 'Delete account', exact: true }).click();
+		await confirmation.getByRole('button', { name: 'Delete account', exact: true }).click();
+		await expect(page.getByText('Registrar account deleted.', { exact: true })).toBeVisible();
+		assert.equal(await page.evaluate(() => window.deletedRegistrar), 'r');
 		assert.deepEqual(errors, []);
 	} finally {
 		await browser?.close();
