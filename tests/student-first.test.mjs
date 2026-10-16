@@ -435,6 +435,44 @@ test('staff can drop and reenroll in the same term without losing the dropped re
 	}
 });
 
+test('staff complete an existing follow-up once without changing grades, clearance or enrollment status', async (t) => {
+	const f = fixture(t);
+	const created = await f.createStudent(personal);
+	const first = await f.enrollStudent(f.input(created));
+	const reference = { userId: created.userId, enrollmentId: first.enrollmentId };
+	await assert.rejects(f.completeEnrollmentFollowUp(reference), status(409));
+	for (const role of [Role.STUDENT, null]) {
+		f.state.role = role;
+		await assert.rejects(f.completeEnrollmentFollowUp(reference), status(role ? 403 : 401));
+	}
+	f.state.role = Role.ADMIN;
+	await assert.rejects(
+		f.completeEnrollmentFollowUp({ ...reference, userId: 'caller' }),
+		status(404)
+	);
+	f.sqlite.exec('UPDATE enrollment SET finalized_grades=1,meeting_request_sent_at=1000');
+	const grades = f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all();
+	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+		f.state.role = role;
+		f.sqlite.exec('UPDATE enrollment SET follow_up_completed_at=NULL');
+		const result = await f.completeEnrollmentFollowUp(reference);
+		assert.ok(result.followUpCompletedAt instanceof Date);
+		const saved = f.db.select().from(schema.enrollment).get();
+		assert.ok(saved.followUpCompletedAt instanceof Date);
+		assert.equal(saved.submittedClearance, false);
+		assert.equal(saved.finalizedGrades, true);
+		assert.equal(saved.status, 'enrolled');
+		await assert.rejects(f.completeEnrollmentFollowUp(reference), status(409));
+	}
+	f.sqlite.exec("UPDATE enrollment SET status='dropped',follow_up_completed_at=NULL");
+	await assert.rejects(f.completeEnrollmentFollowUp(reference), status(409));
+	assert.equal(f.db.select().from(schema.enrollment).get().followUpCompletedAt, null);
+	assert.deepEqual(
+		f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all(),
+		grades
+	);
+});
+
 test('clearance verification enforces staff access, ownership and grade finalization', async (t) => {
 	const f = fixture(t);
 	const created = await f.createStudent(personal);
@@ -578,6 +616,7 @@ test('meeting requests validate concerns and ownership, retry failed email, and 
 	assert.equal(f.state.meetingEmails.length, 3);
 	// The additive migration and rollback preserve student, enrollment and grade records.
 	const grades = f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all();
+	f.sqlite.exec(readFileSync('drizzle/rollback/0027_complete_enrollment_follow_up.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0026_enrollment_lifecycle.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0025_enrollment_meeting_request.sql', 'utf8'));
 	assert.equal(f.sqlite.prepare('SELECT count(*) n FROM enrollment').get().n, 1);

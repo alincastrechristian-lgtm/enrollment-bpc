@@ -39,7 +39,12 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 				'Your current enrollment was dropped. The Registrar can help you enroll again using the same term and subjects.'
 		});
 	const meetingRequests = (record?.enrollments ?? []).flatMap((entry) => {
-		if (entry.status === 'dropped' || !entry.meetingRequestSentAt || !entry.finalizedGrades)
+		if (
+			entry.status === 'dropped' ||
+			entry.followUpCompletedAt ||
+			!entry.meetingRequestSentAt ||
+			!entry.finalizedGrades
+		)
 			return [];
 		const concerns = getGradeConcerns(entry.subjects, true);
 		if (!concerns.failedCount && !concerns.incompleteCount) return [];

@@ -2,6 +2,7 @@
 	import { getErrorMessage } from '#lib/errors.js';
 	import {
 		finalizeEnrollmentGrades,
+		completeEnrollmentFollowUp,
 		dropEnrollment,
 		sendEnrollmentMeetingRequest,
 		updateEnrollmentGrades,
@@ -42,6 +43,10 @@
 	let finalizedHere = $state(false);
 	let meetingSentHere = $state<Date | null>(null);
 	const meetingSentAt = $derived(meetingSentHere ?? data.enrollment.meetingRequestSentAt);
+	let followUpCompletedHere = $state<Date | null>(null);
+	const followUpCompletedAt = $derived(
+		followUpCompletedHere ?? data.enrollment.followUpCompletedAt
+	);
 	let clearanceVerifiedHere = $state(false);
 	let droppedHere = $state(false);
 	const clearanceVerified = $derived(clearanceVerifiedHere || data.enrollment.submittedClearance);
@@ -183,6 +188,35 @@
 				: 'Enrollment dropped. The notification email could not be sent.';
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to drop enrollment. Please try again.');
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function completeFollowUp() {
+		if (busy || editing || dirty || dropped || !finalized || !meetingSentAt || followUpCompletedAt)
+			return;
+		busy = true;
+		message = '';
+		success = '';
+		try {
+			if (
+				!(await showYesNo({
+					title: 'Complete follow-up?',
+					message: `Confirm that the academic follow-up with ${data.student.name} has been completed. This closes the meeting request on the student dashboard; grades and clearance stay as recorded.`,
+					yesText: 'Complete follow-up',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			const result = await completeEnrollmentFollowUp({
+				userId: data.student.id,
+				enrollmentId: data.enrollment.id
+			});
+			followUpCompletedHere = result.followUpCompletedAt;
+			success = 'Academic follow-up completed.';
+		} catch (cause) {
+			message = getErrorMessage(cause, 'Failed to complete follow-up. Please try again.');
 		} finally {
 			busy = false;
 		}
@@ -417,17 +451,35 @@
 						<div>
 							<h3 class="text-sm font-semibold">Academic follow-up</h3>
 							<p class="mt-1 text-xs text-base-content/60">{gradeConcernSummary}</p>
-							{#if meetingSentAt}
+							{#if followUpCompletedAt}
+								<p class="mt-1 text-xs text-base-content/50">
+									Completed {formatter.format(followUpCompletedAt)}
+								</p>
+							{:else if meetingSentAt}
 								<p class="mt-1 text-xs text-base-content/50">
 									Request emailed {formatter.format(meetingSentAt)}
 								</p>
 							{/if}
 						</div>
 					</div>
-					{#if meetingSentAt}
+					{#if followUpCompletedAt}
 						<span class="flex items-center gap-1.5 text-xs font-medium text-base-content/65">
-							<Check class="size-3.5 text-success" aria-hidden="true" />Meeting request sent
+							<Check class="size-3.5 text-success" aria-hidden="true" />Follow-up completed
 						</span>
+					{:else if meetingSentAt}
+						<div class="flex flex-wrap items-center gap-2">
+							<span class="flex items-center gap-1.5 text-xs font-medium text-base-content/65">
+								<Check class="size-3.5 text-success" aria-hidden="true" />Meeting request sent
+							</span>
+							<button
+								type="button"
+								class="btn gap-2 border-base-300 btn-outline btn-sm"
+								disabled={busy || editing || dirty}
+								onclick={completeFollowUp}
+							>
+								<Check class="size-4" aria-hidden="true" />Complete follow-up
+							</button>
+						</div>
 					{:else}
 						<button
 							type="button"

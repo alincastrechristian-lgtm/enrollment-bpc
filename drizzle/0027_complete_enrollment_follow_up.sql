@@ -1,0 +1,1 @@
+ALTER TABLE `enrollment` ADD `follow_up_completed_at` integer;

@@ -162,6 +162,27 @@ export const verifyEnrollmentClearance = command(enrollmentReferenceSchema, (dat
 	);
 });
 
+export const completeEnrollmentFollowUp = command(enrollmentReferenceSchema, (data) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	return db.transaction(
+		(tx) => {
+			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+			if (record.enrollment.status === 'dropped') error(409, 'This enrollment has been dropped.');
+			if (!record.enrollment.finalizedGrades || !record.enrollment.meetingRequestSentAt)
+				error(409, 'Send a meeting request for finalized grades before completing the follow-up.');
+			if (record.enrollment.followUpCompletedAt) error(409, 'This follow-up is already completed.');
+			const completedAt = new Date();
+			tx.update(enrollment)
+				.set({ followUpCompletedAt: completedAt })
+				.where(eq(enrollment.id, record.enrollment.id))
+				.run();
+			return { success: true, followUpCompletedAt: completedAt };
+		},
+		{ behavior: 'immediate' }
+	);
+});
+
 const updateGradesSchema = z.object({
 	userId: z.string().min(1),
 	enrollmentId: z.string().min(1),

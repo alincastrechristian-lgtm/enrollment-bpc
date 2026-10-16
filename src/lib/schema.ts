@@ -205,6 +205,7 @@ export const enrollment = sqliteTable(
 			.default(false)
 			.notNull(),
 		meetingRequestSentAt: integer('meeting_request_sent_at', { mode: 'timestamp_ms' }),
+		followUpCompletedAt: integer('follow_up_completed_at', { mode: 'timestamp_ms' }),
 		// Claim a send without holding a database transaction open during email delivery.
 		meetingRequestStartedAt: integer('meeting_request_started_at', { mode: 'timestamp_ms' }),
 		droppedAt: integer('dropped_at', { mode: 'timestamp_ms' }),

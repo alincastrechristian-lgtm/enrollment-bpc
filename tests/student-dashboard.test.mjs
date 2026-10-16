@@ -148,6 +148,16 @@ test('dashboard shows only the signed-in student meeting requests and keeps hist
 	assert.equal(data.meetingRequests[0].failedCount, 2);
 	assert.equal(data.meetingRequests[0].incompleteCount, 1);
 	assert.ok(data.nextSteps.some((step) => step.id === 'meeting'));
+	f.sqlite.exec("UPDATE enrollment SET follow_up_completed_at=2000 WHERE id='current'");
+	data = (await f.load()).studentDashboard;
+	assert.deepEqual(data.meetingRequests, []);
+	assert.equal(
+		data.nextSteps.some((step) => step.id === 'meeting'),
+		false
+	);
+	assert.equal(data.failedCount, 2);
+	assert.equal(data.incompleteCount, 1);
+	f.sqlite.exec("UPDATE enrollment SET follow_up_completed_at=NULL WHERE id='current'");
 	f.sqlite.exec("UPDATE student SET enrollment_id='newer' WHERE user_id='u'");
 	data = (await f.load()).studentDashboard;
 	assert.equal(data.meetingRequests[0].id, 'current');

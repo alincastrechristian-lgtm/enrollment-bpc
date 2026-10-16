@@ -34,6 +34,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			export function showLoading(){};export function showError(props){window.messages.push({type:'error',...(typeof props==='string'?{message:props}:props)});}export function showSuccess(message){window.messages.push({type:'success',message});}`,
 		'grades.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.gradeCalls=[];window.finalizeCalls=[];
 			export async function dropEnrollment(){return {success:true,status:'dropped',notificationSent:true};}
+			export async function completeEnrollmentFollowUp(){return {success:true,followUpCompletedAt:new Date()};}
 			export async function sendEnrollmentMeetingRequest(){return {success:true,meetingRequestSentAt:new Date()};}
 			export async function verifyEnrollmentClearance(){return {success:true,submittedClearance:true};}
 			export async function finalizeEnrollmentGrades(data){window.finalizeCalls.push(data);if(window.failFinalize)throw new HandledHttpError({status:409,message:'Grades or subjects have changed. Reload before finalizing.'});if(window.deferFinalize)await new Promise(resolve=>window.finishFinalize=resolve);return {success:true,finalizedGrades:true,notificationSent:true};}
