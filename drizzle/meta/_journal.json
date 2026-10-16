@@ -183,6 +183,13 @@
       "when": 1792106217199,
       "tag": "0025_enrollment_meeting_request",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1792109527815,
+      "tag": "0026_enrollment_lifecycle",
+      "breakpoints": true
     }
   ]
 }

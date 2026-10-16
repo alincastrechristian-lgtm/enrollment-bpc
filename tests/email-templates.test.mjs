@@ -48,7 +48,8 @@ test('academic emails share a branded design, term details, safe portal links an
 	const portal = 'https://example.com/portal/user/enrollment?view=grades&term=2';
 	for (const create of [
 		templates.createMeetingRequestEmail,
-		templates.createGradesFinalizedEmail
+		templates.createGradesFinalizedEmail,
+		templates.createEnrollmentDroppedEmail
 	]) {
 		const message = create('Student <script>alert(1)</script>', 2026, 2, portal);
 		assert.match(message.text, /Semester 2, SY 2026–2027/);

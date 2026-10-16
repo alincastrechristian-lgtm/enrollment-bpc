@@ -4,6 +4,7 @@ import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import {
 	canEditEnrollmentGrades,
+	canDropEnrollment,
 	canFinalizeEnrollmentGrades,
 	getEnrollmentGradeLockReason,
 	getStudentEnrollment
@@ -29,6 +30,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const isCurrent = record.student.currentEnrollmentId === record.enrollment.id;
 	const gradeLockReason = getEnrollmentGradeLockReason(record, locals.user.role);
 	return {
+		canDrop: canDropEnrollment(locals.user.role, record),
 		student: { ...record.user, studentId: record.student.studentId },
 		enrollment: { ...record.enrollment, curriculum: selectedCurriculum, subjects },
 		isCurrent,

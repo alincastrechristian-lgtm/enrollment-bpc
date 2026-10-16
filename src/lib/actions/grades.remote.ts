@@ -6,10 +6,12 @@ import { db } from '#lib/server/db/index.js';
 import { sendEmail } from '#lib/server/email.js';
 import {
 	createGradesFinalizedEmail,
+	createEnrollmentDroppedEmail,
 	createMeetingRequestEmail
 } from '#lib/server/email-templates.js';
 import {
 	canEditEnrollmentGrades,
+	canDropEnrollment,
 	canFinalizeEnrollmentGrades,
 	getEnrollmentGradeLockReason,
 	getStudentEnrollment
@@ -31,6 +33,42 @@ const enrollmentReferenceSchema = z.object({
 	enrollmentId: z.string().min(1)
 });
 
+export const dropEnrollment = command(enrollmentReferenceSchema, async (data) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	const record = db.transaction(
+		(tx) => {
+			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+			if (!canDropEnrollment(locals.user.role, record))
+				error(409, 'Only the current, active enrollment can be dropped.');
+			tx.update(enrollment)
+				.set({ status: 'dropped', droppedAt: new Date() })
+				.where(eq(enrollment.id, record.enrollment.id))
+				.run();
+			return record;
+		},
+		{ behavior: 'immediate' }
+	);
+	let notificationSent = false;
+	try {
+		const message = createEnrollmentDroppedEmail(
+			record.user.name,
+			record.enrollment.schoolYearStart,
+			record.enrollment.semester,
+			enrollmentEmailUrl()
+		);
+		notificationSent = await sendEmail(
+			record.user.email,
+			message.subject,
+			message.text,
+			message.html
+		);
+	} catch (cause) {
+		console.error('Enrollment drop email failed:', cause);
+	}
+	return { success: true, status: 'dropped' as const, notificationSent };
+});
+
 export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, async (data) => {
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
@@ -40,6 +78,7 @@ export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, a
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
 			if (!record.enrollment.finalizedGrades)
 				error(409, 'Finalize grades before sending a meeting request.');
+			if (record.enrollment.status === 'dropped') error(409, 'This enrollment has been dropped.');
 			if (record.enrollment.meetingRequestSentAt)
 				error(409, 'A meeting request has already been sent for this enrollment.');
 			// Expired claims can be retried after a server interruption.
@@ -110,13 +149,14 @@ export const verifyEnrollmentClearance = command(enrollmentReferenceSchema, (dat
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
 			if (!record.enrollment.finalizedGrades)
 				error(409, 'Finalize grades before verifying clearance.');
+			if (record.enrollment.status === 'dropped') error(409, 'This enrollment has been dropped.');
 			if (record.enrollment.submittedClearance)
 				error(409, 'Clearance has already been verified. Refresh the page.');
 			tx.update(enrollment)
-				.set({ submittedClearance: true })
+				.set({ submittedClearance: true, status: 'completed' })
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
-			return { success: true, submittedClearance: true };
+			return { success: true, submittedClearance: true, status: 'completed' as const };
 		},
 		{ behavior: 'immediate' }
 	);
@@ -239,7 +279,10 @@ export const finalizeEnrollmentGrades = command(finalizeGradesSchema, async (dat
 			if (!enrolledProgram) error(404, 'Enrollment program not found.');
 			// Null grades in a finalized enrollment represent INC (Incomplete).
 			tx.update(enrollment)
-				.set({ finalizedGrades: true })
+				.set({
+					finalizedGrades: true,
+					status: record.enrollment.submittedClearance ? 'completed' : 'enrolled'
+				})
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
 			return { ...record, program: enrolledProgram };

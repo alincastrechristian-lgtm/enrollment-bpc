@@ -2,6 +2,7 @@
 	import { getErrorMessage } from '#lib/errors.js';
 	import {
 		finalizeEnrollmentGrades,
+		dropEnrollment,
 		sendEnrollmentMeetingRequest,
 		updateEnrollmentGrades,
 		verifyEnrollmentClearance
@@ -18,7 +19,8 @@
 		LockKeyhole,
 		Mail,
 		Pencil,
-		Save
+		Save,
+		UserMinus
 	} from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { semesterLabel } from '../curriculum/SubjectLayout.svelte';
@@ -41,10 +43,15 @@
 	let meetingSentHere = $state<Date | null>(null);
 	const meetingSentAt = $derived(meetingSentHere ?? data.enrollment.meetingRequestSentAt);
 	let clearanceVerifiedHere = $state(false);
+	let droppedHere = $state(false);
 	const clearanceVerified = $derived(clearanceVerifiedHere || data.enrollment.submittedClearance);
 	const finalized = $derived(finalizedHere || data.enrollment.finalizedGrades);
-	const canEdit = $derived(data.canEdit && (!finalized || data.canEditFinalized));
-	const canFinalize = $derived(data.canFinalize && !finalized);
+	const dropped = $derived(droppedHere || data.enrollment.status === 'dropped');
+	const enrollmentStatus = $derived(
+		dropped ? 'dropped' : finalized && clearanceVerified ? 'completed' : data.enrollment.status
+	);
+	const canEdit = $derived(!dropped && data.canEdit && (!finalized || data.canEditFinalized));
+	const canFinalize = $derived(!dropped && data.canFinalize && !finalized);
 	const incompleteCount = $derived(rows.filter((row) => row.savedGrade === null).length);
 	const gradeConcerns = $derived(
 		getGradeConcerns(
@@ -70,9 +77,11 @@
 			)
 	);
 	const lockReason = $derived(
-		finalized && !data.canEditFinalized
-			? 'Grades are finalized. Only administrators can edit them.'
-			: data.gradeLockReason
+		dropped
+			? 'Dropped enrollments cannot be edited or finalized.'
+			: finalized && !data.canEditFinalized
+				? 'Grades are finalized. Only administrators can edit them.'
+				: data.gradeLockReason
 	);
 	let confirmingDiscard = false;
 	let discardAllowed = false;
@@ -148,8 +157,40 @@
 		}
 	}
 
+	async function drop() {
+		if (busy || editing || dirty || !data.canDrop || enrollmentStatus !== 'enrolled') return;
+		busy = true;
+		message = '';
+		success = '';
+		try {
+			if (
+				!(await showYesNo({
+					title: 'Drop enrollment?',
+					message: `Drop ${data.student.name}'s current enrollment? Their subjects and grades will remain in history. They will be notified and can be enrolled again using this term and subject list.`,
+					warning: true,
+					yesText: 'Drop enrollment',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			const result = await dropEnrollment({
+				userId: data.student.id,
+				enrollmentId: data.enrollment.id
+			});
+			droppedHere = true;
+			success = result.notificationSent
+				? 'Enrollment dropped and notification email sent.'
+				: 'Enrollment dropped. The notification email could not be sent.';
+		} catch (cause) {
+			message = getErrorMessage(cause, 'Failed to drop enrollment. Please try again.');
+		} finally {
+			busy = false;
+		}
+	}
+
 	async function requestMeeting() {
-		if (busy || editing || dirty || !finalized || !hasGradeConcerns || meetingSentAt) return;
+		if (busy || editing || dirty || dropped || !finalized || !hasGradeConcerns || meetingSentAt)
+			return;
 		busy = true;
 		message = '';
 		success = '';
@@ -177,7 +218,7 @@
 	}
 
 	async function verifyClearance() {
-		if (busy || editing || dirty || !finalized || clearanceVerified) return;
+		if (busy || editing || dirty || dropped || !finalized || clearanceVerified) return;
 		busy = true;
 		message = '';
 		success = '';
@@ -249,8 +290,18 @@
 					<span class="size-1.5 rounded-full bg-primary" aria-hidden="true"></span>
 					{data.isCurrent ? 'Current enrollment' : 'Historical enrollment'}
 				</span>
-				{#if data.enrollment.status !== 'enrolled'}
-					<span class="badge badge-outline badge-sm capitalize">{data.enrollment.status}</span>
+				{#if enrollmentStatus !== 'enrolled'}
+					<span class="badge badge-outline badge-sm capitalize">{enrollmentStatus}</span>
+				{/if}
+				{#if data.canDrop && enrollmentStatus === 'enrolled'}
+					<button
+						type="button"
+						class="btn ml-auto gap-2 btn-ghost text-error btn-sm"
+						disabled={busy || editing || dirty}
+						onclick={drop}
+					>
+						<UserMinus class="size-4" aria-hidden="true" />Drop enrollment
+					</button>
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
@@ -350,14 +401,14 @@
 					<button
 						type="button"
 						class="btn gap-2 border-base-300 btn-outline btn-sm"
-						disabled={busy || editing || dirty || !finalized}
+						disabled={busy || editing || dirty || dropped || !finalized}
 						onclick={verifyClearance}
 					>
 						Verify clearance
 					</button>
 				{/if}
 			</div>
-			{#if finalized && (hasGradeConcerns || meetingSentAt)}
+			{#if !dropped && finalized && (hasGradeConcerns || meetingSentAt)}
 				<div
 					class="flex flex-wrap items-center justify-between gap-3 border-t border-base-300/60 p-5 sm:px-6 md:border-t-0 md:border-l"
 				>
@@ -390,23 +441,30 @@
 				</div>
 			{/if}
 		</div>
-		{#if data.isCurrent && finalized && clearanceVerified}
+		{#if data.isCurrent && (dropped || (finalized && clearanceVerified))}
 			<div
 				class="flex flex-wrap items-center justify-between gap-4 border-t border-base-300 bg-base-200/35 px-5 py-4 sm:px-6"
 			>
 				<div>
-					<p class="text-sm font-semibold">Ready for the next term</p>
+					<p class="text-sm font-semibold">
+						{dropped ? 'Enrollment dropped' : 'Ready for the next term'}
+					</p>
 					<p class="mt-1 text-xs text-base-content/55">
-						{hasGradeConcerns
-							? 'Review grade concerns before enrolling.'
-							: 'Grades and clearance are complete.'}
+						{dropped
+							? 'Enroll again using the same term and subjects.'
+							: hasGradeConcerns
+								? 'Review grade concerns before enrolling.'
+								: 'Grades and clearance are complete.'}
 					</p>
 				</div>
 				<a
 					class="btn gap-2 btn-primary btn-sm"
 					href={resolve('/user/students/[userId]/enroll', { userId: data.student.id })}
 				>
-					Enroll for next term<ArrowRight class="size-4" aria-hidden="true" />
+					{dropped ? 'Enroll again' : 'Enroll for next term'}<ArrowRight
+						class="size-4"
+						aria-hidden="true"
+					/>
 				</a>
 			</div>
 		{/if}

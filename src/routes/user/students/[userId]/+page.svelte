@@ -129,12 +129,14 @@
 							>
 								<Eye class="size-4" aria-hidden="true" />View
 							</a>
-							{#if current.finalizedGrades && current.submittedClearance}
+							{#if current.status === 'dropped' || (current.finalizedGrades && current.submittedClearance)}
 								<a
 									class="btn gap-2 btn-primary btn-sm"
 									href={resolve('/user/students/[userId]/enroll', { userId: student.id })}
 								>
-									Enroll for next term<ArrowRight class="size-4" aria-hidden="true" />
+									{current.status === 'dropped'
+										? 'Enroll again'
+										: 'Enroll for next term'}<ArrowRight class="size-4" aria-hidden="true" />
 								</a>
 							{/if}
 						</div>

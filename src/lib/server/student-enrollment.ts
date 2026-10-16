@@ -10,6 +10,8 @@ export function getEnrollmentGradeLockReason(
 	record: StudentEnrollmentRecord,
 	role: string | null | undefined
 ) {
+	if (record.enrollment.status === 'dropped')
+		return 'Dropped enrollments cannot be edited or finalized.';
 	if (!record.user.setupComplete)
 		return 'The student must complete account setup before grades can be edited or finalized.';
 	if (record.enrollment.finalizedGrades && role !== Role.ADMIN)
@@ -33,6 +35,17 @@ export function canFinalizeEnrollmentGrades(
 	record: StudentEnrollmentRecord
 ) {
 	return !record.enrollment.finalizedGrades && canEditEnrollmentGrades(role, record);
+}
+
+export function canDropEnrollment(
+	role: string | null | undefined,
+	record: StudentEnrollmentRecord
+) {
+	return (
+		(role === Role.ADMIN || role === Role.REGISTRAR) &&
+		record.student.currentEnrollmentId === record.enrollment.id &&
+		record.enrollment.status === 'enrolled'
+	);
 }
 
 // Resolve enrollment ownership for both the view and the grade-writing transaction.

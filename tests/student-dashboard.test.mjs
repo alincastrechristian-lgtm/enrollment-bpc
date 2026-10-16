@@ -198,13 +198,31 @@ test('missing student records and current links render empty data without select
 	}
 });
 
-test('all-passing grades and withdrawn enrollment status do not produce false concern alerts', async (t) => {
+test('drop notifications stay scoped to the student and remain historical after reenrollment', async (t) => {
 	const f = fixture(t);
 	f.sqlite.exec(
-		"UPDATE enrollment_subject SET grade = 3 WHERE enrollment_id = 'current'; UPDATE enrollment SET status = 'withdrawn' WHERE id = 'current'"
+		"UPDATE enrollment SET status='dropped',dropped_at=1000 WHERE id IN ('current','private')"
+	);
+	let data = (await f.load()).studentDashboard;
+	assert.equal(data.droppedEnrollments.length, 1);
+	assert.equal(data.droppedEnrollments[0].id, 'current');
+	assert.equal(data.droppedEnrollments[0].isCurrent, true);
+	assert.equal(data.enrollment.status, 'dropped');
+	assert.ok(data.nextSteps.some((step) => step.id === 'dropped'));
+	f.sqlite.exec("UPDATE student SET enrollment_id='newer' WHERE user_id='u'");
+	data = (await f.load()).studentDashboard;
+	assert.equal(data.droppedEnrollments[0].isCurrent, false);
+	assert.equal(data.enrollment.schoolYear, '2027–2028');
+	assert.deepEqual(data.subjects, []);
+});
+
+test('all-passing grades and completed enrollment status do not produce false concern alerts', async (t) => {
+	const f = fixture(t);
+	f.sqlite.exec(
+		"UPDATE enrollment_subject SET grade = 3 WHERE enrollment_id = 'current'; UPDATE enrollment SET status = 'completed' WHERE id = 'current'"
 	);
 	const { studentDashboard: data } = await f.load();
-	assert.equal(data.enrollment.status, 'withdrawn');
+	assert.equal(data.enrollment.status, 'completed');
 	assert.equal(data.passedCount, 6);
 	assert.equal(data.attentionCount, 0);
 	assert.deepEqual(

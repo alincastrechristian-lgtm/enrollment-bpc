@@ -76,6 +76,15 @@
 			</div>
 		</section>
 	{:else}
+		{#if data.restoringDropped}
+			<p
+				class="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-base-content/70"
+				role="status"
+			>
+				Restoring the dropped enrollment’s term, section, and subjects. Review the details before
+				enrolling again.
+			</p>
+		{/if}
 		<section class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
 			<div class="h-1.5 bg-primary" aria-hidden="true"></div>
 			<div class="space-y-2 p-5 sm:p-6">

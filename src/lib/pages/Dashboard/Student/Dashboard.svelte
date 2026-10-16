@@ -132,6 +132,36 @@
 		</div>
 	</header>
 
+	{#each data.droppedEnrollments as droppedEnrollment (droppedEnrollment.id)}
+		<section
+			class="rounded-2xl border border-warning/40 bg-base-100 p-5 shadow-sm sm:p-6"
+			aria-labelledby={`dropped-${droppedEnrollment.id}`}
+		>
+			<p class="text-xs font-semibold text-base-content/60">{droppedEnrollment.term}</p>
+			<h2 id={`dropped-${droppedEnrollment.id}`} class="mt-1 text-lg font-bold">
+				{droppedEnrollment.isCurrent
+					? 'Your enrollment has been dropped'
+					: 'A previous enrollment was dropped'}
+			</h2>
+			<p class="mt-2 text-sm text-base-content/70">
+				{droppedEnrollment.isCurrent
+					? "Contact the Registrar's Office if you have questions or want to enroll again. Your term and subject list have been retained."
+					: 'The dropped enrollment and its subjects remain available in your enrollment history.'}
+			</p>
+			{#if droppedEnrollment.droppedAt}
+				<p class="mt-3 text-xs text-base-content/55">
+					Dropped {dateFormatter.format(droppedEnrollment.droppedAt)}
+				</p>
+			{/if}
+			<a
+				class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+				href={resolve('/user/enrollment')}
+			>
+				View enrollment history<ArrowRight class="size-4" aria-hidden="true" />
+			</a>
+		</section>
+	{/each}
+
 	{#each data.meetingRequests as meeting (meeting.id)}
 		<section
 			class="overflow-hidden rounded-2xl border border-warning/40 bg-base-100 shadow-sm"

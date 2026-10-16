@@ -23,8 +23,24 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 	const failed = subjects.filter((subject) => subject.status === 'Failed');
 	const incomplete = subjects.filter((subject) => subject.status === 'Incomplete');
 	const nextSteps: { id: string; title: string; detail: string }[] = [];
+	const droppedEnrollments = (record?.enrollments ?? [])
+		.filter((entry) => entry.status === 'dropped')
+		.map((entry) => ({
+			id: entry.id,
+			droppedAt: entry.droppedAt,
+			isCurrent: entry.id === record?.currentEnrollmentId,
+			term: `Semester ${entry.semester}, SY ${entry.schoolYearStart}–${entry.schoolYearStart + 1}`
+		}));
+	if (current?.status === 'dropped')
+		nextSteps.push({
+			id: 'dropped',
+			title: 'Contact the Registrar about reenrollment',
+			detail:
+				'Your current enrollment was dropped. The Registrar can help you enroll again using the same term and subjects.'
+		});
 	const meetingRequests = (record?.enrollments ?? []).flatMap((entry) => {
-		if (!entry.meetingRequestSentAt || !entry.finalizedGrades) return [];
+		if (entry.status === 'dropped' || !entry.meetingRequestSentAt || !entry.finalizedGrades)
+			return [];
 		const concerns = getGradeConcerns(entry.subjects, true);
 		if (!concerns.failedCount && !concerns.incompleteCount) return [];
 		return [
@@ -79,6 +95,7 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 						}
 		);
 	return {
+		droppedEnrollments,
 		meetingRequests,
 		studentName: name.trim().split(/\s+/)[0] || 'Student',
 		studentNumber: record?.studentId ?? null,

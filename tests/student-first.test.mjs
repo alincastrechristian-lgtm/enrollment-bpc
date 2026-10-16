@@ -64,6 +64,7 @@ function fixture(t) {
 	const state = { role: Role.REGISTRAR, creates: 0, emails: 0, mailFail: false, authFail: false };
 	state.meetingEmails = [];
 	state.enrollmentEmails = [];
+	state.dropEmails = [];
 	const auth = {
 		api: {
 			async createUser({ body }) {
@@ -89,6 +90,11 @@ function fixture(t) {
 		'#lib/server/email-templates.js': emailTemplates,
 		'#lib/server/email.js': {
 			sendEmail: async (...args) => {
+				if (args[1].includes('enrollment has been dropped')) {
+					state.dropEmails.push(args);
+					assert.equal(sqlite.inTransaction, false);
+					return !state.dropEmailFail;
+				}
 				if (args[1].includes('Your enrollment is confirmed')) {
 					state.onEnrollmentEmail?.();
 					state.enrollmentEmails.push(args);
@@ -133,6 +139,12 @@ function fixture(t) {
 		state,
 		...commands,
 		...gradeCommands,
+		enrollmentPage: (userId) =>
+			load('src/routes/user/students/[userId]/enroll/+page.server.ts', deps).load({
+				locals: { user: { id: 'caller', role: state.role }, session: {} },
+				params: { userId },
+				url: new URL('https://example.com/user/students/u/enroll')
+			}),
 		getOutstandingSubjects: (studentId) =>
 			deps['#lib/server/enrollment.js'].getOutstandingEnrollmentSubjects(db, studentId),
 		input: (created, overrides = {}) => ({
@@ -325,6 +337,104 @@ test('reenrollment requires both finalized grades and verified clearance for adm
 	assert.equal(current.submittedClearance, false);
 });
 
+test('staff can drop and reenroll in the same term without losing the dropped record or subject history', async (t) => {
+	const f = fixture(t);
+	f.sqlite.exec(
+		"INSERT INTO curriculum(id,program_code,name,published_at)VALUES('next-c','BSIS','Next curriculum',1000)"
+	);
+	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+		f.state.role = role;
+		f.sqlite.exec(
+			"UPDATE program SET active_curriculum_id='c';UPDATE curriculum SET archived_at=NULL,is_active=1 WHERE id='c'"
+		);
+		const created = await f.createStudent({ ...personal, email: role + '@example.com' });
+		const first = await f.enrollStudent(f.input(created, { section: 'C' }));
+		const reference = { userId: created.userId, enrollmentId: first.enrollmentId };
+		f.sqlite.prepare('UPDATE enrollment SET finalized_grades=1 WHERE id=?').run(first.enrollmentId);
+		f.sqlite
+			.prepare('UPDATE enrollment_subject SET grade=5 WHERE enrollment_id=?')
+			.run(first.enrollmentId);
+		const original = f.sqlite
+			.prepare('SELECT * FROM enrollment_subject WHERE enrollment_id=? ORDER BY id')
+			.all(first.enrollmentId);
+		for (const deniedRole of [Role.STUDENT, null]) {
+			f.state.role = deniedRole;
+			await assert.rejects(f.dropEnrollment(reference), status(deniedRole ? 403 : 401));
+		}
+		f.state.role = role;
+		await assert.rejects(f.dropEnrollment({ ...reference, userId: 'caller' }), status(404));
+		f.state.dropEmailFail = role === Role.REGISTRAR;
+		const dropped = await f.dropEnrollment(reference);
+		assert.equal(dropped.notificationSent, role === Role.ADMIN);
+		assert.equal(f.state.dropEmails.at(-1)[0], role + '@example.com');
+		const saved = f.sqlite.prepare('SELECT * FROM enrollment WHERE id=?').get(first.enrollmentId);
+		assert.equal(saved.status, 'dropped');
+		assert.ok(saved.dropped_at);
+		await assert.rejects(f.dropEnrollment(reference), status(409));
+		await assert.rejects(f.verifyEnrollmentClearance(reference), status(409));
+		await assert.rejects(
+			f.updateEnrollmentGrades({
+				...reference,
+				grades: [{ id: original[0].id, grade: 3, originalGrade: 5 }]
+			}),
+			status(409)
+		);
+		assert.deepEqual(f.getOutstandingSubjects(created.studentId), []);
+		// Reenrollment restores the recorded curriculum even after a new one is selected.
+		f.sqlite.exec(
+			"UPDATE program SET active_curriculum_id='next-c';UPDATE curriculum SET archived_at=1000,is_active=0 WHERE id='c'"
+		);
+		const page = f.enrollmentPage(created.userId);
+		assert.equal(page.restoringDropped, true);
+		assert.equal(page.enrollmentLockReason, null);
+		assert.equal(page.programCode, 'BSIS');
+		assert.equal(page.plan.curriculum.id, 'c');
+		assert.equal(page.schoolYearStart, 2026);
+		assert.equal(page.student.yearLevel, 1);
+		assert.equal(page.student.semester, 1);
+		assert.equal(page.student.section, 'C');
+		assert.deepEqual(page.gradeConcerns, { failedCount: 0, incompleteCount: 0 });
+		assert.deepEqual(page.plan.restoredSubjects.map((entry) => entry.units).sort(), [2.5, 4]);
+		const input = f.input(created, {
+			currentEnrollmentId: first.enrollmentId,
+			section: 'C',
+			subjects: page.plan.restoredSubjects
+		});
+		const reenrolled = await f.enrollStudent(input);
+		assert.notEqual(reenrolled.enrollmentId, first.enrollmentId);
+		assert.equal(
+			f.sqlite.prepare('SELECT status FROM enrollment WHERE id=?').get(first.enrollmentId).status,
+			'dropped'
+		);
+		assert.equal(
+			f.sqlite.prepare('SELECT enrollment_id FROM student WHERE user_id=?').get(created.userId)
+				.enrollment_id,
+			reenrolled.enrollmentId
+		);
+		assert.deepEqual(
+			f.sqlite
+				.prepare('SELECT * FROM enrollment_subject WHERE enrollment_id=? ORDER BY id')
+				.all(first.enrollmentId),
+			original
+		);
+		assert.equal(
+			f.sqlite.prepare('SELECT status FROM enrollment WHERE id=?').get(reenrolled.enrollmentId)
+				.status,
+			'enrolled'
+		);
+		assert.equal(
+			f.sqlite
+				.prepare(
+					'SELECT count(*) n FROM enrollment_subject WHERE enrollment_id=? AND grade IS NOT NULL'
+				)
+				.get(reenrolled.enrollmentId).n,
+			0
+		);
+		await assert.rejects(f.enrollStudent(input), status(409));
+		assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+	}
+});
+
 test('clearance verification enforces staff access, ownership and grade finalization', async (t) => {
 	const f = fixture(t);
 	const created = await f.createStudent(personal);
@@ -354,6 +464,8 @@ test('clearance verification enforces staff access, ownership and grade finaliza
 		f.sqlite.exec('UPDATE enrollment SET submitted_clearance=0');
 		assert.equal((await f.verifyEnrollmentClearance(reference)).submittedClearance, true);
 		assert.equal(f.db.select().from(schema.enrollment).get().submittedClearance, true);
+		assert.equal(f.db.select().from(schema.enrollment).get().status, 'completed');
+		await assert.rejects(f.dropEnrollment(reference), status(409));
 		await assert.rejects(f.verifyEnrollmentClearance(reference), status(409));
 	}
 });
@@ -392,12 +504,20 @@ test('grade finalization sends email after commit, avoids duplicate sends, and s
 		};
 		f.state.deferMeetingEmail = true;
 		f.state.meetingEmailFail = role === Role.REGISTRAR;
+		if (role === Role.REGISTRAR)
+			f.sqlite
+				.prepare('UPDATE enrollment SET submitted_clearance=1 WHERE id=?')
+				.run(first.enrollmentId);
 		const pending = f.finalizeEnrollmentGrades(reference);
 		await assert.rejects(f.finalizeEnrollmentGrades(reference), status(409));
 		f.state.finishMeetingEmail();
 		const result = await pending;
 		assert.equal(result.finalizedGrades, true);
 		assert.equal(result.notificationSent, role === Role.ADMIN);
+		assert.equal(
+			f.sqlite.prepare('SELECT status FROM enrollment WHERE id=?').get(first.enrollmentId).status,
+			role === Role.REGISTRAR ? 'completed' : 'enrolled'
+		);
 		assert.equal(f.state.meetingEmails.at(-1)[0], role + '@example.com');
 		assert.match(f.state.meetingEmails.at(-1)[1], /grades have been finalized/);
 		assert.match(f.state.meetingEmails.at(-1)[2], /Program: Information Systems \(BSIS\)/);
@@ -458,6 +578,7 @@ test('meeting requests validate concerns and ownership, retry failed email, and 
 	assert.equal(f.state.meetingEmails.length, 3);
 	// The additive migration and rollback preserve student, enrollment and grade records.
 	const grades = f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all();
+	f.sqlite.exec(readFileSync('drizzle/rollback/0026_enrollment_lifecycle.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0025_enrollment_meeting_request.sql', 'utf8'));
 	assert.equal(f.sqlite.prepare('SELECT count(*) n FROM enrollment').get().n, 1);
 	assert.deepEqual(

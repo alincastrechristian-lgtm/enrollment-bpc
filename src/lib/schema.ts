@@ -195,7 +195,7 @@ export const enrollment = sqliteTable(
 		yearLevel: integer('year_level').notNull(),
 
 		status: text('status', {
-			enum: ['enrolled', 'cancelled', 'withdrawn']
+			enum: ['enrolled', 'dropped', 'completed']
 		})
 			.default('enrolled')
 			.notNull(),
@@ -207,20 +207,19 @@ export const enrollment = sqliteTable(
 		meetingRequestSentAt: integer('meeting_request_sent_at', { mode: 'timestamp_ms' }),
 		// Claim a send without holding a database transaction open during email delivery.
 		meetingRequestStartedAt: integer('meeting_request_started_at', { mode: 'timestamp_ms' }),
+		droppedAt: integer('dropped_at', { mode: 'timestamp_ms' }),
 
 		enrolledAt: integer('enrolled_at', { mode: 'timestamp_ms' })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 			.notNull()
 	},
 	(table) => [
-		uniqueIndex('enrollment_student_year_semester_unique').on(
-			table.studentId,
-			table.schoolYearStart,
-			table.semester
-		),
+		uniqueIndex('enrollment_student_year_semester_unique')
+			.on(table.studentId, table.schoolYearStart, table.semester)
+			.where(sql`${table.status} <> 'dropped'`),
 		index('enrollment_term_idx').on(table.schoolYearStart, table.semester),
 		check('enrollment_year_range', sql`${table.yearLevel} > 0`),
-		check('enrollment_status_valid', sql`${table.status} IN ('enrolled', 'cancelled', 'withdrawn')`)
+		check('enrollment_status_valid', sql`${table.status} IN ('enrolled', 'dropped', 'completed')`)
 	]
 );
 

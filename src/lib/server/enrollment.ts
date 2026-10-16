@@ -13,7 +13,7 @@ import {
 } from '#lib/schema.js';
 import type { db, Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const enrollStudentSchema = z.object({
@@ -44,8 +44,12 @@ type EnrollmentSubjectValues = Omit<
 >;
 
 export function getEnrollmentLockReason(
-	current: Pick<typeof enrollment.$inferSelect, 'finalizedGrades' | 'submittedClearance'> | null
+	current: Pick<
+		typeof enrollment.$inferSelect,
+		'finalizedGrades' | 'submittedClearance' | 'status'
+	> | null
 ) {
+	if (current?.status === 'dropped') return null;
 	if (current && (!current.finalizedGrades || !current.submittedClearance))
 		return 'Finalize grades and verify clearance for the current enrollment before enrolling this student again.';
 	return null;
@@ -67,7 +71,13 @@ export function getOutstandingEnrollmentSubjects(
 		})
 		.from(enrollmentSubject)
 		.innerJoin(enrollment, eq(enrollment.id, enrollmentSubject.enrollmentId))
-		.where(and(eq(enrollment.studentId, studentId), eq(enrollment.finalizedGrades, true)))
+		.where(
+			and(
+				eq(enrollment.studentId, studentId),
+				eq(enrollment.finalizedGrades, true),
+				ne(enrollment.status, 'dropped')
+			)
+		)
 		.orderBy(
 			desc(enrollment.schoolYearStart),
 			desc(enrollment.semester),
@@ -101,20 +111,34 @@ export function getEnrollmentContext(
 	const owner = database.select().from(program).where(eq(program.code, programCode)).get();
 	if (!owner) error(404, 'Program not found.');
 	if (!owner.isActive) error(400, 'The program must be active before enrolling students.');
-	if (!owner.activeCurriculumId)
+	const restoring = record.student.currentEnrollmentId
+		? database
+				.select({ curriculumId: enrollment.curriculumId })
+				.from(enrollment)
+				.innerJoin(curriculum, eq(curriculum.id, enrollment.curriculumId))
+				.where(
+					and(
+						eq(enrollment.id, record.student.currentEnrollmentId),
+						eq(enrollment.studentId, record.student.studentId),
+						eq(enrollment.status, 'dropped'),
+						eq(curriculum.programCode, owner.code)
+					)
+				)
+				.get()
+		: undefined;
+	if (!restoring && !owner.activeCurriculumId)
 		error(404, 'Select an active curriculum for this program before enrolling students.');
 
 	const selectedCurriculum = database
 		.select()
 		.from(curriculum)
-		.where(eq(curriculum.id, owner.activeCurriculumId))
+		.where(eq(curriculum.id, restoring?.curriculumId ?? owner.activeCurriculumId!))
 		.get();
 	if (
 		!selectedCurriculum ||
 		selectedCurriculum.programCode !== owner.code ||
 		selectedCurriculum.publishedAt === null ||
-		selectedCurriculum.archivedAt !== null ||
-		!selectedCurriculum.isActive
+		(!restoring && (selectedCurriculum.archivedAt !== null || !selectedCurriculum.isActive))
 	) {
 		error(409, 'The active curriculum is unavailable. Refresh and try again.');
 	}
@@ -137,7 +161,8 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 			and(
 				eq(enrollment.studentId, context.student.studentId),
 				eq(enrollment.schoolYearStart, data.schoolYearStart),
-				eq(enrollment.semester, data.semester)
+				eq(enrollment.semester, data.semester),
+				ne(enrollment.status, 'dropped')
 			)
 		)
 		.get();
@@ -163,7 +188,7 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 				.from(enrollmentSubject)
 				.where(eq(enrollmentSubject.enrollmentId, current.id))
 				.all(),
-			current.finalizedGrades
+			current.finalizedGrades && current.status !== 'dropped'
 		);
 		if ((concerns.failedCount || concerns.incompleteCount) && !data.acknowledgeGradeConcerns)
 			error(
@@ -172,7 +197,10 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 			);
 		if (
 			data.schoolYearStart < current.schoolYearStart ||
-			(data.schoolYearStart === current.schoolYearStart && data.semester <= current.semester)
+			(data.schoolYearStart === current.schoolYearStart &&
+				(current.status === 'dropped'
+					? data.semester < current.semester
+					: data.semester <= current.semester))
 		)
 			error(400, 'Select a term after the current enrollment.');
 	}

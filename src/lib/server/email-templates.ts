@@ -298,3 +298,26 @@ export function createEnrollmentConfirmationEmail({
 		note: 'Keep this confirmation for your reference. Your student portal contains your current enrollment and enrollment history.'
 	});
 }
+
+export function createEnrollmentDroppedEmail(
+	name: string,
+	schoolYearStart: number,
+	semester: number,
+	url?: string
+) {
+	return renderAcademicEmail({
+		name,
+		schoolYearStart,
+		semester,
+		url,
+		title: 'Your enrollment has been dropped',
+		category: 'ENROLLMENT UPDATE',
+		message:
+			'Your enrollment for this term has been marked as dropped by the Registrar or an administrator. It is no longer active.',
+		steps: [
+			'Review the dropped enrollment and its subjects in your enrollment history.',
+			"Contact the Registrar's Office if you have questions or would like to enroll again."
+		],
+		note: 'Your enrollment record and subject history have been retained. Reenrollment can use the same term and subjects.'
+	});
+}

@@ -43,7 +43,17 @@
 			.filter((entry) => entry.yearLevel === year && entry.semester === term)
 			.map((entry) => ({ key: entry.id, subjectId: entry.subjectId, units: entry.units }));
 	}
-	let rows = $state<SubjectRow[]>(untrack(() => termRows(yearLevel, semester)));
+	let rows = $state<SubjectRow[]>(
+		untrack(() =>
+			data.restoredSubjects
+				? data.restoredSubjects.map((entry) => ({
+						key: crypto.randomUUID(),
+						subjectId: entry.id,
+						units: entry.units
+					}))
+				: termRows(yearLevel, semester)
+		)
+	);
 	const outstandingSubjects = $derived(data.outstandingSubjects ?? []);
 	const remainingSubjects = $derived(
 		outstandingSubjects.filter((subject) => !rows.some((row) => row.subjectId === subject.id))

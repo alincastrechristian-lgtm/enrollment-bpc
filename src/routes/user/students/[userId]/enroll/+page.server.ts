@@ -64,9 +64,11 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		programCode && !enrollmentLockReason
 			? getEnrollmentContext(db, params.userId, programCode)
 			: null;
+	const restoring = current?.status === 'dropped';
 	// Advance using the enrolled curriculum's calendar, even if the program changes.
-	const nextYear = !!current && current.semester >= current.curriculumSemesters;
+	const nextYear = !!current && !restoring && current.semester >= current.curriculumSemesters;
 	return {
+		restoringDropped: restoring,
 		enrollmentLockReason,
 		gradeConcerns: getGradeConcerns(
 			current
@@ -76,14 +78,14 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 						.where(eq(enrollmentSubject.enrollmentId, current.id))
 						.all()
 				: [],
-			current?.finalizedGrades ?? false
+			!!current?.finalizedGrades && !restoring
 		),
 		student: {
 			...record.student,
 			name: record.name,
 			email: record.email,
 			yearLevel: current ? current.yearLevel + (nextYear ? 1 : 0) : 1,
-			semester: current && !nextYear ? current.semester + 1 : 1,
+			semester: restoring ? current.semester : current && !nextYear ? current.semester + 1 : 1,
 			section: current?.section ?? ''
 		},
 		programs,
@@ -97,6 +99,14 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 			),
 		plan: context
 			? {
+					restoredSubjects: restoring
+						? db
+								.select({ id: enrollmentSubject.subjectId, units: enrollmentSubject.units })
+								.from(enrollmentSubject)
+								.where(eq(enrollmentSubject.enrollmentId, current.id))
+								.orderBy(asc(enrollmentSubject.subjectCode))
+								.all()
+						: null,
 					outstandingSubjects: getOutstandingEnrollmentSubjects(db, record.student.studentId),
 					curriculum: context.curriculum,
 					program: context.program,
