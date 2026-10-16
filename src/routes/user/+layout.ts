@@ -70,7 +70,7 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	},
 	'/user/reports': {
 		pageTitle: 'REPORTS',
-		pageDescription: 'Explore enrollment insights and reporting tools.'
+		pageDescription: 'Review academic reports, export CSV files, and print term summaries.'
 	},
 	'/user/settings/email': {
 		pageTitle: 'EMAIL SETTINGS',

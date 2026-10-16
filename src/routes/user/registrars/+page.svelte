@@ -319,9 +319,9 @@
 	aria-describedby="new-registrar-description"
 >
 	<div
-		class="modal-box max-w-lg overflow-y-auto rounded-2xl border border-base-300 bg-base-100 p-0"
+		class="popup-accent-panel modal-box max-w-lg overflow-y-auto rounded-2xl p-0"
+		style:--popup-accent-height="0.25rem"
 	>
-		<div class="h-1 bg-primary" aria-hidden="true"></div>
 		<form
 			bind:this={registrarForm}
 			class="space-y-6 p-6 sm:p-8"

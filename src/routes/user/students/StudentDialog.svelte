@@ -67,9 +67,8 @@
 	}}
 >
 	<div
-		class="portal-panel modal-box flex max-h-[90dvh] max-w-2xl flex-col overflow-hidden p-0 shadow-xl"
+		class="portal-panel popup-accent-panel modal-box flex max-h-[90dvh] max-w-2xl flex-col overflow-hidden p-0 shadow-xl"
 	>
-		<div class="h-1.5 shrink-0 bg-primary" aria-hidden="true"></div>
 		<header
 			class="flex shrink-0 items-start justify-between gap-4 border-b border-base-300 bg-base-200/40 p-5 sm:p-6"
 		>

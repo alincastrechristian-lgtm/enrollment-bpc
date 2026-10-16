@@ -72,6 +72,7 @@ flowchart TD
 | ----------------------------------------- | ----------------------------------------- | --------------------------------- | ---------------------------- |
 | Create/view students; enroll students | Yes | Yes | No |
 | View student masterlist by term and class | Yes | Yes | No |
+| Generate reports, export CSV, and print | Yes | Yes | No |
 | Create/list registrar accounts | Yes | No | No |
 | Delete unfinished students without enrollment history | Yes | Yes | No |
 | Disable/enable registrar accounts | Yes | No | No |
@@ -579,7 +580,7 @@ Notifications use saved backend events. The table also identifies remaining unfi
 | Notifications page | Saved events with search, email-type filters, pagination and All/Unread views |
 | Notifications: open row | Show safe message details and persist read status only for the student recipient |
 | Notifications: Mark all as read | Student recipients mark their own notifications read; staff have no read controls |
-| Reports                             | Coming-soon screen linking to live dashboard and records; no report generation                          |
+| Reports                             | Admin/registrar can generate enrollment summaries, grade reports, attention lists, completion reports, and dropped enrollment reports; export CSV or print/Save as PDF |
 | Revoke sessions | Confirm sign-out on all devices. Better Auth revokes all target sessions without changing password or access; admins can target students/registrars, registrars can target students only |
 | Student Edit/Delete | Editing remains unavailable. Admin/registrar can confirm deletion only while setup is incomplete and no current or historical enrollment exists; server rechecks atomically and removes linked auth data and reset tokens |
 | Registrar Delete account | Admin confirms permanent deletion; login data and reset tokens are removed atomically. Student enrollments, subjects, grades, and notifications remain; deleted staff author references become null. Disable account remains available for temporary suspension |
@@ -588,6 +589,8 @@ Notifications use saved backend events. The table also identifies remaining unfi
 | Two-factor account flow | Auth plugin exists, but no complete dedicated verification/enrollment UI in current pages |
 
 The inbox and student dashboard use saved events matching outgoing email types. Academic event notifications are saved with their state changes even if email delivery fails; meeting-request events are saved after successful delivery. Account notifications contain safe setup/reset text only, never one-time links or tokens. The top-bar badge uses the same server-enforced visibility; unread badges are shown only for student recipients. Historical events are not backfilled.
+
+**Reports:** changing the report, school year, semester, program, year level, or section updates results automatically. Rapid dropdown changes are grouped into one request; failed updates offer **Retry**. Print and CSV controls wait until the update finishes. Reports use that term's enrollment records, not current class assignments. Enrollment summary counts include dropped attempts and show distinct student counts separately. Other academic reports exclude dropped attempts; the dropped report lists them explicitly. Draft grade outcomes remain Pending, finalized null grades are INC, and next-term readiness follows the same failed-grade meeting rule as enrollment. Historical enrollments are labeled rather than presented as ready for reenrollment. **Download CSV** exports all matching rows with spreadsheet formula protection and rechecks staff permissions. **Print / PDF** prints the complete generated report with scope and Manila timestamp, omitting workspace controls. Reports do not change student or enrollment data.
 
 ## 18. Backend action index
 

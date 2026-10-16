@@ -104,6 +104,20 @@
 		background: var(--color-base-100);
 		box-shadow: 0 2px 4px -3px color-mix(in oklch, var(--color-base-content) 15%, transparent);
 	}
+	/* Paint the accent and body together so rounded popup corners have no border seam. */
+	.popup-accent-panel {
+		border: 0;
+		background: linear-gradient(
+			var(--color-primary) 0 var(--popup-accent-height, 0.375rem),
+			var(--color-base-100) var(--popup-accent-height, 0.375rem)
+		);
+	}
+	.popup-accent-panel::before {
+		content: '';
+		display: block;
+		height: var(--popup-accent-height, 0.375rem);
+		flex-shrink: 0;
+	}
 	.portal-page-header {
 		position: relative;
 		overflow: hidden;

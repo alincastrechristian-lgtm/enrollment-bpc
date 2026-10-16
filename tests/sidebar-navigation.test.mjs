@@ -49,6 +49,7 @@ for (const [role, expected] of [
 			'Programs',
 			'Curriculum',
 			'Notifications',
+			'Reports',
 			'Settings'
 		]
 	],
