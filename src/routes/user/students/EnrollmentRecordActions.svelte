@@ -1,13 +1,15 @@
 <script lang="ts">
-	import { voidEnrollment, reopenEnrollment } from '#lib/actions/enrollment.remote.js';
+	import { reopenEnrollment, voidEnrollment } from '#lib/actions/enrollment.remote.js';
+	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
 	import { getErrorMessage } from '#lib/errors.js';
-	import { showYesNo, showSuccess, showError } from '#lib/components/Popup/Popup.svelte.js';
 	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { History, Pencil, RotateCcw, Ban, X } from '@lucide/svelte';
+	import { Ban, History, Pencil, RotateCcw, X } from '@lucide/svelte';
 	import type { PageData } from './[userId]/enrollments/[enrollmentId]/$types';
 	let { data, disabled = false }: { data: PageData; disabled?: boolean } = $props();
 	let dialog: HTMLDialogElement;
+	let isOpen = $state(false);
+
 	let action = $state<'voided' | 'reopened'>('voided');
 	let reason = $state('');
 	let busy = $state(false);
@@ -213,7 +215,7 @@
 				bind:value={reason}
 				maxlength="1000"
 				minlength="5"
-				required
+				required={isOpen}
 				disabled={busy}
 				placeholder="Explain what needs to be corrected..."></textarea>
 		</label>
