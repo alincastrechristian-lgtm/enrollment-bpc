@@ -23,6 +23,8 @@
 		action = kind;
 		reason = '';
 		message = '';
+
+		isOpen = true;
 		dialog.showModal();
 	}
 	async function confirm() {
@@ -186,6 +188,7 @@
 	oncancel={(event) => {
 		if (busy) event.preventDefault();
 	}}
+	onclose={() => (isOpen = false)}
 >
 	<div class="portal-panel popup-accent-panel modal-box max-w-lg space-y-5 p-6">
 		<header class="flex items-start justify-between gap-3">
