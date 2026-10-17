@@ -62,8 +62,8 @@ function fixture(t) {
 
 function seed(sqlite) {
 	sqlite.exec(`
-		INSERT INTO user(id,name,email,role) VALUES ('u1','Alice','alice@example.com','student'),('u2','Bea','bea@example.com','student'),('u3','Unenrolled','new@example.com','student');
-		INSERT INTO student(id,user_id) VALUES ('MA-001','u1'),('MA-002','u2'),('MA-003','u3');
+		INSERT INTO user(id,name,email,role,first_name,last_name) VALUES ('u1','Alice','alice@example.com','student','Alice',''),('u2','Bea','bea@example.com','student','Bea',''),('u3','Unenrolled','new@example.com','student','Unenrolled','');
+		INSERT INTO student(id,user_id,birth_date,sex) VALUES ('MA-001','u1','2000-01-01','female'),('MA-002','u2','2000-01-01','female'),('MA-003','u3','2000-01-01','female');
 		INSERT INTO program(id,code,name,is_active) VALUES ('p1','BSIS','Information Systems',0),('p2','BSA','Accountancy',1);
 		INSERT INTO curriculum(id,program_code,name) VALUES ('c1','BSIS','Old Curriculum'),('c2','BSA','New Curriculum');
 		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,status) VALUES
@@ -137,8 +137,8 @@ test('masterlist loads all matching students in bounded batches and protects eve
 	for (let i = 0; i < 61; i++) {
 		const suffix = String(i).padStart(2, '0');
 		f.sqlite.exec(`
-			INSERT INTO user(id,name,email,role) VALUES('r${suffix}','Roster ${suffix}','r${suffix}@example.com','student');
-			INSERT INTO student(id,user_id) VALUES('R-${suffix}','r${suffix}');
+			INSERT INTO user(id,name,email,role,first_name,last_name) VALUES ('r${suffix}','Roster ${suffix}','r${suffix}@example.com','student','Roster','${suffix}');
+			INSERT INTO student(id,user_id,birth_date,sex) VALUES ('R-${suffix}','r${suffix}','2000-01-01','female');
 			INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level)
 			VALUES('e${suffix}','R-${suffix}','c1','C',2026,2,1);
 		`);

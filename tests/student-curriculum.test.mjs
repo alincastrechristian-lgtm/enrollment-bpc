@@ -41,7 +41,7 @@ function fixture(t) {
 	migrate(db, { migrationsFolder: 'drizzle' });
 	sqlite.pragma('foreign_keys = ON');
 	sqlite.exec(`
-		INSERT INTO user (id,name,email,role) VALUES ('u','Student','u@example.com','student'),('other','Other','other@example.com','student');
+		INSERT INTO user(id,name,email,role,first_name,last_name) VALUES ('u','Student','u@example.com','student','Student',''),('other','Other','other@example.com','student','Other','');
 		INSERT INTO program (id,code,name) VALUES ('p','BSIS','Information Systems');
 		INSERT INTO curriculum (id,program_code,name,published_at,archived_at) VALUES
 		('assigned','BSIS','Original Curriculum',1000,2000),('new','BSIS','New Curriculum',2000,null),('draft','BSIS','Draft Curriculum',null,null);
@@ -49,7 +49,7 @@ function fixture(t) {
 		INSERT INTO subject (id,code,name) VALUES ('s1','IS101','Introduction'),('s2','IS201','Programming');
 		INSERT INTO curriculum_subject (id,curriculum_id,subject_id,subject_code,subject_name,year_level,semester,units) VALUES
 		('cs2','assigned','s2','IS201','Programming',2,2,4),('cs1','assigned','s1','IS101','Introduction',1,1,3);
-		INSERT INTO student (id,user_id) VALUES ('MA-001','u'),('MA-002','other');
+		INSERT INTO student(id,user_id,birth_date,sex) VALUES ('MA-001','u','2000-01-01','female'),('MA-002','other','2000-01-01','female');
 		INSERT INTO enrollment (id,student_id,curriculum_id,section,school_year_start,semester,year_level) VALUES
 		('own','MA-001','assigned','A',2026,1,1),('foreign','MA-002','new','B',2026,1,1);
 		UPDATE student SET enrollment_id='own' WHERE user_id='u';

@@ -437,7 +437,7 @@ test('curriculum deletion cascades subject entries but preserves enrollment refe
 		subjects: [entry('s1')]
 	});
 	f.sqlite.exec(
-		"INSERT INTO user (id, name, email) VALUES ('u', 'Student', 'student@example.com'); INSERT INTO student (id, user_id) VALUES ('student', 'u')"
+		"INSERT INTO user(id,name,email,first_name,last_name) VALUES ('u','Student','student@example.com','Student',''); INSERT INTO student(id,user_id,birth_date,sex) VALUES ('student','u','2000-01-01','female')"
 	);
 	f.db
 		.insert(schema.enrollment)
@@ -481,7 +481,7 @@ test('activation archives the previous version without moving existing enrollmen
 	await assert.rejects(f.updateCurriculum({ id: a.id, subjects: [] }), { status: 409 });
 	await assert.rejects(f.deleteCurriculum(a.id), { status: 400 });
 	f.sqlite.exec(
-		"INSERT INTO user (id, name, email) VALUES ('u', 'Student', 'student@example.com'); INSERT INTO student (id, user_id) VALUES ('student', 'u')"
+		"INSERT INTO user(id,name,email,first_name,last_name) VALUES ('u','Student','student@example.com','Student',''); INSERT INTO student(id,user_id,birth_date,sex) VALUES ('student','u','2000-01-01','female')"
 	);
 	f.db
 		.insert(schema.enrollment)

@@ -39,7 +39,7 @@ function fixture(t) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
 	sqlite.exec(`
-CREATE TABLE user (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
+CREATE TABLE user (id TEXT PRIMARY KEY, name TEXT NOT NULL, first_name TEXT NOT NULL, middle_name TEXT NOT NULL DEFAULT '', last_name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
  email_verified INTEGER DEFAULT 0, image TEXT, created_at INTEGER DEFAULT 0, updated_at INTEGER DEFAULT 0,
  role TEXT DEFAULT 'student', setup_complete INTEGER DEFAULT 0, banned INTEGER DEFAULT 0,
  ban_reason TEXT, ban_expires INTEGER, two_factor_enabled INTEGER DEFAULT 0);
@@ -80,6 +80,10 @@ CREATE TABLE two_factor (id TEXT PRIMARY KEY, secret TEXT NOT NULL, backup_codes
 		'better-auth/plugins/two-factor': { twoFactor },
 		'better-auth/svelte-kit': { sveltekitCookies },
 		'../auth-permissions': permissions,
+		'./auth-names': loadTypeScript('src/lib/server/auth-names.ts', {
+			'../person-name': loadTypeScript('src/lib/person-name.ts')
+		}),
+		'./account-setup-email': loadTypeScript('src/lib/server/account-setup-email.ts'),
 		'./notifications': { recordNotification: () => {} },
 		'./email': { sendEmail: async () => true },
 		'./email-templates': {
@@ -120,9 +124,23 @@ CREATE TABLE two_factor (id TEXT PRIMARY KEY, secret TEXT NOT NULL, backup_codes
 		return verification.identifier.slice('reset-password:'.length);
 	}
 	db.insert(schema.user)
-		.values({ id: 'student', name: 'Student', email: 'student@example.com' })
+		.values({
+			id: 'student',
+			name: 'Student',
+			firstName: 'Student',
+			lastName: '',
+			email: 'student@example.com'
+		})
 		.run();
-	db.insert(schema.user).values({ id: 'other', name: 'Other', email: 'other@example.com' }).run();
+	db.insert(schema.user)
+		.values({
+			id: 'other',
+			name: 'Other',
+			firstName: 'Other',
+			lastName: '',
+			email: 'other@example.com'
+		})
+		.run();
 	return { db, auth, commands, refreshSession, issueToken, event, cookieHeader, ...commands() };
 }
 

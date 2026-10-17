@@ -18,6 +18,7 @@ function load(file, deps = {}, source) {
 	return exports;
 }
 const { Role } = load('src/lib/Roles.ts');
+const deliveryModule = load('src/lib/server/account-setup-email.ts');
 const schema = load('src/lib/schema.ts', {
 	'#lib/Roles.js': { Role },
 	'./email': load('src/lib/email.ts')
@@ -45,6 +46,11 @@ const { validateUser } = load(
 const status = (n) => (cause) => isHttpError(cause) && cause.status === n;
 const personal = {
 	name: 'New Student',
+	firstName: 'New',
+	middleName: '',
+	lastName: 'Student',
+	birthDate: '2000-02-29',
+	sex: 'female',
 	email: 'new@example.com',
 	address: 'Malolos, Bulacan',
 	contactNumber: '09171234567'
@@ -165,7 +171,7 @@ function fixture(t) {
 	const db = drizzle(sqlite, { schema });
 	migrate(db, { migrationsFolder: 'drizzle' });
 	sqlite.pragma('foreign_keys = ON');
-	sqlite.exec(`INSERT INTO user(id,name,email,role) VALUES ('caller','Registrar','staff@example.com','registrar');
+	sqlite.exec(`INSERT INTO user(id,name,first_name,last_name,email,role) VALUES ('caller','Registrar','Test','Registrar','staff@example.com','registrar');
  INSERT INTO program(id,code,name) VALUES('p','BSIS','Information Systems');
  INSERT INTO curriculum(id,program_code,name,published_at,year_levels,semesters) VALUES('c','BSIS','Published Curriculum',1000,4,2);
  UPDATE program SET active_curriculum_id='c';
@@ -183,6 +189,7 @@ function fixture(t) {
 				const user = {
 					id: crypto.randomUUID(),
 					name: body.name,
+					...body.data,
 					email: body.email,
 					role: body.role ?? Role.STUDENT
 				};
@@ -192,6 +199,7 @@ function fixture(t) {
 			async requestPasswordReset() {
 				state.emails++;
 				if (state.mailFail) throw new Error('SECRET SMTP credentials');
+				deliveryModule.accountSetupEmailDelivery.getStore().sent = true;
 			}
 		}
 	};
@@ -221,10 +229,13 @@ function fixture(t) {
 		},
 		'#lib/Roles.js': { Role },
 		'#lib/schema.js': schema,
+		'#lib/person-name.js': load('src/lib/person-name.ts'),
 		'#lib/students.js': load('src/lib/students.ts', {
+			'./person-name': load('src/lib/person-name.ts'),
 			'./student-demographics': load('src/lib/student-demographics.ts')
 		}),
 		'#lib/server/auth.js': { auth, validateUser },
+		'#lib/server/account-setup-email.js': deliveryModule,
 		'../server/db': { db },
 		'#lib/server/db/index.js': { db },
 		'@sveltejs/kit': { error, isHttpError },
@@ -1072,7 +1083,7 @@ test('enrollment page resolves existing student, program selection, and active c
 test('migration creates student records for older student accounts without applicants', (t) => {
 	const f = legacy(t);
 	f.sqlite.exec(
-		"INSERT INTO user(id,name,email,role)VALUES('orphan','Older Student','orphan@example.com','student')"
+		"INSERT INTO user(id,name,first_name,last_name,email,role)VALUES('orphan','Older Student','Older','Student','orphan@example.com','student')"
 	);
 	f.apply();
 	const record = f.sqlite.prepare("SELECT * FROM student WHERE user_id='orphan'").get();
@@ -1104,10 +1115,10 @@ test('student numbering starts at one in a new month even when the preceding mon
 test('student filters combine current enrollment fields without matching enrollment history', async (t) => {
 	const f = fixture(t);
 	const alice = await f.createStudent(personal);
-	const bob = await f.createStudent({ ...personal, name: 'Bob', email: 'bob@example.com' });
+	const bob = await f.createStudent({ ...personal, firstName: 'Bob', email: 'bob@example.com' });
 	const waiting = await f.createStudent({
 		...personal,
-		name: 'Waiting Student',
+		firstName: 'Waiting',
 		email: 'waiting@example.com'
 	});
 	f.sqlite.exec(
@@ -1147,6 +1158,7 @@ test('student filters combine current enrollment fields without matching enrollm
 	const { load: page } = load('src/routes/user/students/+page.server.ts', {
 		'#lib/Roles.js': { Role },
 		'#lib/students.js': load('src/lib/students.ts', {
+			'./person-name': load('src/lib/person-name.ts'),
 			'./student-demographics': load('src/lib/student-demographics.ts')
 		}),
 		'#lib/schema.js': schema,

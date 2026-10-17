@@ -29,6 +29,10 @@ const schema = load('src/lib/schema.ts', {
 	'./email': load('src/lib/email.ts')
 });
 const permissions = load('src/lib/auth-permissions.ts');
+const personNames = load('src/lib/person-name.ts');
+const { nameFields, nameHooks } = load('src/lib/server/auth-names.ts', {
+	'../person-name': personNames
+});
 
 test('account actions enforce role boundaries, revoke sessions, ban/unban, and preserve records on deletion', async (t) => {
 	const sqlite = new Database(':memory:');
@@ -41,6 +45,8 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 		secret: 'test-secret-with-at-least-thirty-two-characters',
 		database: drizzleAdapter(db, { provider: 'sqlite' }),
 		emailAndPassword: { enabled: true },
+		user: { additionalFields: nameFields },
+		databaseHooks: { user: nameHooks },
 		plugins: [
 			admin({
 				ac: permissions.ac,
@@ -54,14 +60,29 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 		]
 	});
 	const password = 'TestPassword123!';
-	const owner = await auth.api.signUpEmail({
-		body: { name: 'Admin', email: 'admin@example.com', password }
+	const owner = await auth.api.createUser({
+		body: {
+			name: 'Test Admin',
+			email: 'admin@example.com',
+			password,
+			data: { firstName: 'Test', lastName: 'Admin' }
+		}
 	});
-	const target = await auth.api.signUpEmail({
-		body: { name: 'Registrar', email: 'registrar@example.com', password }
+	const target = await auth.api.createUser({
+		body: {
+			name: 'Test Registrar',
+			email: 'registrar@example.com',
+			password,
+			data: { firstName: 'Test', lastName: 'Registrar' }
+		}
 	});
-	const student = await auth.api.signUpEmail({
-		body: { name: 'Student', email: 'student@example.com', password }
+	const student = await auth.api.createUser({
+		body: {
+			name: 'Test Student',
+			email: 'student@example.com',
+			password,
+			data: { firstName: 'Test', lastName: 'Student' }
+		}
 	});
 	db.update(schema.user).set({ role: 'admin' }).where(eq(schema.user.id, owner.user.id)).run();
 	db.update(schema.user).set({ role: 'registrar' }).where(eq(schema.user.id, target.user.id)).run();
@@ -78,15 +99,24 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 	let headers = adminHeaders;
 	let registrarHeaders = await signIn('registrar@example.com');
 	const studentHeaders = await signIn('student@example.com');
-	// Generic auth endpoints must not bypass admin-only student information edits.
+	// Generic auth endpoints must not bypass student-specific validation and email safeguards.
 	for (const data of [{ name: 'Unauthorized name' }, { email: 'unauthorized@example.com' }]) {
 		await assert.rejects(
-			auth.api.adminUpdateUser({ headers: registrarHeaders, body: { userId: student.user.id, data } }),
+			auth.api.adminUpdateUser({
+				headers: registrarHeaders,
+				body: { userId: student.user.id, data }
+			}),
 			(cause) => isAPIError(cause) && cause.statusCode === 403
 		);
 	}
-	assert.equal(db.select().from(schema.user).where(eq(schema.user.id, student.user.id)).get().name, 'Student');
-	assert.equal(db.select().from(schema.user).where(eq(schema.user.id, student.user.id)).get().email, 'student@example.com');
+	assert.equal(
+		db.select().from(schema.user).where(eq(schema.user.id, student.user.id)).get().name,
+		'Test Student'
+	);
+	assert.equal(
+		db.select().from(schema.user).where(eq(schema.user.id, student.user.id)).get().email,
+		'student@example.com'
+	);
 	let locals = { user: { id: owner.user.id, role: 'admin' }, session: {} };
 	const guard = (value, allowed) => {
 		if (!value.user || !value.session) error(401, 'Unauthorized');
@@ -95,10 +125,13 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 	const dependencies = {
 		'#lib/Roles.js': roles,
 		'#lib/schema.js': schema,
+		'#lib/person-name.js': personNames,
 		'#lib/students.js': load('src/lib/students.ts', {
+			'./person-name': personNames,
 			'./student-demographics': load('src/lib/student-demographics.ts')
 		}),
 		'#lib/server/auth.js': { auth, validateUser: guard },
+		'#lib/server/account-setup-email.js': load('src/lib/server/account-setup-email.ts'),
 		'../server/db': { db },
 		'#lib/server/enrollment.js': { enrollStudentSchema: z.any() },
 		'#lib/server/email.js': {},
@@ -204,7 +237,7 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 		.where(eq(schema.user.id, target.user.id))
 		.run();
 	sqlite.exec(`
-		INSERT INTO student(id,user_id) VALUES('MA','${student.user.id}');
+		INSERT INTO student(id,user_id,birth_date,sex) VALUES('MA','${student.user.id}','2000-01-01','female');
 		INSERT INTO program(id,code,name) VALUES('p','BSIS','Information Systems');
 		INSERT INTO curriculum(id,program_code,name) VALUES('c','BSIS','Curriculum');
 		INSERT INTO subject(id,code,name) VALUES('s','IS101','Introduction');
@@ -311,6 +344,8 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 		.values({
 			id: 'unfinished',
 			name: 'Pending',
+			firstName: 'Pending',
+			lastName: 'Registrar',
 			email: 'pending@example.com',
 			role: 'registrar',
 			banned: true

@@ -69,11 +69,10 @@ function fixture(t) {
 	dependencies['#lib/server/cor.js'] = backend;
 	const { GET } = load('src/routes/user/enrollment/[enrollmentId]/cor/+server.ts', dependencies);
 	sqlite.exec(`
-		INSERT INTO user(id,name,email,role,ban_reason) VALUES
-		('a','Ana Muñoz','ana@example.com','student','PRIVATE AUTH VALUE'),
-		('b','Bea','bea@example.com','student',NULL);
+		INSERT INTO user(id,name,email,role,ban_reason,first_name,last_name) VALUES ('a','Ana Muñoz','ana@example.com','student','PRIVATE AUTH VALUE','Ana','Muñoz'),
+		('b','Bea','bea@example.com','student',NULL,'Bea','');
 		INSERT INTO student(id,user_id,address,contact_number,birth_date,sex) VALUES
-		('MA-202610-000001','a','Malolos, Bulacan','09123456789','2000-02-29','female'),('OTHER','b','','',NULL,NULL);
+		('MA-202610-000001','a','Malolos, Bulacan','09123456789','2000-02-29','female'),('OTHER','b','','','2000-01-01','female');
 		INSERT INTO program(id,code,name) VALUES('p1','BSIS','Information Systems'),('p2','BSA','Accountancy');
 		INSERT INTO curriculum(id,program_code,name) VALUES('c1','BSIS','Historical curriculum'),('c2','BSA','Current curriculum');
 		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,status,finalized_grades) VALUES

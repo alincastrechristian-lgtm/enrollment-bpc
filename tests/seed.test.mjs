@@ -74,35 +74,45 @@ test('seeded migration preserves existing settings, retries safely, and can roll
 	});
 });
 
-test('seed creates linked catalog data, valid draft curricula and students without enrollments', (t) => {
+test('seed creates linked catalog data and active curricula without student accounts or enrollments', (t) => {
 	const { db, sqlite } = fixture(t);
 	assert.deepEqual(seedAcademicData(db), {
 		programs: 3,
 		subjects: 20,
 		curricula: 3,
-		students: 20
+		students: 0
 	});
 	const curricula = db.select().from(schema.curriculum).all();
 	const entries = db.select().from(schema.curriculumSubject).all();
+	const programs = db.select().from(schema.program).all();
+	for (const curriculum of curricula) {
+		assert.ok(curriculum.publishedAt instanceof Date);
+		assert.equal(
+			programs.find((program) => program.code === curriculum.programCode).activeCurriculumId,
+			curriculum.id
+		);
+	}
 	assert.equal(entries.length, 33);
 	for (const entry of entries) {
 		const curriculum = curricula.find((record) => record.id === entry.curriculumId);
-		assert.equal(curriculum.publishedAt, null);
 		assert.ok(entry.yearLevel >= 1 && entry.yearLevel <= curriculum.yearLevels);
 		assert.ok(entry.semester >= 1 && entry.semester <= curriculum.semesters);
 		assert.ok(entry.units > 0);
 	}
 	const students = db.select().from(schema.studentData).all();
-	assert.equal(students.length, 20);
-	assert.ok(
-		students.every(
-			(record) => record.address && record.contactNumber && !record.currentEnrollmentId
-		)
-	);
-	assert.equal(db.select().from(schema.user).all().length, 20);
+	assert.equal(students.length, 0);
+	assert.equal(db.select().from(schema.user).all().length, 0);
 	assert.equal(sqlite.prepare('SELECT count(*) n FROM enrollment').get().n, 0);
 	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
+	sqlite.exec('UPDATE program SET active_curriculum_id=NULL');
 	assert.deepEqual(seedAcademicData(db), { programs: 0, subjects: 0, curricula: 0, students: 0 });
+	assert.ok(
+		db
+			.select()
+			.from(schema.program)
+			.all()
+			.every((program) => program.activeCurriculumId === null)
+	);
 });
 
 test('seed reuses existing catalog IDs and preserves edited and published records on reruns', (t) => {
@@ -117,7 +127,7 @@ test('seed reuses existing catalog IDs and preserves edited and published record
 		programs: 2,
 		subjects: 19,
 		curricula: 3,
-		students: 20
+		students: 0
 	});
 	assert.ok(
 		db
@@ -141,10 +151,10 @@ test('seed reuses existing catalog IDs and preserves edited and published record
 	assert.deepEqual(academicRows(db), before);
 });
 
-test('seed rolls back academic inserts when a student insert fails', (t) => {
+test('seed rolls back academic inserts when curriculum activation fails', (t) => {
 	const { db, sqlite } = fixture(t);
 	sqlite.exec(
-		"CREATE TRIGGER reject_seed BEFORE INSERT ON student BEGIN SELECT RAISE(ABORT, 'test failure'); END;"
+		"CREATE TRIGGER reject_seed BEFORE UPDATE OF active_curriculum_id ON program BEGIN SELECT RAISE(ABORT, 'test failure'); END;"
 	);
 	assert.throws(() => seedAcademicData(db), /test failure/);
 	assert.ok(academicRows(db).every((rows) => rows.length === 0));

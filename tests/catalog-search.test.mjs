@@ -257,11 +257,20 @@ for (const kind of ['students', 'registrars']) {
 				...Array.from({ length: 12 }, (_, index) => ({
 					id: `account-${index}`,
 					name: `Account ${index}`,
+					firstName: 'Account',
+					lastName: String(index),
 					email: `account${index}@example.com`,
 					role,
 					setupComplete: index !== 0
 				})),
-				{ id: 'admin', name: 'Account admin', email: 'admin@example.com', role: Role.ADMIN }
+				{
+					id: 'admin',
+					name: 'Account admin',
+					firstName: 'Account',
+					lastName: 'admin',
+					email: 'admin@example.com',
+					role: Role.ADMIN
+				}
 			])
 			.run();
 		assert.equal((await f.load('?page=2')).users.length, 2);

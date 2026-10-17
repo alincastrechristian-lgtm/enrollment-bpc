@@ -1,4 +1,5 @@
 import { Role } from '#lib/Roles.js';
+import { formatPersonName, personNameSchema } from '#lib/person-name.js';
 import {
 	canDeleteStudentAccount,
 	createStudentSchema,
@@ -14,6 +15,7 @@ import {
 	verification
 } from '#lib/schema.js';
 import { auth, validateUser } from '#lib/server/auth.js';
+import { accountSetupEmailDelivery } from '#lib/server/account-setup-email.js';
 import { enrollStudentSchema, getEnrollmentPlan } from '#lib/server/enrollment.js';
 import { sendEmail } from '#lib/server/email.js';
 import { createEnrollmentConfirmationEmail } from '#lib/server/email-templates.js';
@@ -25,7 +27,7 @@ import { error, isHttpError } from '@sveltejs/kit';
 import { and, eq, like, ne, sql } from 'drizzle-orm';
 import { isAPIError } from 'better-auth/api';
 import { z } from 'zod';
-import { db } from '../server/db';
+import { db, type Transaction } from '../server/db';
 
 export const deleteStudent = command(z.object({ userId: z.string().min(1) }), ({ userId }) => {
 	const { locals } = getRequestEvent();
@@ -163,18 +165,22 @@ export const revokeAccountSessions = command(
 );
 
 async function sendPasswordResetLink(email: string, headers: Headers) {
+	const delivery = { sent: false };
 	try {
-		await auth.api.requestPasswordReset({
-			body: {
-				email,
-				redirectTo: '/first-login'
-			},
-			headers: headers
-		});
+		await accountSetupEmailDelivery.run(delivery, () =>
+			auth.api.requestPasswordReset({
+				body: {
+					email,
+					redirectTo: '/first-login'
+				},
+				headers: headers
+			})
+		);
 	} catch (err) {
 		console.error('Account setup email failed:', err);
 		error(502, 'Failed to send account setup email. Please try again.');
 	}
+	if (!delivery.sent) error(502, 'Failed to send account setup email. Please try again.');
 }
 
 export const resendMagicLink = command(
@@ -197,13 +203,7 @@ export const resendMagicLink = command(
 	}
 );
 
-const createUserSchema = z.object({
-	name: z
-		.string()
-		.trim()
-		.min(2, 'Name must be at least 2 characters')
-		.max(100, 'Name must be at most 100 characters'),
-
+const createUserSchema = personNameSchema.extend({
 	email: z.email('Please enter a valid email address').trim().toLowerCase()
 });
 type CreateUserSchema = z.infer<typeof createUserSchema>;
@@ -244,7 +244,13 @@ async function createUser(data: CreateUserSchema, role: Role, headers: Headers) 
 	try {
 		const result = await auth.api.createUser({
 			body: {
-				...data,
+				name: formatPersonName(data),
+				email: data.email,
+				data: {
+					firstName: data.firstName,
+					middleName: data.middleName,
+					lastName: data.lastName
+				},
 				role: role === Role.STUDENT ? undefined : role
 			},
 			headers
@@ -265,11 +271,16 @@ export const createRegistrar = command(
 		validateUser(locals, [Role.ADMIN]);
 
 		const createdUser = await createUser(data, Role.REGISTRAR, request.headers);
-		await sendPasswordResetLink(createdUser.email, request.headers);
+		let invitationSent = true;
+		try {
+			await sendPasswordResetLink(createdUser.email, request.headers);
+		} catch {
+			invitationSent = false;
+		}
 
 		return {
 			success: true,
-			invitationSent: true,
+			invitationSent,
 			userId: createdUser.id,
 			email: createdUser.email
 		};
@@ -279,11 +290,7 @@ export const createRegistrar = command(
 export const createStudent = command(createStudentSchema, async (data) => {
 	const { locals, request } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
-	const createdUser = await createUser(
-		{ name: data.name, email: data.email },
-		Role.STUDENT,
-		request.headers
-	);
+	const createdUser = await createUser(data, Role.STUDENT, request.headers);
 	let studentId: string;
 	try {
 		studentId = db.transaction((tx) => {
@@ -350,15 +357,96 @@ export const createStudent = command(createStudentSchema, async (data) => {
 	};
 });
 
+// Both staff editors use the same account and email-change safeguards.
+function saveAccountInformation(
+	tx: Transaction,
+	userId: string,
+	originalEmail: string,
+	data: CreateUserSchema
+) {
+	rejectExistingEmail(data.email, userId);
+	const emailChanged = originalEmail.toLowerCase() !== data.email;
+	tx.update(user)
+		.set({
+			name: formatPersonName(data),
+			firstName: data.firstName,
+			middleName: data.middleName,
+			lastName: data.lastName,
+			email: data.email,
+			...(emailChanged ? { emailVerified: false } : {})
+		})
+		.where(eq(user.id, userId))
+		.run();
+	if (emailChanged) {
+		// Auth has no cookie cache or secondary store. Invalidate sessions and setup/reset links.
+		tx.delete(session).where(eq(session.userId, userId)).run();
+		tx.delete(verification)
+			.where(and(eq(verification.value, userId), like(verification.identifier, 'reset-password:%')))
+			.run();
+	}
+	return { success: true, userId, emailChanged };
+}
+
+export const updateRegistrar = command(
+	createUserSchema.extend({
+		userId: z.string().min(1),
+		original: z.object({
+			name: z.string(),
+			firstName: z.string(),
+			middleName: z.string(),
+			lastName: z.string(),
+			email: z.string()
+		})
+	}),
+	(data) => {
+		const { locals } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN]);
+		try {
+			return db.transaction(
+				(tx) => {
+					const current = tx
+						.select({
+							name: user.name,
+							firstName: user.firstName,
+							middleName: user.middleName,
+							lastName: user.lastName,
+							email: user.email
+						})
+						.from(user)
+						.where(and(eq(user.id, data.userId), eq(user.role, Role.REGISTRAR)))
+						.get();
+					if (!current) error(404, 'Registrar not found.');
+					if (
+						Object.keys(current).some((field) => {
+							const key = field as keyof typeof current;
+							return current[key] !== data.original[key];
+						})
+					)
+						error(409, 'Registrar information changed. Reload the list before saving again.');
+					return saveAccountInformation(tx, data.userId, current.email, data);
+				},
+				{ behavior: 'immediate' }
+			);
+		} catch (cause) {
+			if (isHttpError(cause)) throw cause;
+			console.error('Registrar information update failed:', cause);
+			error(500, 'Failed to update registrar information. Please try again.');
+		}
+	}
+);
+
 export const updateStudent = command(updateStudentSchema, (data) => {
 	const { locals } = getRequestEvent();
-	validateUser(locals, [Role.ADMIN]);
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 	try {
 		return db.transaction(
 			(tx) => {
 				const current = tx
 					.select({
 						name: user.name,
+						firstName: user.firstName,
+						middleName: user.middleName,
+						lastName: user.lastName,
 						email: user.email,
 						address: studentData.address,
 						contactNumber: studentData.contactNumber,
@@ -377,17 +465,8 @@ export const updateStudent = command(updateStudentSchema, (data) => {
 					})
 				)
 					error(409, 'Student information changed. Reload the record before saving again.');
-				rejectExistingEmail(data.email, data.userId);
-				const emailChanged = current.email.toLowerCase() !== data.email;
 				// These fields span auth and academic tables: commit them together.
-				tx.update(user)
-					.set({
-						name: data.name,
-						email: data.email,
-						...(emailChanged ? { emailVerified: false } : {})
-					})
-					.where(and(eq(user.id, data.userId), eq(user.role, Role.STUDENT)))
-					.run();
+				const result = saveAccountInformation(tx, data.userId, current.email, data);
 				tx.update(studentData)
 					.set({
 						address: data.address,
@@ -397,20 +476,7 @@ export const updateStudent = command(updateStudentSchema, (data) => {
 					})
 					.where(eq(studentData.userId, data.userId))
 					.run();
-				if (emailChanged) {
-					// Better Auth uses this database without a cookie cache or secondary store.
-					// Remove sessions and outstanding reset/setup links atomically with the new email.
-					tx.delete(session).where(eq(session.userId, data.userId)).run();
-					tx.delete(verification)
-						.where(
-							and(
-								eq(verification.value, data.userId),
-								like(verification.identifier, 'reset-password:%')
-							)
-						)
-						.run();
-				}
-				return { success: true, userId: data.userId, emailChanged };
+				return result;
 			},
 			{ behavior: 'immediate' }
 		);

@@ -19,25 +19,37 @@ function load(file, dependencies = {}) {
 }
 const demographics = load('src/lib/student-demographics.ts');
 const { createStudentSchema } = load('src/lib/students.ts', {
+	'./person-name': load('src/lib/person-name.ts'),
 	'./student-demographics': demographics
 });
 const personal = {
-	name: 'Ana Muñoz',
+	firstName: 'Ana',
+	lastName: 'Muñoz',
 	email: 'ana@example.com',
 	address: 'Malolos',
-	contactNumber: '09123456789'
+	contactNumber: '09123456789',
+	birthDate: '2000-02-29',
+	sex: 'female'
 };
 
-test('student demographics accept optional, null, valid dates and sexes; reject impossible/future dates', () => {
+test('students require name parts, birth date and sex; only middle name is optional', () => {
 	assert.deepEqual(createStudentSchema.parse(personal), {
 		...personal,
-		birthDate: null,
-		sex: null
+		middleName: ''
 	});
 	assert.equal(
-		createStudentSchema.parse({ ...personal, birthDate: null, sex: null }).birthDate,
-		null
+		createStudentSchema.parse({ ...personal, middleName: '  Maria  ' }).middleName,
+		'Maria'
 	);
+	for (const field of ['firstName', 'lastName', 'birthDate', 'sex']) {
+		for (const value of [undefined, null, ''])
+			assert.equal(
+				createStudentSchema.safeParse({ ...personal, [field]: value }).success,
+				false,
+				`${field}: ${value}`
+			);
+	}
+	assert.equal(createStudentSchema.safeParse({ ...personal, middleName: null }).success, false);
 	for (const sex of ['female', 'male']) {
 		const parsed = createStudentSchema.parse({ ...personal, birthDate: '2000-02-29', sex });
 		assert.equal(parsed.birthDate, '2000-02-29');
@@ -135,5 +147,60 @@ test('demographic migration preserves student/enrollment records and rollback re
 	assert.equal(
 		sqlite.prepare('SELECT count(*) AS count FROM __drizzle_migrations').get().count,
 		31
+	);
+});
+
+test('required personal details migration supports fresh databases and enforces non-null columns', (t) => {
+	const sqlite = new Database(':memory:');
+	t.after(() => sqlite.close());
+	migrate(drizzle(sqlite), { migrationsFolder: 'drizzle' });
+	sqlite.pragma('foreign_keys=ON');
+	assert.throws(
+		() =>
+			sqlite.exec(
+				"INSERT INTO user(id,name,email) VALUES('missing','Missing','missing@example.com')"
+			),
+		/NOT NULL/
+	);
+	sqlite.exec(
+		"INSERT INTO user(id,name,first_name,last_name,email,role) VALUES('u','Ana Student','Ana','Student','ana@example.com','student')"
+	);
+	assert.equal(sqlite.prepare('SELECT middle_name FROM user WHERE id=?').get('u').middle_name, '');
+	assert.throws(() => sqlite.exec("UPDATE user SET middle_name=NULL WHERE id='u'"), /NOT NULL/);
+	const insert = sqlite.prepare('INSERT INTO student(id,user_id,birth_date,sex) VALUES(?,?,?,?)');
+	for (const [birthDate, sex] of [
+		[null, 'female'],
+		['2000-02-29', null]
+	])
+		assert.throws(() => insert.run('MA-001', 'u', birthDate, sex), /NOT NULL/);
+	insert.run('MA-001', 'u', '2000-02-29', 'female');
+	assert.deepEqual(sqlite.prepare('SELECT birth_date,sex FROM student').get(), {
+		birth_date: '2000-02-29',
+		sex: 'female'
+	});
+	assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
+});
+
+test('required personal details migration refuses existing accounts without modifying records', (t) => {
+	const sqlite = new Database(':memory:');
+	t.after(() => sqlite.close());
+	const db = drizzle(sqlite);
+	migrate(db, migrationConfigThrough(t, 31));
+	sqlite.exec(`
+		INSERT INTO user(id,name,email,role) VALUES('legacy','Legacy Student','legacy@example.com','student');
+		INSERT INTO student(id,user_id,address,contact_number,birth_date,sex) VALUES('MA-001','legacy','Malolos','09123456789','2000-02-29','female');
+	`);
+	const tables = ['user', 'student', '__drizzle_migrations'];
+	const before = tables.map((table) => sqlite.prepare(`SELECT * FROM ${table}`).all());
+	assert.throws(
+		() => migrate(db, { migrationsFolder: 'drizzle' }),
+		(cause) =>
+			/reset_required_for_required_personal_details/.test(cause.cause?.message ?? cause.message)
+	);
+	for (const [index, table] of tables.entries())
+		assert.deepEqual(sqlite.prepare(`SELECT * FROM ${table}`).all(), before[index], table);
+	assert.equal(
+		sqlite.pragma('table_info(user)').some((column) => column.name === 'first_name'),
+		false
 	);
 });

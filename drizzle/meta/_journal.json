@@ -225,6 +225,13 @@
       "when": 1792196286272,
       "tag": "0031_unique_roughhouse",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1792211273103,
+      "tag": "0032_required_personal_details",
+      "breakpoints": true
     }
   ]
 }

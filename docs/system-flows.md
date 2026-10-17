@@ -97,8 +97,8 @@ Grade editing/finalization always requires completed student account setup, unfi
 ```mermaid
 flowchart TD
     Start{Click which account action?}
-    Start -->|Create student: admin or registrar| StudentForm[Enter name, email, address, contact number, and optional birth date/sex]
-    Start -->|Create registrar: admin only| RegistrarForm[Enter name and email]
+    Start -->|Create student: admin or registrar| StudentForm[Enter first/last names, optional middle name, email, address, contact number, birth date, and sex]
+    Start -->|Create registrar: admin only| RegistrarForm[Enter first/last names, optional middle name, and email]
     StudentForm --> Timing[Choose enroll now or later]
     Timing --> Validate[Submit; validate fields and check existing email]
     RegistrarForm --> Validate
@@ -119,13 +119,14 @@ flowchart TD
     Type -->|No| RegistrarInvite[Request registrar setup email]
     RegistrarInvite --> RegistrarSent{Setup request succeeds?}
     RegistrarSent -->|Yes| RegistrarList[Close dialog, refresh registrar list, show success]
-    RegistrarSent -->|No| RegistrarError[Show error; created registrar account remains]
+    RegistrarSent -->|No| RegistrarError[Refresh list; show account created but email failed; offer resend]
 ```
 
 - Student numbers use `MA-YYYYMM-000001`; numbering resets monthly using Manila time.
 - Creating a student does not create an enrollment. Program, year, semester, section, and subjects are saved when enrolling.
 - No applicant record or document uploads are involved.
 - **Resend verification** on an unfinished student/registrar account requests another setup link. Despite the backend name `resendMagicLink`, this uses password-reset account setup, not passwordless login.
+- Staff setup-link requests check the actual email delivery result, including provider failures Better Auth suppresses. Failed invitations keep the saved account and show an email-failure message with a resend option; they do not show a delivery-success message. Delivery results stay separate for concurrent requests. Public password-recovery responses retain their generic account-privacy behavior.
 - Email outcomes here reflect the setup-request code's success/error result, not proof that the recipient received the message.
 
 ## 3. Account setup, sign-in, and password recovery
@@ -531,7 +532,7 @@ Student data is scoped to the session. Students cannot open another curriculum I
 
 Staff **View student** opens personal details, current enrollment, and history. **View enrollment** on a card/history record opens the separate staff details page with the actions allowed for that staff role.
 
-Admins can use **Edit student** in the personal-information panel to update name, email, address, contact number, birth date, and sex. The dialog reuses student creation fields and keeps the student number fixed. Registrars and students cannot use this action; registrar permissions also exclude the generic Better Auth admin user-update endpoint. Saving compares the editable fields with the original values so stale forms cannot overwrite another update. Name/contact/demographic edits keep account setup, verification, credentials, and enrollment records intact. Changing the login email requires confirmation, checks for an existing account, resets email verification, signs out that student's active sessions, and invalidates outstanding setup/reset links. All profile and account writes commit together; staff can resend a setup link using the updated email when needed. COR downloads and profile displays use the saved information.
+Admins and registrars can use **Edit student** in the personal-information panel to update name, email, address, contact number, birth date, and sex. The dialog reuses student creation fields and keeps the student number fixed. Students cannot use this action; registrar permissions exclude the generic Better Auth admin user-update endpoint so edits use the student-specific safeguards. Saving compares the editable fields with the original values so stale forms cannot overwrite another update. Name/contact/demographic edits keep account setup, verification, credentials, and enrollment records intact. Changing the login email requires confirmation, checks for an existing account, resets email verification, signs out that student's active sessions, and invalidates outstanding setup/reset links. All profile and account writes commit together; staff can resend a setup link using the updated email when needed. COR downloads and profile displays use the saved information.
 
 ## 14. Search, filters, history, and pagination
 
@@ -574,7 +575,9 @@ flowchart TD
 
 Admin and registrar can download any eligible student's COR. Students can download only their own, including completed historical terms. The server rechecks enrollment status on every request to `/user/enrollment/[enrollmentId]/cor`; hiding the button is not the authorization boundary. Subject codes, names, and custom units come from that enrollment's saved subjects, rather than the current catalog or curriculum. The COR includes program name and code, sex, and birth date. Missing personal fields display **Not recorded**. Downloads include no grades, fees, payment details, signatures, seals, or account secrets. Long values wrap, and long subject lists continue across pages with repeated headings. Staff downloads are also available from the current-enrollment card.
 
-Birth date and sex are optional student-creation fields, stored on the student record and displayed in staff student details and the student's profile. Birth dates use `YYYY-MM-DD` calendar dates; invalid or future dates are rejected. Existing records retain null values after migration `0031_unique_roughhouse`. Its rollback refuses to discard recorded demographic values.
+Student creation and editing require birth date and sex, stored on the student record and displayed in student details, profile, and COR. Birth dates use `YYYY-MM-DD` calendar dates; invalid or future dates are rejected. Student and registrar accounts require first and last names; middle name is optional and stored as an empty string when omitted. Name parts are stored on `user`, and both creation and editing compose `user.name` from them. Admins can edit registrar details through **Edit registrar** in the account dropdown. Students cannot edit names through the generic auth API.
+
+Migration `0032_required_personal_details` requires a fresh account database, matching the planned reset of disposable data. It refuses to run while accounts or student records exist instead of guessing names or birth dates. Reset the disposable database, run migrations, and seed the initial admin before starting the updated application. The guarded rollback in `drizzle/rollback/0032_required_personal_details.sql` is available only before accounts exist and refuses newer migrations.
 
 [Example COR PDF](examples/certificate-of-registration.pdf) uses fictional data and is marked **NOT VALID FOR REGISTRATION**. Regenerate with `pnpm exec tsx scripts/generate-cor-example.ts`; see [example documentation](examples/README.md).
 
@@ -684,6 +687,8 @@ Exported remote commands are covered above. Source links are relative to this do
 | --------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | [user.remote.ts](../src/lib/actions/user.remote.ts)             | `createStudent`                | Create personal record and account, assign student number, request setup email                                         |
 | same                                                            | `createRegistrar`              | Create registrar account and request setup email                                                                       |
+| same                                                            | `updateStudent`                | Staff edit personal details and name parts; synchronize display name and protect email changes                         |
+| same                                                            | `updateRegistrar`              | Admin edit registrar name parts and email with stale-form and session safeguards                                       |
 | same                                                            | `deleteStudent`                | Atomically delete an unfinished student only if no enrollment history exists; preserve student numbering               |
 | same                                                            | `setRegistrarDisabled`         | Admin-only Better Auth ban/unban for registrar accounts                                                                |
 | same                                                            | `deleteRegistrar`              | Admin-only permanent registrar deletion; preserve academic records and student notifications                           |

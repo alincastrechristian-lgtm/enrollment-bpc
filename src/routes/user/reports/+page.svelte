@@ -1,21 +1,20 @@
 <script lang="ts">
-	import { beforeNavigate, goto, refreshAll } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { reportTypes } from '#lib/reports.js';
+	import { beforeNavigate, goto, refreshAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import {
 		ArrowUpRight,
 		CheckCheck,
 		Download,
 		FileCheck2,
 		FileText,
-		Printer,
 		RotateCcw,
 		SearchX,
-		Users,
-		UserRoundMinus
+		UserRoundMinus,
+		Users
 	} from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -324,20 +323,20 @@
 					tabindex={generating ? -1 : undefined}
 					download
 					data-sveltekit-reload
-					class="btn gap-2 btn-outline btn-sm"
+					class="btn gap-2 btn-primary btn-sm"
 					class:pointer-events-none={generating}
 					class:opacity-50={generating}
 				>
 					<Download class="size-4" aria-hidden="true" />Download CSV
 				</a>
-				<button
+				<!-- <button
 					type="button"
 					disabled={generating}
 					onclick={() => window.print()}
 					class="btn gap-2 btn-primary btn-sm"
 				>
 					<Printer class="size-4" aria-hidden="true" />Print / PDF
-				</button>
+				</button> -->
 			</div>
 		</div>
 		{#if data.rows.length}

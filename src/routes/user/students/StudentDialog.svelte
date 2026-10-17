@@ -9,11 +9,13 @@
 		type StudentSex
 	} from '#lib/student-demographics.js';
 	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
-	import { goto } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { ArrowRight, Clock3, GraduationCap, Mail, Pencil, UserPlus, X } from '@lucide/svelte';
 	let dialog: HTMLDialogElement;
-	let name = $state(''),
+	let firstName = $state(''),
+		middleName = $state(''),
+		lastName = $state(''),
 		email = $state(''),
 		address = $state(''),
 		contactNumber = $state('');
@@ -23,7 +25,9 @@
 	let original = $state<StudentInformationSnapshot | null>(null);
 	const dirty = $derived(
 		!original ||
-			name.trim() !== original.name.trim() ||
+			firstName.trim() !== original.firstName.trim() ||
+			middleName.trim() !== original.middleName.trim() ||
+			lastName.trim() !== original.lastName.trim() ||
 			email.trim().toLowerCase() !== original.email.trim().toLowerCase() ||
 			address.trim() !== original.address.trim() ||
 			contactNumber.trim() !== original.contactNumber.trim() ||
@@ -39,6 +43,9 @@
 		original = student
 			? {
 					name: student.name,
+					firstName: student.firstName,
+					middleName: student.middleName,
+					lastName: student.lastName,
 					email: student.email,
 					address: student.address,
 					contactNumber: student.contactNumber,
@@ -46,7 +53,9 @@
 					sex: student.sex
 				}
 			: null;
-		name = student?.name ?? '';
+		firstName = student?.firstName ?? '';
+		middleName = student?.middleName ?? '';
+		lastName = student?.lastName ?? '';
 		email = student?.email ?? '';
 		address = student?.address ?? '';
 		contactNumber = student?.contactNumber ?? '';
@@ -58,8 +67,27 @@
 	}
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
-		if (busy || savedUserId || !dirty) return;
+		if (busy || savedUserId || !dirty || !birthDate || !sex) return;
 		busy = true;
+		const fields = {
+			firstName,
+			middleName,
+			lastName,
+			email,
+			address,
+			contactNumber,
+			birthDate,
+			sex
+		};
+		let invitationSent = true;
+		const invitationWarning = {
+			tone: 'warning' as const,
+			title: 'Student account created; email not sent',
+			message:
+				'The student account was created successfully, but the account setup email could not be sent.',
+			hintText:
+				'Do not create the account again. Open the student record and use Resend setup link to try again.'
+		};
 		try {
 			if (editingUserId && original) {
 				const emailChanged = email.trim().toLowerCase() !== original.email.trim().toLowerCase();
@@ -77,47 +105,42 @@
 					return;
 				const result = await updateStudent({
 					userId: editingUserId,
-					name,
-					email,
-					address,
-					contactNumber,
-					birthDate: birthDate || null,
-					sex: sex || null,
+					...fields,
 					original: { ...original }
 				});
 				savedUserId = result.userId;
 				dialog.close();
-				await goto(resolve('/user/students/[userId]', { userId: result.userId }), {
-					refreshAll: true
-				});
+				await refreshAll();
 				showSuccess('Student information updated successfully.');
 				return;
 			}
-			const result = await createStudent({
-				name,
-				email,
-				address,
-				contactNumber,
-				birthDate: birthDate || null,
-				sex: sex || null
-			});
+			const result = await createStudent(fields);
 			savedUserId = result.userId;
+			invitationSent = result.invitationSent;
+			// Navigation can destroy this component and clear its dialog binding.
+			dialog.close();
 			await goto(
 				enrollNow
 					? resolve('/user/students/[userId]/enroll', { userId: result.userId })
 					: resolve('/user/students/[userId]', { userId: result.userId }),
 				{ refreshAll: true }
 			);
-			dialog.close();
-			if (result.invitationSent)
+			if (invitationSent)
 				showSuccess(
 					enrollNow ? 'Student created. Continue with enrollment.' : 'Student created successfully.'
 				);
-			else
-				showError(
-					'Student created, but the account setup email failed. Resend the setup link from the student record.'
-				);
+			else showError(invitationWarning);
 		} catch (cause) {
+			// Keep the saved-record link available if navigation leaves this page mounted.
+			if (savedUserId && !editingUserId && dialog?.isConnected) dialog.showModal();
+			if (savedUserId && !editingUserId && !invitationSent) {
+				showError({
+					...invitationWarning,
+					hintText:
+						'The page could not open. Use View student below to open the saved account, then Resend setup link. Do not create the account again.'
+				});
+				return;
+			}
 			showError({
 				title: savedUserId
 					? editingUserId
@@ -196,136 +219,157 @@
 			</button>
 		</header>
 		<form onsubmit={save} class="flex min-h-0 flex-col" aria-busy={busy}>
-			<fieldset
-				disabled={busy || !!savedUserId}
-				class="grid min-h-0 gap-4 overflow-y-auto p-5 sm:grid-cols-2 sm:p-6"
-			>
-				<div class="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
-					<h3 class="text-sm font-bold">Personal details</h3>
-					<span class="text-xs text-base-content/45">Required unless marked optional</span>
-				</div>
-				<label class="space-y-2 sm:col-span-2">
-					<span class="text-sm font-semibold">Full name</span>
-					<input
-						class="input w-full bg-base-200"
-						bind:value={name}
-						required
-						minlength="2"
-						maxlength="100"
-						autocomplete="name"
-						placeholder="e.g. Maria Santos"
-					/>
-				</label>
-				<label class="space-y-2">
-					<span class="text-sm font-semibold">
-						Birth date <span class="font-normal text-base-content/50">(optional)</span>
-					</span>
-					<input
-						class="input w-full bg-base-200"
-						type="date"
-						bind:value={birthDate}
-						max={todayInManila()}
-						autocomplete="bday"
-					/>
-				</label>
-				<label class="space-y-2">
-					<span class="text-sm font-semibold">
-						Sex <span class="font-normal text-base-content/50">(optional)</span>
-					</span>
-					<select class="select w-full bg-base-200" bind:value={sex}>
-						<option value="">Not recorded</option>
-						{#each studentSexValues as value (value)}
-							<option {value}>{formatStudentSex(value)}</option>
-						{/each}
-					</select>
-				</label>
-				<label class="space-y-2">
-					<span class="text-sm font-semibold">Email</span>
-					<input
-						class="input w-full bg-base-200"
-						type="email"
-						bind:value={email}
-						required
-						autocomplete="email"
-						placeholder="student@example.com"
-					/>
-				</label>
-				<label class="space-y-2">
-					<span class="text-sm font-semibold">Contact number</span>
-					<input
-						class="input w-full bg-base-200"
-						type="tel"
-						bind:value={contactNumber}
-						required
-						maxlength="30"
-						autocomplete="tel"
-						placeholder="e.g. 0917 123 4567"
-					/>
-				</label>
-				<label class="space-y-2 sm:col-span-2">
-					<span class="text-sm font-semibold">Address</span>
-					<textarea
-						class="textarea min-h-22 w-full resize-y bg-base-200"
-						bind:value={address}
-						required
-						maxlength="500"
-						rows="2"
-						placeholder="House / street, barangay, city or municipality, province"
-						autocomplete="street-address"></textarea>
-				</label>
-				{#if !editingUserId}
-					<p
-						class="flex items-start gap-2 text-xs leading-relaxed text-base-content/50 sm:col-span-2"
-					>
-						<Mail class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />The account setup link will
-						be sent to this email address.
-					</p>
-					<div class="mt-1 border-t border-base-300 pt-5 sm:col-span-2">
-						<h3 class="text-sm font-bold">What happens next?</h3>
-						<p class="mt-1 text-xs text-base-content/50">
-							The student account is saved with either option.
-						</p>
-						<div class="mt-4 grid gap-3 sm:grid-cols-2">
-							<label
-								class={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors focus-within:ring-2 focus-within:ring-primary/30 ${enrollNow ? 'border-primary/40 bg-primary/5' : 'border-base-300 bg-base-100 hover:bg-base-200/50'}`}
-							>
-								<input
-									type="radio"
-									class="radio mt-0.5 radio-sm radio-primary"
-									bind:group={enrollNow}
-									value={true}
-								/>
-								<span>
-									<span class="flex items-center gap-2 text-sm font-bold">
-										<GraduationCap class="size-4 text-primary" aria-hidden="true" />Enroll now
-									</span>
-									<span class="mt-1.5 block text-xs leading-relaxed text-base-content/55">
-										Choose a program, term, section, and subjects next.
-									</span>
-								</span>
-							</label>
-							<label
-								class={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors focus-within:ring-2 focus-within:ring-primary/30 ${!enrollNow ? 'border-primary/40 bg-primary/5' : 'border-base-300 bg-base-100 hover:bg-base-200/50'}`}
-							>
-								<input
-									type="radio"
-									class="radio mt-0.5 radio-sm radio-primary"
-									bind:group={enrollNow}
-									value={false}
-								/>
-								<span>
-									<span class="flex items-center gap-2 text-sm font-bold">
-										<Clock3 class="size-4 text-base-content/55" aria-hidden="true" />Enroll later
-									</span>
-									<span class="mt-1.5 block text-xs leading-relaxed text-base-content/55">
-										Open their record and enroll when ready.
-									</span>
-								</span>
-							</label>
-						</div>
+			<div class="min-h-0 flex-1 overflow-y-auto">
+				<fieldset
+					disabled={busy || !!savedUserId}
+					class="grid min-w-0 gap-4 p-5 sm:grid-cols-2 sm:p-6"
+				>
+					<div class="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
+						<h3 class="text-sm font-bold">Personal details</h3>
+						<span class="text-xs text-base-content/45">Required unless marked optional</span>
 					</div>
-				{/if}
-			</fieldset>
+					<label class="space-y-2">
+						<span class="text-sm font-semibold">First name</span>
+						<input
+							class="input w-full bg-base-200"
+							bind:value={firstName}
+							required
+							maxlength="100"
+							autocomplete="given-name"
+							placeholder="e.g. Maria"
+						/>
+					</label>
+					<label class="space-y-2">
+						<span class="text-sm font-semibold">
+							Middle name <span class="font-normal text-base-content/50">(optional)</span>
+						</span>
+						<input
+							class="input w-full bg-base-200"
+							bind:value={middleName}
+							maxlength="100"
+							autocomplete="additional-name"
+							placeholder="Middle name"
+						/>
+					</label>
+					<label class="space-y-2 sm:col-span-2">
+						<span class="text-sm font-semibold">Last name</span>
+						<input
+							class="input w-full bg-base-200"
+							bind:value={lastName}
+							required
+							maxlength="100"
+							autocomplete="family-name"
+							placeholder="e.g. Santos"
+						/>
+					</label>
+					<label class="space-y-2">
+						<span class="text-sm font-semibold">Birth date</span>
+						<input
+							class="input w-full bg-base-200"
+							type="date"
+							required
+							bind:value={birthDate}
+							max={todayInManila()}
+							autocomplete="bday"
+						/>
+					</label>
+					<label class="space-y-2">
+						<span class="text-sm font-semibold">Sex</span>
+						<select class="select w-full bg-base-200" bind:value={sex} required>
+							<option value="">Choose sex</option>
+							{#each studentSexValues as value (value)}
+								<option {value}>{formatStudentSex(value)}</option>
+							{/each}
+						</select>
+					</label>
+					<label class="space-y-2">
+						<span class="text-sm font-semibold">Email</span>
+						<input
+							class="input w-full bg-base-200"
+							type="email"
+							bind:value={email}
+							required
+							autocomplete="email"
+							placeholder="student@example.com"
+						/>
+					</label>
+					<label class="space-y-2">
+						<span class="text-sm font-semibold">Contact number</span>
+						<input
+							class="input w-full bg-base-200"
+							type="tel"
+							bind:value={contactNumber}
+							required
+							maxlength="30"
+							autocomplete="tel"
+							placeholder="e.g. 0917 123 4567"
+						/>
+					</label>
+					<label class="space-y-2 sm:col-span-2">
+						<span class="text-sm font-semibold">Address</span>
+						<textarea
+							class="textarea min-h-22 w-full resize-y bg-base-200"
+							bind:value={address}
+							required
+							maxlength="500"
+							rows="2"
+							placeholder="House / street, barangay, city or municipality, province"
+							autocomplete="street-address"></textarea>
+					</label>
+					{#if !editingUserId}
+						<p
+							class="flex items-start gap-2 text-xs leading-relaxed text-base-content/50 sm:col-span-2"
+						>
+							<Mail class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />The account setup link
+							will be sent to this email address.
+						</p>
+						<div class="mt-1 border-t border-base-300 pt-5 sm:col-span-2">
+							<h3 class="text-sm font-bold">What happens next?</h3>
+							<p class="mt-1 text-xs text-base-content/50">
+								The student account is saved with either option.
+							</p>
+							<div class="mt-4 grid gap-3 sm:grid-cols-2">
+								<label
+									class={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors focus-within:ring-2 focus-within:ring-primary/30 ${enrollNow ? 'border-primary/40 bg-primary/5' : 'border-base-300 bg-base-100 hover:bg-base-200/50'}`}
+								>
+									<input
+										type="radio"
+										class="radio mt-0.5 radio-sm radio-primary"
+										bind:group={enrollNow}
+										value={true}
+									/>
+									<span>
+										<span class="flex items-center gap-2 text-sm font-bold">
+											<GraduationCap class="size-4 text-primary" aria-hidden="true" />Enroll now
+										</span>
+										<span class="mt-1.5 block text-xs leading-relaxed text-base-content/55">
+											Choose a program, term, section, and subjects next.
+										</span>
+									</span>
+								</label>
+								<label
+									class={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors focus-within:ring-2 focus-within:ring-primary/30 ${!enrollNow ? 'border-primary/40 bg-primary/5' : 'border-base-300 bg-base-100 hover:bg-base-200/50'}`}
+								>
+									<input
+										type="radio"
+										class="radio mt-0.5 radio-sm radio-primary"
+										bind:group={enrollNow}
+										value={false}
+									/>
+									<span>
+										<span class="flex items-center gap-2 text-sm font-bold">
+											<Clock3 class="size-4 text-base-content/55" aria-hidden="true" />Enroll later
+										</span>
+										<span class="mt-1.5 block text-xs leading-relaxed text-base-content/55">
+											Open their record and enroll when ready.
+										</span>
+									</span>
+								</label>
+							</div>
+						</div>
+					{/if}
+				</fieldset>
+			</div>
 			<div
 				class="flex shrink-0 flex-col-reverse gap-3 border-t border-base-300 bg-base-200/30 p-5 sm:flex-row sm:justify-end sm:px-6 sm:py-4"
 			>

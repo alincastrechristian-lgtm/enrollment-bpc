@@ -7,6 +7,7 @@
 		message?: string;
 		buttonText?: string;
 		hintText?: string;
+		tone?: 'error' | 'warning';
 		onClose?: () => void;
 	};
 
@@ -15,10 +16,17 @@
 		message = 'An unexpected error occurred. Please try again.',
 		buttonText = 'Close',
 		hintText,
+		tone = 'error',
 		onClose
 	}: ErrorProps = $props();
 
 	let visible = $state(true);
+	const iconColor = $derived(
+		tone === 'warning' ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error'
+	);
+	const hintColor = $derived(
+		tone === 'warning' ? 'border-warning/20 bg-warning/5' : 'border-error/20 bg-error/5'
+	);
 
 	function close() {
 		visible = false;
@@ -31,9 +39,7 @@
 		<div class="card-body gap-6 p-6">
 			<!-- Header -->
 			<div class="flex items-center gap-4">
-				<div
-					class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-error/10 text-error"
-				>
+				<div class={`flex size-14 shrink-0 items-center justify-center rounded-xl ${iconColor}`}>
 					<TriangleAlert class="size-7" />
 				</div>
 
@@ -50,9 +56,11 @@
 
 			<!-- Error hint -->
 			{#if hintText}
-				<div class="rounded-xl border border-error/20 bg-error/5 p-4">
+				<div class={`rounded-xl border p-4 ${hintColor}`}>
 					<div class="flex items-start gap-3">
-						<TriangleAlert class="mt-0.5 size-4 shrink-0 text-error" />
+						<TriangleAlert
+							class={`mt-0.5 size-4 shrink-0 ${tone === 'warning' ? 'text-warning' : 'text-error'}`}
+						/>
 
 						<p class="text-sm text-base-content/70">
 							{hintText}

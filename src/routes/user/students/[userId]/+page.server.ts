@@ -33,7 +33,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!student) error(404, 'Student not found.');
 	return {
 		student,
-		canEdit: locals.user.role === Role.ADMIN && !!student.studentData,
+		canEdit: !!student.studentData,
 		canDelete: canDeleteStudentAccount({
 			setupComplete: student.setupComplete,
 			currentEnrollmentId: student.studentData?.currentEnrollmentId,

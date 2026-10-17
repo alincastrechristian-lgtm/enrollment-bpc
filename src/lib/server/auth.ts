@@ -12,6 +12,8 @@ import { ac, adminRole, registrarRole, studentRole } from '../auth-permissions';
 import { sendEmail } from './email';
 import { createFirstLoginEmail, createResetPasswordEmail } from './email-templates';
 import { recordNotification } from './notifications';
+import { nameFields, nameHooks } from './auth-names';
+import { accountSetupEmailDelivery } from './account-setup-email';
 
 const RESET_PASSWORD_EXPIRY_SECONDS = 24 * 60 * 60;
 
@@ -19,6 +21,7 @@ export const auth = betterAuth({
 	baseURL: ORIGIN,
 	secret: BETTER_AUTH_SECRET,
 	database: drizzleAdapter(db, { provider: 'sqlite' }),
+	databaseHooks: { user: nameHooks },
 	emailAndPassword: {
 		enabled: true,
 		disableSignUp: true,
@@ -41,7 +44,9 @@ export const auth = betterAuth({
 				// Auth can also be called outside a SvelteKit request, without a staff actor.
 			}
 			recordNotification(db, { ...message.notification, recipientId: user.id, actorId });
-			await sendEmail(user.email, message.subject, message.text, message.html);
+			const sent = await sendEmail(user.email, message.subject, message.text, message.html);
+			const delivery = accountSetupEmailDelivery.getStore();
+			if (delivery) delivery.sent = sent;
 		}
 	},
 	plugins: [
@@ -60,6 +65,7 @@ export const auth = betterAuth({
 	],
 	user: {
 		additionalFields: {
+			...nameFields,
 			setupComplete: {
 				type: 'boolean',
 				default: false

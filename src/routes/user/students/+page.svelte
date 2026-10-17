@@ -1,36 +1,54 @@
 <script lang="ts">
-	import { getErrorMessage } from '#lib/errors.js';
+	import { deleteStudent, resendMagicLink } from '#lib/actions/user.remote.js';
 	import CatalogPage from '#lib/components/Catalog/CatalogPage.svelte';
 	import CatalogToolbar from '#lib/components/Catalog/CatalogToolbar.svelte';
 	import Dropdown from '#lib/components/Dropdown/Dropdown.svelte';
-	import RevokeSessionsAction from '#lib/components/RevokeSessionsAction.svelte';
 	import {
 		showError,
 		showLoading,
 		showSuccess,
 		showYesNo
 	} from '#lib/components/Popup/Popup.svelte.js';
+	import RevokeSessionsAction from '#lib/components/RevokeSessionsAction.svelte';
+	import { getErrorMessage } from '#lib/errors.js';
+	import { filterStudentSchema } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { filterStudentSchema } from '#lib/schema.js';
 	import {
+		Ellipsis,
 		Eye,
 		GraduationCap,
 		MailCheck,
 		Pencil,
-		Ellipsis,
 		Trash2,
 		UserPlus
 	} from '@lucide/svelte';
-	import { deleteStudent, resendMagicLink } from '#lib/actions/user.remote.js';
 
 	import StudentDialog from './StudentDialog.svelte';
+	import type { PageProps } from './$types';
 	let studentDialog = $state<StudentDialog>();
-	let { data } = $props();
+	let { data }: PageProps = $props();
 
 	const students = $derived(data.users);
 	let resending = $state(false);
 	let deleting = $state(false);
+
+	function editStudent(student: PageProps['data']['users'][number]) {
+		const record = student.studentData;
+		if (!record || deleting || resending) return;
+		studentDialog?.open({
+			userId: student.id,
+			name: student.name,
+			firstName: student.firstName,
+			middleName: student.middleName,
+			lastName: student.lastName,
+			email: student.email,
+			address: record.address,
+			contactNumber: record.contactNumber,
+			birthDate: record.birthDate,
+			sex: record.sex
+		});
+	}
 
 	async function removeStudent(student: { id: string; name: string }) {
 		if (deleting || resending) return;
@@ -207,7 +225,11 @@
 								</li>
 							{/if}
 							<li>
-								<button type="button" disabled title="Editing is not available yet">
+								<button
+									type="button"
+									disabled={deleting || resending || !student.studentData}
+									onclick={() => editStudent(student)}
+								>
 									<Pencil class="h-4 w-4" />
 									Edit
 								</button>

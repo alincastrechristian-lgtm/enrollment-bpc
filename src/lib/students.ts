@@ -1,27 +1,28 @@
 import { z } from 'zod';
 import { studentSexValues, todayInManila } from './student-demographics';
+import { personNameSchema } from './person-name';
 
-export const createStudentSchema = z.object({
-	name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
+export const createStudentSchema = personNameSchema.extend({
 	email: z.email('Enter a valid email address').trim().toLowerCase(),
 	address: z.string().trim().min(1, 'Address is required').max(500),
 	contactNumber: z.string().trim().min(1, 'Contact number is required').max(30),
 	birthDate: z.iso
 		.date('Enter a valid birth date')
-		.refine((value) => value <= todayInManila(), 'Birth date cannot be in the future')
-		.nullable()
-		.default(null),
-	sex: z.enum(studentSexValues, { error: 'Choose a valid sex' }).nullable().default(null)
+		.refine((value) => value <= todayInManila(), 'Birth date cannot be in the future'),
+	sex: z.enum(studentSexValues, { error: 'Choose a valid sex' })
 });
 
-// Compare exactly what the admin opened, including legacy casing/spacing.
+// Compare exactly what staff opened, without normalizing the original values.
 export const studentInformationSnapshotSchema = z.object({
 	name: z.string(),
+	firstName: z.string(),
+	middleName: z.string(),
+	lastName: z.string(),
 	email: z.string(),
 	address: z.string(),
 	contactNumber: z.string(),
-	birthDate: z.string().nullable(),
-	sex: z.enum(studentSexValues).nullable()
+	birthDate: z.string(),
+	sex: z.enum(studentSexValues)
 });
 export type StudentInformationSnapshot = z.infer<typeof studentInformationSnapshotSchema>;
 export type EditableStudentInformation = StudentInformationSnapshot & { userId: string };

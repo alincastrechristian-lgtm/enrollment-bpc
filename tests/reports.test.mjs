@@ -66,8 +66,8 @@ function fixture(t) {
 
 function seed(sqlite) {
 	sqlite.exec(`
-		INSERT INTO user(id,name,email,role) VALUES('a','Alice','a@example.com','student'),('b','Bea','b@example.com','student'),('c','Cara','c@example.com','student'),('d','=2+2','d@example.com','student'),('e','Voided Only','e@example.com','student');
-		INSERT INTO student(id,user_id) VALUES('A','a'),('B','b'),('C','c'),('D','d'),('E','e');
+		INSERT INTO user(id,name,email,role,first_name,last_name) VALUES ('a','Alice','a@example.com','student','Alice',''),('b','Bea','b@example.com','student','Bea',''),('c','Cara','c@example.com','student','Cara',''),('d','=2+2','d@example.com','student','=2+2',''),('e','Voided Only','e@example.com','student','Voided','Only');
+		INSERT INTO student(id,user_id,birth_date,sex) VALUES ('A','a','2000-01-01','female'),('B','b','2000-01-01','female'),('C','c','2000-01-01','female'),('D','d','2000-01-01','female'),('E','e','2000-01-01','female');
 		INSERT INTO program(id,code,name) VALUES('p1','BSIS','Information Systems'),('p2','BSA','Accountancy');
 		INSERT INTO curriculum(id,program_code,name) VALUES('c1','BSIS','Original'),('c2','BSA','Other');
 		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,status,finalized_grades,submitted_clearance) VALUES

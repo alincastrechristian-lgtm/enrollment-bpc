@@ -49,7 +49,7 @@ function fixture(t, lastMigration) {
 		['s2', 'student']
 	]) {
 		db.insert(schema.user)
-			.values({ id, name: id, email: `${id}@example.com`, role })
+			.values({ id, name: id, firstName: id, lastName: '', email: `${id}@example.com`, role })
 			.run();
 	}
 	const record = (recipientId, actorId, type, title) =>
@@ -209,6 +209,8 @@ test('auth email events persist safe notifications with the authenticated staff 
 		'better-auth/plugins/two-factor': { twoFactor: plugin },
 		'better-auth/svelte-kit': { sveltekitCookies: plugin },
 		'../auth-permissions': {},
+		'./auth-names': {},
+		'./account-setup-email': load('src/lib/server/account-setup-email.ts'),
 		'./email': { sendEmail: async () => false },
 		'./email-templates': templates
 	});

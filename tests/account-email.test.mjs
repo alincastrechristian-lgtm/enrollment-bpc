@@ -8,6 +8,10 @@ import test from 'node:test';
 import ts from 'typescript';
 import { HttpError, HandledHttpError } from '@sveltejs/kit/internal';
 import { isHttpError } from '@sveltejs/kit';
+import { betterAuth } from 'better-auth/minimal';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { admin } from 'better-auth/plugins/admin';
+import { twoFactor } from 'better-auth/plugins/two-factor';
 
 const require = createRequire(import.meta.url);
 function loadModule(filename, dependencies = {}, sourceOverride) {
@@ -20,6 +24,7 @@ function loadModule(filename, dependencies = {}, sourceOverride) {
 	return exports;
 }
 const { Role } = loadModule('src/lib/Roles.ts');
+const deliveryModule = loadModule('src/lib/server/account-setup-email.ts');
 const errorHelpers = loadModule('src/lib/errors.ts', { '@sveltejs/kit': { isHttpError } });
 const schema = loadModule('src/lib/schema.ts', {
 	'#lib/Roles.js': { Role },
@@ -58,6 +63,8 @@ function fixture(
 			.values({
 				id: 'existing',
 				name: 'Existing Account',
+				firstName: 'Existing',
+				lastName: 'Account',
 				email: 'Taken@Example.com',
 				role: existingRole
 			})
@@ -69,14 +76,22 @@ function fixture(
 				state.creates++;
 				if (raceRole) {
 					db.insert(schema.user)
-						.values({ id: 'winner', name: 'Concurrent Account', email: body.email, role: raceRole })
+						.values({
+							id: 'winner',
+							name: 'Concurrent Account',
+							firstName: 'Concurrent',
+							lastName: 'Account',
+							email: body.email,
+							role: raceRole
+						})
 						.run();
 					throw { message: 'Email already exists' };
 				}
 				if (authFailure) throw authFailure;
 				const created = {
-					id: 'created',
+					id: state.creates === 1 ? 'created' : `created-${state.creates}`,
 					name: body.name,
+					...body.data,
 					email: body.email,
 					role: body.role ?? Role.STUDENT
 				};
@@ -86,6 +101,7 @@ function fixture(
 			async requestPasswordReset() {
 				state.invitations++;
 				if (mailFailure) throw mailFailure;
+				deliveryModule.accountSetupEmailDelivery.getStore().sent = true;
 			},
 			async removeUser() {
 				state.deletions++;
@@ -108,8 +124,13 @@ function fixture(
 		'#lib/schema.js': schema,
 		'#lib/errors.js': errorHelpers,
 		'#lib/server/auth.js': { auth, validateUser },
+		'#lib/server/account-setup-email.js': deliveryModule,
 		'../server/db': { db },
-		'#lib/students.js': loadModule('src/lib/students.ts'),
+		'#lib/person-name.js': loadModule('src/lib/person-name.ts'),
+		'#lib/students.js': loadModule('src/lib/students.ts', {
+			'./person-name': loadModule('src/lib/person-name.ts'),
+			'./student-demographics': loadModule('src/lib/student-demographics.ts')
+		}),
 		'@sveltejs/kit': { error, isHttpError: (cause) => Number.isInteger(cause?.status) },
 		'$app/server': {
 			command: (validation, handler) => async (input) => handler(validation.parse(input)),
@@ -124,11 +145,14 @@ function fixture(
 	};
 	const enrollment = loadModule('src/lib/server/enrollment.ts', dependencies);
 	dependencies['#lib/server/enrollment.js'] = enrollment;
-	return { ...loadModule('src/lib/actions/user.remote.ts', dependencies), state, db };
+	return { ...loadModule('src/lib/actions/user.remote.ts', dependencies), state, db, auth };
 }
-const registrarInput = { name: 'New Registrar', email: 'TAKEN@example.com' };
+const registrarInput = { firstName: 'New', lastName: 'Registrar', email: 'TAKEN@example.com' };
 const studentInput = {
-	name: 'New Student',
+	firstName: 'New',
+	lastName: 'Student',
+	birthDate: '2000-02-29',
+	sex: 'female',
 	email: 'taken@example.com',
 	address: 'Bulacan',
 	contactNumber: '0917'
@@ -195,6 +219,76 @@ test('setup email failures hide SMTP details', async (t) => {
 		status: 502,
 		message: 'Failed to send account setup email. Please try again.'
 	});
+});
+
+test('staff receive actual mail results even when Better Auth suppresses delivery errors', async (t) => {
+	t.mock.method(console, 'error', () => {});
+	const f = fixture(t);
+	const names = loadModule('src/lib/person-name.ts');
+	const deliveries = new Map();
+	const { auth } = loadModule('src/lib/server/auth.ts', {
+		'#lib/Roles.js': { Role },
+		'#lib/server/db/index.js': { db: f.db },
+		'$app/env/private': {
+			ORIGIN: 'http://localhost:3000',
+			BETTER_AUTH_SECRET: 'test-secret-with-at-least-thirty-two-characters'
+		},
+		'$app/server': {
+			getRequestEvent: () => ({ locals: { user: { id: 'caller', role: Role.ADMIN } } })
+		},
+		'@sveltejs/kit': { error },
+		'better-auth/minimal': { betterAuth },
+		'better-auth/adapters/drizzle': { drizzleAdapter },
+		'better-auth/plugins/admin': { admin },
+		'better-auth/plugins/two-factor': { twoFactor },
+		'better-auth/svelte-kit': { sveltekitCookies: () => ({ id: 'test-cookies' }) },
+		'../auth-permissions': loadModule('src/lib/auth-permissions.ts'),
+		'./auth-names': loadModule('src/lib/server/auth-names.ts', { '../person-name': names }),
+		'./account-setup-email': deliveryModule,
+		'./notifications': { recordNotification: () => {} },
+		'./email': { sendEmail: (email) => deliveries.get(email) ?? Promise.resolve(false) },
+		'./email-templates': {
+			createFirstLoginEmail: () => ({ subject: 'Setup', text: 'Setup' }),
+			createResetPasswordEmail: () => ({ subject: 'Reset', text: 'Reset' })
+		}
+	});
+	f.auth.api.requestPasswordReset = auth.api.requestPasswordReset;
+
+	const registrar = await f.createRegistrar(registrarInput);
+	assert.equal(registrar.success, true);
+	assert.equal(registrar.invitationSent, false);
+	assert.equal(f.db.select().from(schema.user).all().length, 1);
+	deliveries.set(registrar.email, Promise.reject(new Error('SECRET email provider error')));
+	await assert.rejects(f.resendMagicLink({ email: registrar.email }), {
+		status: 502,
+		message: 'Failed to send account setup email. Please try again.'
+	});
+
+	f.db
+		.insert(schema.user)
+		.values({
+			id: 'another',
+			name: 'Another Student',
+			firstName: 'Another',
+			lastName: 'Student',
+			email: 'another@example.com'
+		})
+		.run();
+	let finish;
+	deliveries.set(
+		registrar.email,
+		new Promise((resolve) => {
+			finish = resolve;
+		})
+	);
+	const sent = f.resendMagicLink({ email: registrar.email });
+	await assert.rejects(f.resendMagicLink({ email: 'another@example.com' }), { status: 502 });
+	finish(true);
+	assert.equal((await sent).success, true);
+
+	const student = await f.createStudent({ ...studentInput, email: 'student@example.com' });
+	assert.equal(student.invitationSent, false);
+	assert.equal(f.db.select().from(schema.studentData).all().length, 1);
 });
 for (const role of [Role.STUDENT, Role.REGISTRAR, null]) {
 	test(`${role ?? 'anonymous'} cannot probe existing accounts through registrar creation`, async (t) => {

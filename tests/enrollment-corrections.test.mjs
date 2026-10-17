@@ -45,12 +45,11 @@ function fixture(t, proveMigration = false) {
 	migrate(db, proveMigration ? migrationConfigThrough(t, 29) : { migrationsFolder: 'drizzle' });
 	sqlite.pragma('foreign_keys=ON');
 	sqlite.exec(`
-		INSERT INTO user(id,name,email,role,setup_complete) VALUES
-		('admin','Administrator','admin@example.com','admin',1),
-		('registrar','Registrar','registrar@example.com','registrar',1),
-		('student','Alice Student','alice@example.com','student',1),
-		('other','Other Student','other@example.com','student',1);
-		INSERT INTO student(id,user_id) VALUES ('MA-001','student'),('MA-002','other');
+		INSERT INTO user(id,name,email,role,setup_complete,first_name,last_name) VALUES ('admin','Administrator','admin@example.com','admin',1,'Administrator',''),
+		('registrar','Registrar','registrar@example.com','registrar',1,'Registrar',''),
+		('student','Alice Student','alice@example.com','student',1,'Alice','Student'),
+		('other','Other Student','other@example.com','student',1,'Other','Student');
+		INSERT INTO student(id,user_id,birth_date,sex) VALUES ('MA-001','student','2000-01-01','female'),('MA-002','other','2000-01-01','female');
 		INSERT INTO program(id,code,name,is_active) VALUES
 		('p1','BSIS','Information Systems',1),('p2','BSA','Accountancy',1);
 		INSERT INTO curriculum(id,program_code,name,year_levels,semesters,published_at) VALUES

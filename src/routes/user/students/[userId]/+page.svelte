@@ -1,21 +1,21 @@
 <script lang="ts">
-	import { getErrorMessage } from '#lib/errors.js';
-	import { formatBirthDate, formatStudentSex } from '#lib/student-demographics.js';
-	import { getEnrollmentLockReason, getGradeConcerns } from '#lib/enrollment-grades.js';
-	import EnrollmentHistory from '#lib/components/EnrollmentHistory.svelte';
-	import CORDownload from '#lib/components/CORDownload.svelte';
 	import { deleteStudent, resendMagicLink } from '#lib/actions/user.remote.js';
+	import CORDownload from '#lib/components/CORDownload.svelte';
+	import EnrollmentHistory from '#lib/components/EnrollmentHistory.svelte';
 	import {
 		showError,
 		showLoading,
 		showSuccess,
 		showYesNo
 	} from '#lib/components/Popup/Popup.svelte.js';
+	import { getEnrollmentLockReason, getGradeConcerns } from '#lib/enrollment-grades.js';
+	import { getErrorMessage } from '#lib/errors.js';
+	import { formatBirthDate, formatStudentSex } from '#lib/student-demographics.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { ArrowRight, Eye, GraduationCap, MailCheck, Pencil, Trash2 } from '@lucide/svelte';
-	import StudentDialog from '../StudentDialog.svelte';
 	import { semesterLabel } from '../../curriculum/SubjectLayout.svelte';
+	import StudentDialog from '../StudentDialog.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -27,6 +27,9 @@
 		studentDialog?.open({
 			userId: student.id,
 			name: student.name,
+			firstName: student.firstName,
+			middleName: student.middleName,
+			lastName: student.lastName,
 			email: student.email,
 			address: record.address,
 			contactNumber: record.contactNumber,
@@ -184,7 +187,7 @@
 							disabled={resending || deleting}
 							onclick={editStudent}
 						>
-							<Pencil class="size-4" aria-hidden="true" />Edit student
+							<Pencil class="size-4" aria-hidden="true" />Edit
 						</button>
 					{/if}
 				</div>

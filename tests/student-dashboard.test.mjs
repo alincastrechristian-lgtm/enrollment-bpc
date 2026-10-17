@@ -43,11 +43,10 @@ function fixture(t, finalized = true) {
 	migrate(db, { migrationsFolder: 'drizzle' });
 	sqlite.pragma('foreign_keys = ON');
 	sqlite.exec(`
-		INSERT INTO user (id, name, email, role) VALUES
-		('u', 'Maria Cruz', 'maria@example.com', 'student'),
-		('other', 'Other Student', 'other@example.com', 'student'),
-		('empty', 'New Student', 'new@example.com', 'student');
-		INSERT INTO student (id, user_id) VALUES ('MA-001', 'u'), ('MA-002', 'other');
+		INSERT INTO user(id,name,email,role,first_name,last_name) VALUES ('u','Maria Cruz','maria@example.com','student','Maria','Cruz'),
+		('other','Other Student','other@example.com','student','Other','Student'),
+		('empty','New Student','new@example.com','student','New','Student');
+		INSERT INTO student(id,user_id,birth_date,sex) VALUES ('MA-001','u','2000-01-01','female'), ('MA-002','other','2000-01-01','female');
 		INSERT INTO program (id, code, name) VALUES ('p', 'BSIS', 'Information Systems');
 		INSERT INTO curriculum (id, program_code, name) VALUES ('c', 'BSIS', 'Curriculum');
 		INSERT INTO enrollment (id, student_id, curriculum_id, section, school_year_start, semester, year_level, status, finalized_grades) VALUES

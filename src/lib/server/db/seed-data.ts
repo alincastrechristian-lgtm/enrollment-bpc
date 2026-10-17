@@ -1,4 +1,5 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { eq } from 'drizzle-orm';
 import * as schema from '../../schema.ts';
 
 const programs = [
@@ -149,7 +150,8 @@ export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 					name: '2026 Sample Curriculum',
 					programCode: program.code,
 					yearLevels: template.yearLevels,
-					semesters: 2
+					semesters: 2,
+					publishedAt: new Date()
 				})
 				.onConflictDoNothing({ target: [schema.curriculum.programCode, schema.curriculum.name] })
 				.returning()
@@ -170,6 +172,13 @@ export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 						subjectCode: subject.code,
 						subjectName: subject.name
 					})
+					.run();
+			}
+			// Set the default without replacing a program's existing curriculum selection.
+			if (program.isActive && program.activeCurriculumId === null) {
+				tx.update(schema.program)
+					.set({ activeCurriculumId: curriculum.id })
+					.where(eq(schema.program.id, program.id))
 					.run();
 			}
 		}

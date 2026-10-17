@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../../schema.ts';
 import { seedAcademicData } from './seed-data.ts';
+import { nameFields, nameHooks } from '../auth-names.ts';
 
 async function main() {
 	if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
@@ -42,6 +43,8 @@ async function main() {
 				baseURL: process.env.ORIGIN!,
 				secret: process.env.BETTER_AUTH_SECRET!,
 				database: drizzleAdapter(db, { provider: 'sqlite' }),
+				user: { additionalFields: nameFields },
+				databaseHooks: { user: nameHooks },
 				emailAndPassword: { enabled: true, disableSignUp: false },
 				plugins: [
 					admin({
@@ -50,11 +53,12 @@ async function main() {
 				]
 			});
 
-			const adminResult = await auth.api.signUpEmail({
+			const adminResult = await auth.api.createUser({
 				body: {
 					email: adminEmail,
 					password: process.env.INITIAL_ADMIN_PASSWORD || 'admin123',
-					name: 'Admin'
+					name: 'System Administrator',
+					data: { firstName: 'System', middleName: '', lastName: 'Administrator' }
 				}
 			});
 

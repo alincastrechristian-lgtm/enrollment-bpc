@@ -153,9 +153,8 @@ export const studentData = sqliteTable('student', {
 		.references(() => user.id, { onDelete: 'restrict' }),
 	address: text('address').notNull().default(''),
 	contactNumber: text('contact_number').notNull().default(''),
-	// Nullable for existing students whose personal details have not been recorded.
-	birthDate: text('birth_date'),
-	sex: text('sex', { enum: ['female', 'male'] }),
+	birthDate: text('birth_date').notNull(),
+	sex: text('sex', { enum: ['female', 'male'] }).notNull(),
 	currentEnrollmentId: text('enrollment_id')
 		.unique()
 		// AnySQLiteColumn prevents circular reference which typescript cannot resolve.
@@ -341,6 +340,9 @@ const roleValues = Object.values(Role) as [Role, ...Role[]];
 export const user = sqliteTable('user', {
 	id: text('id').primaryKey(),
 	name: text('name').notNull(),
+	firstName: text('first_name').notNull(),
+	middleName: text('middle_name').notNull().default(''),
+	lastName: text('last_name').notNull(),
 	email: text('email').notNull().unique(),
 	emailVerified: integer('email_verified', { mode: 'boolean' }).default(false).notNull(),
 	image: text('image'),

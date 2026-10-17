@@ -17,9 +17,9 @@
 		Ellipsis,
 		Mail,
 		MailCheck,
+		Pencil,
 		Plus,
 		Trash2,
-		User,
 		UserPlus,
 		UserCheck,
 		UserRoundX,
@@ -27,6 +27,7 @@
 	} from '@lucide/svelte';
 	import {
 		createRegistrar,
+		updateRegistrar,
 		deleteRegistrar,
 		resendMagicLink,
 		setRegistrarDisabled
@@ -36,7 +37,27 @@
 
 	const registrars = $derived(data.users);
 	let registrarDialog: HTMLDialogElement;
-	let registrarForm: HTMLFormElement;
+	type RegistrarInformation = {
+		name: string;
+		firstName: string;
+		middleName: string;
+		lastName: string;
+		email: string;
+	};
+	let editingRegistrarId = $state<string | null>(null);
+	let original = $state<RegistrarInformation | null>(null);
+	let firstName = $state(''),
+		middleName = $state(''),
+		lastName = $state(''),
+		email = $state('');
+	let saved = $state(false);
+	const dirty = $derived(
+		!original ||
+			firstName.trim() !== original.firstName.trim() ||
+			middleName.trim() !== original.middleName.trim() ||
+			lastName.trim() !== original.lastName.trim() ||
+			email.trim().toLowerCase() !== original.email.trim().toLowerCase()
+	);
 	let creating = $state(false);
 	let resendingEmail = $state<string | null>(null);
 	let changingAccess = $state(false);
@@ -115,41 +136,94 @@
 		}
 	}
 
-	function openRegistrarPopup() {
-		if (creating) return;
-		registrarForm.reset();
+	function openRegistrarPopup(registrar?: RegistrarInformation & { id: string }) {
+		if (creating || deleting || changingAccess || resendingEmail) return;
+		editingRegistrarId = registrar?.id ?? null;
+		original = registrar
+			? {
+					name: registrar.name,
+					firstName: registrar.firstName,
+					middleName: registrar.middleName,
+					lastName: registrar.lastName,
+					email: registrar.email
+				}
+			: null;
+		firstName = registrar?.firstName ?? '';
+		middleName = registrar?.middleName ?? '';
+		lastName = registrar?.lastName ?? '';
+		email = registrar?.email ?? '';
+		saved = false;
 		registrarDialog.showModal();
 	}
 
-	async function handleCreateRegistrar(event: SubmitEvent) {
+	async function saveRegistrar(event: SubmitEvent) {
 		event.preventDefault();
-		if (creating) return;
+		if (creating || saved || !dirty) return;
 		creating = true;
-
-		const form = event.currentTarget as HTMLFormElement;
-		const formData = new FormData(form);
-
-		const name = formData.get('name')?.toString() ?? '';
-		const email = formData.get('email')?.toString() ?? '';
-
-		showLoading();
-
+		const fields = { firstName, middleName, lastName, email };
+		let invitationSent = true;
+		const invitationWarning = {
+			tone: 'warning' as const,
+			title: 'Registrar account created; email not sent',
+			message:
+				'The registrar account was created successfully, but the account setup email could not be sent.',
+			hintText:
+				'Do not create the account again. Use Resend setup link from the account actions to try again.'
+		};
 		try {
-			await createRegistrar({
-				name,
-				email
-			});
-
+			if (editingRegistrarId && original) {
+				if (
+					email.trim().toLowerCase() !== original.email.trim().toLowerCase() &&
+					!(await showYesNo({
+						title: 'Change registrar email?',
+						message:
+							'This changes the registrar’s sign-in email and signs them out of all sessions. Existing account setup and password reset links will stop working. Email verification will be reset. No new setup email will be sent automatically.',
+						warning: true,
+						yesText: 'Save changes',
+						noText: 'Cancel'
+					}))
+				)
+					return;
+				await updateRegistrar({ userId: editingRegistrarId, ...fields, original: { ...original } });
+			} else {
+				const result = await createRegistrar(fields);
+				invitationSent = result.invitationSent;
+			}
+			saved = true;
 			registrarDialog.close();
-			registrarForm.reset();
-
 			await refreshAll();
-
-			showSuccess('Registrar invitation created successfully');
-		} catch (error) {
+			if (!invitationSent) {
+				showError(invitationWarning);
+				return;
+			}
+			showSuccess(
+				editingRegistrarId
+					? 'Registrar information updated successfully.'
+					: 'Registrar invitation created successfully'
+			);
+		} catch (cause) {
+			if (saved && !invitationSent) {
+				showError({
+					...invitationWarning,
+					hintText:
+						'The list could not refresh. Reload the page to find the saved account, then use Resend setup link. Do not create the account again.'
+				});
+				return;
+			}
 			showError({
-				title: 'Unable to create registrar',
-				message: getErrorMessage(error, 'Failed to create registrar. Please try again.')
+				title: saved
+					? 'Registrar saved'
+					: editingRegistrarId
+						? 'Unable to update registrar'
+						: 'Unable to create registrar',
+				message: saved
+					? 'Registrar saved, but the list could not refresh. Reload the page to see the latest information.'
+					: getErrorMessage(
+							cause,
+							editingRegistrarId
+								? 'Failed to update registrar. Please try again.'
+								: 'Failed to create registrar. Please try again.'
+						)
 			});
 		} finally {
 			creating = false;
@@ -191,7 +265,7 @@
 			<button
 				type="button"
 				class="btn gap-2 bg-primary text-primary-content btn-sm hover:bg-primary/80"
-				onclick={openRegistrarPopup}
+				onclick={() => openRegistrarPopup()}
 			>
 				<Plus class="h-4 w-4" />
 				New Registrar
@@ -258,6 +332,15 @@
 							<Ellipsis class="size-4" aria-hidden="true" />
 						{/snippet}
 						<ul class="menu w-full p-0">
+							<li>
+								<button
+									type="button"
+									disabled={creating || deleting || changingAccess || !!resendingEmail}
+									onclick={() => openRegistrarPopup(registrar)}
+								>
+									<Pencil class="size-4" aria-hidden="true" />Edit registrar
+								</button>
+							</li>
 							{#if !registrar.setupComplete && !registrar.banned}
 								<li>
 									<button
@@ -322,28 +405,31 @@
 		class="popup-accent-panel modal-box max-w-lg overflow-y-auto rounded-2xl p-0"
 		style:--popup-accent-height="0.25rem"
 	>
-		<form
-			bind:this={registrarForm}
-			class="space-y-6 p-6 sm:p-8"
-			aria-busy={creating}
-			onsubmit={handleCreateRegistrar}
-		>
+		<form class="space-y-6 p-6 sm:p-8" aria-busy={creating} onsubmit={saveRegistrar}>
 			<div class="flex items-start gap-4">
 				<div
 					class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
 				>
-					<UserPlus class="size-7" aria-hidden="true" />
+					{#if editingRegistrarId}
+						<Pencil class="size-7" aria-hidden="true" />
+					{:else}
+						<UserPlus class="size-7" aria-hidden="true" />
+					{/if}
 				</div>
 				<div class="min-w-0 flex-1">
-					<h2 id="new-registrar-title" class="text-lg font-semibold">New Registrar</h2>
+					<h2 id="new-registrar-title" class="text-lg font-semibold">
+						{editingRegistrarId ? 'Edit registrar' : 'New registrar'}
+					</h2>
 					<p id="new-registrar-description" class="mt-1 text-sm text-base-content/60">
-						Enter the registrar's name and email address.
+						{editingRegistrarId
+							? 'Update the registrar’s personal details and sign-in email.'
+							: 'Enter the registrar’s name and email address.'}
 					</p>
 				</div>
 				<button
 					type="button"
 					class="btn btn-circle btn-ghost btn-sm"
-					aria-label="Close new registrar popup"
+					aria-label="Close registrar dialog"
 					disabled={creating}
 					onclick={() => registrarDialog.close()}
 				>
@@ -351,29 +437,49 @@
 				</button>
 			</div>
 
-			<div class="space-y-4">
-				<div class="space-y-2">
-					<label for="registrar-name" class="text-sm font-semibold">Name</label>
-					<div class="input-bordered input flex w-full items-center gap-3 bg-base-200">
-						<User class="size-4 shrink-0 text-base-content/50" aria-hidden="true" />
-						<input
-							id="registrar-name"
-							name="name"
-							type="text"
-							placeholder="Full name"
-							autocomplete="name"
-							required
-							class="min-w-0 grow text-sm"
-						/>
-					</div>
-				</div>
-				<div class="space-y-2">
+			<fieldset class="grid gap-4 sm:grid-cols-2" disabled={creating || saved}>
+				<label class="space-y-2">
+					<span class="text-sm font-semibold">First name</span>
+					<input
+						class="input w-full bg-base-200"
+						bind:value={firstName}
+						required
+						maxlength="100"
+						autocomplete="given-name"
+						placeholder="First name"
+					/>
+				</label>
+				<label class="space-y-2">
+					<span class="text-sm font-semibold">
+						Middle name <span class="font-normal text-base-content/50">(optional)</span>
+					</span>
+					<input
+						class="input w-full bg-base-200"
+						bind:value={middleName}
+						maxlength="100"
+						autocomplete="additional-name"
+						placeholder="Middle name"
+					/>
+				</label>
+				<label class="space-y-2 sm:col-span-2">
+					<span class="text-sm font-semibold">Last name</span>
+					<input
+						class="input w-full bg-base-200"
+						bind:value={lastName}
+						required
+						maxlength="100"
+						autocomplete="family-name"
+						placeholder="Last name"
+					/>
+				</label>
+				<div class="space-y-2 sm:col-span-2">
 					<label for="registrar-email" class="text-sm font-semibold">Email</label>
 					<div class="input-bordered input flex w-full items-center gap-3 bg-base-200">
 						<Mail class="size-4 shrink-0 text-base-content/50" aria-hidden="true" />
 						<input
 							id="registrar-email"
 							name="email"
+							bind:value={email}
 							type="email"
 							placeholder="registrar@example.com"
 							autocomplete="email"
@@ -382,7 +488,7 @@
 						/>
 					</div>
 				</div>
-			</div>
+			</fieldset>
 
 			<div class="space-y-3">
 				<div class="flex flex-col-reverse gap-2 sm:flex-row">
@@ -394,15 +500,32 @@
 					>
 						Cancel
 					</button>
-					<button type="submit" disabled={creating} class="btn flex-1 btn-primary">
-						<Plus class="size-4" aria-hidden="true" />
-						{creating ? 'Creating…' : 'Create Registrar'}
+					<button
+						type="submit"
+						disabled={creating || saved || !dirty}
+						class="btn flex-1 btn-primary"
+					>
+						{#if creating}
+							<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
+						{:else if !editingRegistrarId}
+							<Plus class="size-4" aria-hidden="true" />
+						{/if}
+						{creating
+							? editingRegistrarId
+								? 'Saving…'
+								: 'Creating…'
+							: editingRegistrarId
+								? 'Save changes'
+								: 'Create registrar'}
 					</button>
 				</div>
 			</div>
-			<p class="text-xs leading-relaxed text-base-content/55">
-				An account setup link will be sent to this email. The registrar chooses their own password.
-			</p>
+			{#if !editingRegistrarId}
+				<p class="text-xs leading-relaxed text-base-content/55">
+					An account setup link will be sent to this email. The registrar chooses their own
+					password.
+				</p>
+			{/if}
 		</form>
 	</div>
 </dialog>
