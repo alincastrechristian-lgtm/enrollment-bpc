@@ -221,7 +221,9 @@ function fixture(t) {
 		},
 		'#lib/Roles.js': { Role },
 		'#lib/schema.js': schema,
-		'#lib/students.js': load('src/lib/students.ts'),
+		'#lib/students.js': load('src/lib/students.ts', {
+			'./student-demographics': load('src/lib/student-demographics.ts')
+		}),
 		'#lib/server/auth.js': { auth, validateUser },
 		'../server/db': { db },
 		'#lib/server/db/index.js': { db },
@@ -298,12 +300,14 @@ function fixture(t) {
 }
 test('staff create a student without enrollment or academic columns, then enroll the same account', async (t) => {
 	const f = fixture(t);
-	const created = await f.createStudent(personal);
+	const created = await f.createStudent({ ...personal, birthDate: '2000-02-29', sex: 'female' });
 	assert.match(created.studentId, /^MA-\d{6}-\d{6}$/);
 	assert.equal(created.invitationSent, true);
 	const record = f.db.select().from(schema.studentData).get();
 	assert.equal(record.address, personal.address);
 	assert.equal(record.contactNumber, personal.contactNumber);
+	assert.equal(record.birthDate, '2000-02-29');
+	assert.equal(record.sex, 'female');
 	assert.equal(record.currentEnrollmentId, null);
 	assert.equal(f.db.select().from(schema.enrollment).all().length, 0);
 	for (const field of ['programCode', 'section', 'yearLevel', 'semester', 'applicantId'])
@@ -837,6 +841,7 @@ test('meeting requests validate concerns and ownership, retry failed email, and 
 	assert.equal(f.state.meetingEmails.length, 3);
 	// The additive migration and rollback preserve student, enrollment and grade records.
 	const grades = f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all();
+	f.sqlite.exec(readFileSync('drizzle/rollback/0031_student_demographics.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0030_enrollment_corrections.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0029_registrar_deletion.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0028_notifications.sql', 'utf8'));
@@ -1141,7 +1146,9 @@ test('student filters combine current enrollment fields without matching enrollm
 	});
 	const { load: page } = load('src/routes/user/students/+page.server.ts', {
 		'#lib/Roles.js': { Role },
-		'#lib/students.js': load('src/lib/students.ts'),
+		'#lib/students.js': load('src/lib/students.ts', {
+			'./student-demographics': load('src/lib/student-demographics.ts')
+		}),
 		'#lib/schema.js': schema,
 		'#lib/server/auth.js': { validateUser },
 		'#lib/server/db/index.js': { db: f.db },

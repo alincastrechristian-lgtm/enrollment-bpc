@@ -97,7 +97,7 @@ Grade editing/finalization always requires completed student account setup, unfi
 ```mermaid
 flowchart TD
     Start{Click which account action?}
-    Start -->|Create student: admin or registrar| StudentForm[Enter name, email, address, and contact number]
+    Start -->|Create student: admin or registrar| StudentForm[Enter name, email, address, contact number, and optional birth date/sex]
     Start -->|Create registrar: admin only| RegistrarForm[Enter name and email]
     StudentForm --> Timing[Choose enroll now or later]
     Timing --> Validate[Submit; validate fields and check existing email]
@@ -531,6 +531,8 @@ Student data is scoped to the session. Students cannot open another curriculum I
 
 Staff **View student** opens personal details, current enrollment, and history. **View enrollment** on a card/history record opens the separate staff details page with the actions allowed for that staff role.
 
+Admins can use **Edit student** in the personal-information panel to update name, email, address, contact number, birth date, and sex. The dialog reuses student creation fields and keeps the student number fixed. Registrars and students cannot use this action; registrar permissions also exclude the generic Better Auth admin user-update endpoint. Saving compares the editable fields with the original values so stale forms cannot overwrite another update. Name/contact/demographic edits keep account setup, verification, credentials, and enrollment records intact. Changing the login email requires confirmation, checks for an existing account, resets email verification, signs out that student's active sessions, and invalidates outstanding setup/reset links. All profile and account writes commit together; staff can resend a setup link using the updated email when needed. COR downloads and profile displays use the saved information.
+
 ## 14. Search, filters, history, and pagination
 
 ```mermaid
@@ -555,6 +557,26 @@ flowchart TD
 - Setup/verification filters concern account setup, not an enrollment pending state. Enrollment statuses are `enrolled`, `completed`, `dropped`, and `voided`.
 - History's **Current** badge means the record matches `currentEnrollmentId`; it is independent of enrollment status. The ordinary `enrolled` badge is omitted while other statuses remain visible.
 - History filters do not write to the database. Staff history links open an enrollment detail record; students review their history read-only.
+
+### Certificate of Registration (COR)
+
+```mermaid
+flowchart TD
+    Open[Open enrollment history or staff enrollment details] --> Eligible{Enrolled or completed record?}
+    Eligible -->|No| Hidden[No Download COR button for dropped or voided records]
+    Eligible -->|Yes| Download[Click Download COR]
+    Download --> Access[Server checks session, role, and student ownership]
+    Access -->|Not authorized| Reject[Show a safe error; no PDF returned]
+    Access -->|Authorized| Snapshot[Read enrollment details and registered subject snapshots]
+    Snapshot --> PDF[Generate PDF with student details, term, program, subjects, and total units]
+    PDF --> Save[Download COR PDF; private response without caching]
+```
+
+Admin and registrar can download any eligible student's COR. Students can download only their own, including completed historical terms. The server rechecks enrollment status on every request to `/user/enrollment/[enrollmentId]/cor`; hiding the button is not the authorization boundary. Subject codes, names, and custom units come from that enrollment's saved subjects, rather than the current catalog or curriculum. The COR includes program name and code, sex, and birth date. Missing personal fields display **Not recorded**. Downloads include no grades, fees, payment details, signatures, seals, or account secrets. Long values wrap, and long subject lists continue across pages with repeated headings. Staff downloads are also available from the current-enrollment card.
+
+Birth date and sex are optional student-creation fields, stored on the student record and displayed in staff student details and the student's profile. Birth dates use `YYYY-MM-DD` calendar dates; invalid or future dates are rejected. Existing records retain null values after migration `0031_unique_roughhouse`. Its rollback refuses to discard recorded demographic values.
+
+[Example COR PDF](examples/certificate-of-registration.pdf) uses fictional data and is marked **NOT VALID FOR REGISTRATION**. Regenerate with `pnpm exec tsx scripts/generate-cor-example.ts`; see [example documentation](examples/README.md).
 
 ## 15. Email settings
 

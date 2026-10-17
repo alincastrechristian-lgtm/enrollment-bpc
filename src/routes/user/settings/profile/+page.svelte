@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatBirthDate, formatStudentSex } from '#lib/student-demographics.js';
 	import {
 		CalendarDays,
 		CircleCheck,
@@ -100,6 +101,16 @@
 					</dt>
 					<dd class="mt-2 font-semibold">{profile.contactNumber || 'Not recorded'}</dd>
 				</div>
+				{#if profile.student}
+					<div>
+						<dt class="text-xs text-base-content/55">Birth date</dt>
+						<dd class="mt-2 font-semibold">{formatBirthDate(profile.birthDate)}</dd>
+					</div>
+					<div>
+						<dt class="text-xs text-base-content/55">Sex</dt>
+						<dd class="mt-2 font-semibold">{formatStudentSex(profile.sex)}</dd>
+					</div>
+				{/if}
 				<div class="sm:col-span-2">
 					<dt class="flex items-center gap-1.5 text-xs text-base-content/55">
 						<Mail class="size-3.5" aria-hidden="true" />Email address

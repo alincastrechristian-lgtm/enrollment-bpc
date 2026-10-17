@@ -49,6 +49,7 @@ function fixture(t) {
 		INSERT INTO program (id, code, name) VALUES ('p', 'BSIS', 'Information Systems');
 		INSERT INTO curriculum (id, program_code, name) VALUES ('c', 'BSIS', 'Curriculum');
 		INSERT INTO student (id, user_id, address,contact_number) VALUES ('MA-001', 'u', 'Malolos, Bulacan','09123456789');
+		UPDATE student SET birth_date='2000-02-29', sex='female' WHERE id='MA-001';
 		INSERT INTO enrollment (id, student_id, curriculum_id, section, school_year_start, semester, year_level, status)
 		VALUES ('e', 'MA-001', 'c', 'A', 2026, 1, 2, 'enrolled');
 		UPDATE student SET enrollment_id = 'e' WHERE user_id = 'u';
@@ -80,6 +81,8 @@ test('profile returns only the signed-in account and public profile fields', asy
 	assert.equal(profile.email, 'maria@example.com');
 	assert.equal(profile.contactNumber, '09123456789');
 	assert.equal(profile.address, 'Malolos, Bulacan');
+	assert.equal(profile.birthDate, '2000-02-29');
+	assert.equal(profile.sex, 'female');
 	assert.equal(profile.emailVerified, true);
 	assert.equal(profile.setupComplete, true);
 	assert.ok(profile.createdAt instanceof Date);
@@ -90,6 +93,8 @@ test('profile returns only the signed-in account and public profile fields', asy
 		Object.keys(profile).sort(),
 		[
 			'address',
+			'birthDate',
+			'sex',
 			'contactNumber',
 			'createdAt',
 			'email',

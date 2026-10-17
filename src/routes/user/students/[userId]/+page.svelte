@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { getErrorMessage } from '#lib/errors.js';
+	import { formatBirthDate, formatStudentSex } from '#lib/student-demographics.js';
 	import { getEnrollmentLockReason, getGradeConcerns } from '#lib/enrollment-grades.js';
 	import EnrollmentHistory from '#lib/components/EnrollmentHistory.svelte';
+	import CORDownload from '#lib/components/CORDownload.svelte';
 	import { deleteStudent, resendMagicLink } from '#lib/actions/user.remote.js';
 	import {
 		showError,
@@ -11,13 +13,27 @@
 	} from '#lib/components/Popup/Popup.svelte.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { ArrowRight, Eye, GraduationCap, MailCheck, Trash2 } from '@lucide/svelte';
+	import { ArrowRight, Eye, GraduationCap, MailCheck, Pencil, Trash2 } from '@lucide/svelte';
+	import StudentDialog from '../StudentDialog.svelte';
 	import { semesterLabel } from '../../curriculum/SubjectLayout.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	let studentDialog = $state<StudentDialog>();
 	const student = $derived(data.student);
 	const record = $derived(student.studentData);
+	function editStudent() {
+		if (!data.canEdit || !record || resending || deleting) return;
+		studentDialog?.open({
+			userId: student.id,
+			name: student.name,
+			email: student.email,
+			address: record.address,
+			contactNumber: record.contactNumber,
+			birthDate: record.birthDate,
+			sex: record.sex
+		});
+	}
 
 	const enrollments = $derived(record?.enrollments ?? []);
 	const current = $derived(
@@ -75,6 +91,8 @@
 		value ? formatter.format(value) : 'Not recorded';
 	const details = $derived([
 		['Email', student.email],
+		['Birth date', formatBirthDate(record?.birthDate)],
+		['Sex', formatStudentSex(record?.sex)],
 		['Contact number', record?.contactNumber ?? 'Not recorded'],
 		['Address', record?.address ?? 'Not recorded'],
 		['Program', current?.curriculum.program?.name ?? 'Not enrolled'],
@@ -157,7 +175,19 @@
 	<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
 		<div class="min-w-0 space-y-6">
 			<section class="portal-panel p-5 shadow-sm sm:p-6" aria-labelledby="student-info-heading">
-				<h2 id="student-info-heading" class="mb-5 font-bold">Student information</h2>
+				<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+					<h2 id="student-info-heading" class="font-bold">Student information</h2>
+					{#if data.canEdit}
+						<button
+							type="button"
+							class="btn border-base-300 btn-outline btn-sm"
+							disabled={resending || deleting}
+							onclick={editStudent}
+						>
+							<Pencil class="size-4" aria-hidden="true" />Edit student
+						</button>
+					{/if}
+				</div>
 				<dl class="grid gap-5 text-sm sm:grid-cols-2">
 					{#each details as [label, value] (label)}
 						<div>
@@ -177,6 +207,7 @@
 					</h2>
 					{#if current}
 						<div class="flex flex-wrap items-center gap-2">
+							<CORDownload enrollmentId={current.id} status={current.status} />
 							<a
 								class="btn border-base-300 btn-outline btn-sm"
 								href={resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
@@ -263,3 +294,7 @@
 		/>
 	{/key}
 </section>
+
+{#if data.canEdit}
+	<StudentDialog bind:this={studentDialog} />
+{/if}

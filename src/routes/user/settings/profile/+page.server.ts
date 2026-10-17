@@ -22,7 +22,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		},
 		with: {
 			studentData: {
-				columns: { studentId: true, address: true, contactNumber: true },
+				columns: {
+					studentId: true,
+					address: true,
+					contactNumber: true,
+					birthDate: true,
+					sex: true
+				},
 				with: {
 					currentEnrollment: {
 						columns: {
@@ -51,6 +57,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			...details,
 			contactNumber: contact?.contactNumber ?? null,
 			address: contact?.address ?? null,
+			birthDate: contact?.birthDate ?? null,
+			sex: contact?.sex ?? null,
 			student:
 				account.role === Role.STUDENT && studentData
 					? { studentId: studentData.studentId, enrollment: studentData.currentEnrollment }

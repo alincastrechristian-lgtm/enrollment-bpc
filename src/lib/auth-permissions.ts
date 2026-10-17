@@ -12,7 +12,7 @@ export const adminRole = ac.newRole({
 });
 
 export const registrarRole = ac.newRole({
-	user: ['create', 'list', 'get', 'update', 'set-email'],
+	user: ['create', 'list', 'get'],
 	session: ['list', 'revoke', 'delete']
 });
 

@@ -25,6 +25,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { BookOpen, Eye, RotateCcw } from '@lucide/svelte';
+	import CORDownload from './CORDownload.svelte';
 	import { semesterLabel } from '../../routes/user/curriculum/SubjectLayout.svelte';
 
 	let {
@@ -199,6 +200,7 @@
 							<Eye class="size-4" aria-hidden="true" />View
 						</a>
 					{/if}
+					<CORDownload enrollmentId={entry.id} status={entry.status} />
 				</div>
 			</div>
 			{#if entry.subjects.length}

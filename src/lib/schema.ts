@@ -153,6 +153,9 @@ export const studentData = sqliteTable('student', {
 		.references(() => user.id, { onDelete: 'restrict' }),
 	address: text('address').notNull().default(''),
 	contactNumber: text('contact_number').notNull().default(''),
+	// Nullable for existing students whose personal details have not been recorded.
+	birthDate: text('birth_date'),
+	sex: text('sex', { enum: ['female', 'male'] }),
 	currentEnrollmentId: text('enrollment_id')
 		.unique()
 		// AnySQLiteColumn prevents circular reference which typescript cannot resolve.

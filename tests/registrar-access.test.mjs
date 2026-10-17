@@ -78,6 +78,15 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 	let headers = adminHeaders;
 	let registrarHeaders = await signIn('registrar@example.com');
 	const studentHeaders = await signIn('student@example.com');
+	// Generic auth endpoints must not bypass admin-only student information edits.
+	for (const data of [{ name: 'Unauthorized name' }, { email: 'unauthorized@example.com' }]) {
+		await assert.rejects(
+			auth.api.adminUpdateUser({ headers: registrarHeaders, body: { userId: student.user.id, data } }),
+			(cause) => isAPIError(cause) && cause.statusCode === 403
+		);
+	}
+	assert.equal(db.select().from(schema.user).where(eq(schema.user.id, student.user.id)).get().name, 'Student');
+	assert.equal(db.select().from(schema.user).where(eq(schema.user.id, student.user.id)).get().email, 'student@example.com');
 	let locals = { user: { id: owner.user.id, role: 'admin' }, session: {} };
 	const guard = (value, allowed) => {
 		if (!value.user || !value.session) error(401, 'Unauthorized');
@@ -86,7 +95,9 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 	const dependencies = {
 		'#lib/Roles.js': roles,
 		'#lib/schema.js': schema,
-		'#lib/students.js': load('src/lib/students.ts'),
+		'#lib/students.js': load('src/lib/students.ts', {
+			'./student-demographics': load('src/lib/student-demographics.ts')
+		}),
 		'#lib/server/auth.js': { auth, validateUser: guard },
 		'../server/db': { db },
 		'#lib/server/enrollment.js': { enrollStudentSchema: z.any() },

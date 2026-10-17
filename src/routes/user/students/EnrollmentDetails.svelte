@@ -1,5 +1,6 @@
 <script lang="ts">
 	import EnrollmentRecordActions from './EnrollmentRecordActions.svelte';
+	import CORDownload from '#lib/components/CORDownload.svelte';
 	import { getErrorMessage } from '#lib/errors.js';
 	import {
 		finalizeEnrollmentGrades,
@@ -384,16 +385,23 @@
 				{#if enrollmentStatus !== 'enrolled'}
 					<span class="badge badge-outline badge-sm capitalize">{enrollmentStatus}</span>
 				{/if}
-				{#if data.canDrop && enrollmentStatus === 'enrolled'}
-					<button
-						type="button"
-						class="btn ml-auto gap-2 btn-ghost text-error btn-sm"
+				<div class="ml-auto flex flex-wrap items-center gap-2">
+					<CORDownload
+						enrollmentId={data.enrollment.id}
+						status={enrollmentStatus}
 						disabled={busy || editing || dirty}
-						onclick={drop}
-					>
-						<UserMinus class="size-4" aria-hidden="true" />Drop enrollment
-					</button>
-				{/if}
+					/>
+					{#if data.canDrop && enrollmentStatus === 'enrolled'}
+						<button
+							type="button"
+							class="btn gap-2 btn-ghost text-error btn-sm"
+							disabled={busy || editing || dirty}
+							onclick={drop}
+						>
+							<UserMinus class="size-4" aria-hidden="true" />Drop enrollment
+						</button>
+					{/if}
+				</div>
 			</div>
 			<div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
 				<h1 class="text-2xl font-bold wrap-break-word">{data.student.name}</h1>

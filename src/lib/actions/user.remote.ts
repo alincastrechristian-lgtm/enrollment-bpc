@@ -1,10 +1,15 @@
 import { Role } from '#lib/Roles.js';
-import { canDeleteStudentAccount, createStudentSchema } from '#lib/students.js';
+import {
+	canDeleteStudentAccount,
+	createStudentSchema,
+	updateStudentSchema
+} from '#lib/students.js';
 import {
 	enrollment,
 	enrollmentSubject,
 	studentData,
 	studentSequence,
+	session,
 	user,
 	verification
 } from '#lib/schema.js';
@@ -17,7 +22,7 @@ import { command, getRequestEvent } from '$app/server';
 import { ORIGIN } from '$app/env/private';
 import { resolve } from '$app/paths';
 import { error, isHttpError } from '@sveltejs/kit';
-import { and, eq, like, sql } from 'drizzle-orm';
+import { and, eq, like, ne, sql } from 'drizzle-orm';
 import { isAPIError } from 'better-auth/api';
 import { z } from 'zod';
 import { db } from '../server/db';
@@ -210,11 +215,16 @@ export type CreateUserResult = {
 	email: string;
 };
 
-function rejectExistingEmail(email: string) {
+function rejectExistingEmail(email: string, excludeUserId?: string) {
 	const existing = db
 		.select({ role: user.role })
 		.from(user)
-		.where(sql`lower(${user.email}) = ${email}`)
+		.where(
+			and(
+				sql`lower(${user.email}) = ${email}`,
+				excludeUserId ? ne(user.id, excludeUserId) : undefined
+			)
+		)
 		.get();
 	if (!existing) return;
 	const message =
@@ -306,7 +316,9 @@ export const createStudent = command(createStudentSchema, async (data) => {
 					studentId: id,
 					userId: createdUser.id,
 					address: data.address,
-					contactNumber: data.contactNumber
+					contactNumber: data.contactNumber,
+					birthDate: data.birthDate,
+					sex: data.sex
 				})
 				.run();
 			return id;
@@ -336,6 +348,77 @@ export const createStudent = command(createStudentSchema, async (data) => {
 		studentId,
 		invitationSent
 	};
+});
+
+export const updateStudent = command(updateStudentSchema, (data) => {
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN]);
+	try {
+		return db.transaction(
+			(tx) => {
+				const current = tx
+					.select({
+						name: user.name,
+						email: user.email,
+						address: studentData.address,
+						contactNumber: studentData.contactNumber,
+						birthDate: studentData.birthDate,
+						sex: studentData.sex
+					})
+					.from(user)
+					.innerJoin(studentData, eq(studentData.userId, user.id))
+					.where(and(eq(user.id, data.userId), eq(user.role, Role.STUDENT)))
+					.get();
+				if (!current) error(404, 'Student not found.');
+				if (
+					Object.keys(current).some((field) => {
+						const key = field as keyof typeof current;
+						return current[key] !== data.original[key];
+					})
+				)
+					error(409, 'Student information changed. Reload the record before saving again.');
+				rejectExistingEmail(data.email, data.userId);
+				const emailChanged = current.email.toLowerCase() !== data.email;
+				// These fields span auth and academic tables: commit them together.
+				tx.update(user)
+					.set({
+						name: data.name,
+						email: data.email,
+						...(emailChanged ? { emailVerified: false } : {})
+					})
+					.where(and(eq(user.id, data.userId), eq(user.role, Role.STUDENT)))
+					.run();
+				tx.update(studentData)
+					.set({
+						address: data.address,
+						contactNumber: data.contactNumber,
+						birthDate: data.birthDate,
+						sex: data.sex
+					})
+					.where(eq(studentData.userId, data.userId))
+					.run();
+				if (emailChanged) {
+					// Better Auth uses this database without a cookie cache or secondary store.
+					// Remove sessions and outstanding reset/setup links atomically with the new email.
+					tx.delete(session).where(eq(session.userId, data.userId)).run();
+					tx.delete(verification)
+						.where(
+							and(
+								eq(verification.value, data.userId),
+								like(verification.identifier, 'reset-password:%')
+							)
+						)
+						.run();
+				}
+				return { success: true, userId: data.userId, emailChanged };
+			},
+			{ behavior: 'immediate' }
+		);
+	} catch (cause) {
+		if (isHttpError(cause)) throw cause;
+		console.error('Student information update failed:', cause);
+		error(500, 'Failed to update student information. Please try again.');
+	}
 });
 
 export const enrollStudent = command(enrollStudentSchema, async (data) => {
