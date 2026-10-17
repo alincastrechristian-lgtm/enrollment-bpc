@@ -5,8 +5,12 @@ import { db } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { RequestEvent } from '@sveltejs/kit';
+import { createCsv } from './csv';
 
-export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'url'>) {
+export function getMasterlist(
+	{ locals, url }: Pick<RequestEvent, 'locals' | 'url'>,
+	{ all = false }: { all?: boolean } = {}
+) {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 	const eligibleEnrollment = inArray(enrollment.status, ['enrolled', 'completed']);
 
@@ -70,6 +74,9 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 				userId: sql<string>`${user.id}`.as('user_id'),
 				studentId: sql<string>`${studentData.studentId}`.as('student_id'),
 				name: user.name,
+				firstName: user.firstName,
+				middleName: user.middleName,
+				lastName: user.lastName,
 				email: user.email,
 				programCode: curriculum.programCode,
 				programName: sql<string>`${program.name}`.as('program_name'),
@@ -96,14 +103,21 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 	);
 	const total = db.with(roster).select({ value: count() }).from(roster).get()!.value;
 	const pageSize = 50;
-	const currentPage = integerParameter('page', 'batch', 1)!;
-	const students =
-		(currentPage - 1) * pageSize < total
-			? db
-					.with(roster)
-					.select()
-					.from(roster)
-					.orderBy(asc(roster.name), asc(roster.studentId))
+	const currentPage = all ? 1 : integerParameter('page', 'batch', 1)!;
+	const rows = db
+		.with(roster)
+		.select()
+		.from(roster)
+		.orderBy(
+			asc(roster.lastName),
+			asc(roster.firstName),
+			asc(roster.middleName),
+			asc(roster.studentId)
+		);
+	const students = all
+		? rows.all()
+		: (currentPage - 1) * pageSize < total
+			? rows
 					.limit(pageSize)
 					.offset((currentPage - 1) * pageSize)
 					.all()
@@ -112,7 +126,7 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 	return {
 		students,
 		total,
-		nextPage: currentPage * pageSize < total ? currentPage + 1 : null,
+		nextPage: !all && currentPage * pageSize < total ? currentPage + 1 : null,
 		filters: { schoolYearStart, semester, programCode, yearLevel, section },
 		options: {
 			programs,
@@ -136,4 +150,31 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 			].sort((a, b) => a - b)
 		}
 	};
+}
+
+export function createMasterlistCsv({
+	filters,
+	students
+}: Pick<ReturnType<typeof getMasterlist>, 'filters' | 'students'>) {
+	const group =
+		filters.programCode && filters.yearLevel && filters.section
+			? `${filters.programCode} ${filters.yearLevel}${filters.section}`
+			: [
+					filters.programCode || 'All programs',
+					filters.yearLevel ? `Year ${filters.yearLevel}` : 'All year levels',
+					filters.section ? `Section ${filters.section}` : 'All sections'
+				].join(' / ');
+	const title = `${group} ENROLLEES - SEMESTER ${filters.semester} SY ${filters.schoolYearStart}-${filters.schoolYearStart + 1}`;
+	return createCsv([
+		[title, '', '', '', ''],
+		['', '', '', '', ''],
+		['No.', 'Student ID', 'Surname', 'Given Name', 'Middle Name'],
+		...students.map((student, index) => [
+			index + 1,
+			student.studentId,
+			student.lastName,
+			student.firstName,
+			student.middleName
+		])
+	]);
 }

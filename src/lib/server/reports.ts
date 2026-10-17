@@ -1,4 +1,5 @@
 import { Role } from '#lib/Roles.js';
+import { createCsv } from './csv';
 import {
 	getEnrollmentLockReason,
 	getGradeConcerns,
@@ -327,17 +328,5 @@ export function getReports(
 }
 
 export function createReportCsv(report: Pick<ReturnType<typeof getReports>, 'columns' | 'rows'>) {
-	const cell = (value: string | number) => {
-		const text = String(value);
-		// Quoting alone does not prevent spreadsheet formulas in names and subject titles.
-		const safe = /^\s*[=+\-@]/.test(text) || /^[\t\r\n]/.test(text) ? `'${text}` : text;
-		return `"${safe.replaceAll('"', '""')}"`;
-	};
-	return (
-		'\uFEFF' +
-		[report.columns, ...report.rows.map((row) => row.cells)]
-			.map((row) => row.map(cell).join(','))
-			.join('\r\n') +
-		'\r\n'
-	);
+	return createCsv([report.columns, ...report.rows.map((row) => row.cells)]);
 }

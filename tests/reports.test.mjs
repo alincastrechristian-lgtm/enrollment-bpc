@@ -40,6 +40,7 @@ function fixture(t) {
 	migrate(db, { migrationsFolder: 'drizzle' });
 	sqlite.pragma('foreign_keys=ON');
 	const dependencies = {
+		'./csv': load('src/lib/server/csv.ts'),
 		'#lib/Roles.js': roles,
 		'#lib/schema.js': schema,
 		'#lib/reports.js': load('src/lib/reports.ts'),

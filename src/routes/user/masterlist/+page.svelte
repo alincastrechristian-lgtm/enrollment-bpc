@@ -4,7 +4,7 @@
 	import MasterlistTable from './MasterlistTable.svelte';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import { getErrorMessage } from '#lib/errors.js';
-	import { CalendarDays, RotateCcw, Users } from '@lucide/svelte';
+	import { CalendarDays, Download, RotateCcw, Users } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { semesterLabel } from '../curriculum/SubjectLayout.svelte';
@@ -17,6 +17,14 @@
 	let form: HTMLFormElement;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let requestId = 0;
+	let pending = $state(false);
+	const csvHref = $derived.by(() => {
+		const parameters = new SvelteURLSearchParams();
+		for (const [key, value] of Object.entries(data.filters)) {
+			if (value !== undefined && value !== '') parameters.set(key, String(value));
+		}
+		return `${resolve('/user/masterlist/export')}?${parameters}`;
+	});
 	const programOptions = $derived([
 		{ value: '', label: 'All programs' },
 		...data.options.programs.map((item) => ({
@@ -27,6 +35,7 @@
 
 	function schedule() {
 		clearTimeout(timer);
+		pending = true;
 		filterError = '';
 		const id = ++requestId;
 		// Capture this selection before an earlier navigation can update the form.
@@ -47,7 +56,10 @@
 			if (id === requestId)
 				filterError = getErrorMessage(cause, 'Could not load the masterlist. Please try again.');
 		} finally {
-			if (id === requestId) applying = false;
+			if (id === requestId) {
+				applying = false;
+				pending = false;
+			}
 		}
 	}
 
@@ -176,21 +188,36 @@
 						Filters update automatically. More students load as you scroll.
 					{/if}
 				</p>
-				<a
-					href={resolve('/user/masterlist')}
-					class="btn gap-2 btn-ghost btn-sm"
-					aria-label="Reset masterlist filters"
-					onclick={(event) => {
-						clearTimeout(timer);
-						requestId++;
-						applying = false;
-						event.currentTarget.closest('form')?.reset();
-						programCode = '';
-						filterError = '';
-					}}
-				>
-					<RotateCcw class="size-4" aria-hidden="true" />Reset filters
-				</a>
+				<div class="flex flex-wrap items-center gap-2">
+					<a
+						href={resolve('/user/masterlist')}
+						class="btn gap-2 btn-ghost btn-sm"
+						aria-label="Reset masterlist filters"
+						onclick={(event) => {
+							clearTimeout(timer);
+							requestId++;
+							applying = false;
+							pending = false;
+							event.currentTarget.closest('form')?.reset();
+							programCode = '';
+							filterError = '';
+						}}
+					>
+						<RotateCcw class="size-4" aria-hidden="true" />Reset filters
+					</a>
+					<a
+						href={pending || applying || filterError ? undefined : csvHref}
+						aria-disabled={pending || applying || !!filterError}
+						tabindex={pending || applying || filterError ? -1 : undefined}
+						class="btn gap-2 btn-primary btn-sm"
+						class:pointer-events-none={pending || applying || !!filterError}
+						class:opacity-50={pending || applying || !!filterError}
+						download
+						data-sveltekit-reload
+					>
+						<Download class="size-4" aria-hidden="true" />Download CSV
+					</a>
+				</div>
 			</div>
 			{#if filterError}
 				<div class="flex flex-wrap items-center gap-3">

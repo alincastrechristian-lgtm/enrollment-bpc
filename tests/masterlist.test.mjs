@@ -40,6 +40,7 @@ function fixture(t) {
 	migrate(db, { migrationsFolder: 'drizzle' });
 	sqlite.pragma('foreign_keys=ON');
 	const dependencies = {
+		'./csv': load('src/lib/server/csv.ts'),
 		'#lib/Roles.js': roles,
 		'#lib/schema.js': schema,
 		'#lib/server/db/index.js': { db },
@@ -49,6 +50,7 @@ function fixture(t) {
 	dependencies['#lib/server/masterlist.js'] = load('src/lib/server/masterlist.ts', dependencies);
 	const { load: masterlist } = load('src/routes/user/masterlist/+page.server.ts', dependencies);
 	const { GET } = load('src/routes/user/masterlist/rows/+server.ts', dependencies);
+	const { GET: exportCsv } = load('src/routes/user/masterlist/export/+server.ts', dependencies);
 	const event = (query, role) => ({
 		url: new URL(`http://localhost/user/masterlist?${query}`),
 		locals: role ? { user: { id: 'staff', role }, session: {} } : {}
@@ -56,6 +58,7 @@ function fixture(t) {
 	return {
 		sqlite,
 		get: (query = '', role = 'admin') => masterlist(event(query, role)),
+		csv: (query = '', role = 'admin') => exportCsv(event(query, role)),
 		batch: (query = '', role = 'admin') => GET(event(query, role))
 	};
 }
@@ -107,6 +110,9 @@ test('masterlist scopes access, validates filters, and excludes dropped or voide
 			userId: 'u1',
 			studentId: 'MA-001',
 			name: 'Alice',
+			firstName: 'Alice',
+			middleName: '',
+			lastName: '',
 			email: 'alice@example.com',
 			programCode: 'BSIS',
 			programName: 'Information Systems',
@@ -159,6 +165,23 @@ test('masterlist loads all matching students in bounded batches and protects eve
 		new Set([...first.students, ...second.students].map((row) => row.studentId)).size,
 		61
 	);
+	for (const role of ['admin', 'registrar']) {
+		const exported = f.csv(`${query}&page=999`, role);
+		assert.equal(exported.headers.get('content-type'), 'text/csv; charset=utf-8');
+		assert.equal(exported.headers.get('cache-control'), 'private, no-store');
+		assert.match(
+			exported.headers.get('content-disposition'),
+			/attachment; filename="masterlist-2026-2027-semester-2.csv"/
+		);
+		const csv = await exported.text();
+		const lines = csv.trimEnd().split('\r\n');
+		assert.equal(lines.length, 64); // title, blank row, column headings, all 61 students
+		assert.match(lines[0], /BSIS 1C ENROLLEES - SEMESTER 2 SY 2026-2027/);
+		assert.equal(lines[2], '"No.","Student ID","Surname","Given Name","Middle Name"');
+		assert.equal(lines.at(-1), '"61","R-60","60","Roster",""');
+		assert.ok(!csv.includes('MA-001'));
+		assert.ok(!csv.includes('MA-002'));
+	}
 	assert.deepEqual(f.get(`${query}&page=2`).students, first.students);
 	assert.equal((await f.batch(`${query}&page=999999999999999`).json()).students.length, 0);
 	assert.equal((await f.batch(`${query}&page=999`).json()).nextPage, null);
@@ -166,14 +189,51 @@ test('masterlist loads all matching students in bounded batches and protects eve
 	for (const [role, status] of [
 		[null, 401],
 		['student', 403]
-	])
+	]) {
 		assert.throws(
 			() => f.batch(`${query}&page=2`, role),
 			(cause) => isHttpError(cause) && cause.status === status
 		);
+		assert.throws(
+			() => f.csv(query, role),
+			(cause) => isHttpError(cause) && cause.status === status
+		);
+	}
 	for (const parameter of ['page=-1', 'page=bad', 'semester=0', 'section=unknown'])
 		assert.throws(
 			() => f.batch(parameter),
 			(cause) => isHttpError(cause) && cause.status === 400
 		);
+});
+
+test('CSV uses saved name parts, surname order, safe cells, and the same validated filters', async (t) => {
+	const f = fixture(t);
+	seed(f.sqlite);
+	f.sqlite
+		.prepare('UPDATE user SET first_name=?,middle_name=?,last_name=? WHERE id=?')
+		.run('Ána, "Luz"', '', 'Santos', 'u1');
+	f.sqlite
+		.prepare('UPDATE user SET first_name=?,middle_name=?,last_name=? WHERE id=?')
+		.run('=1+1', 'Muñoz', 'Alba', 'u2');
+	const csv = await f.csv('schoolYearStart=2026&semester=2').text();
+	const lines = csv.trimEnd().split('\r\n');
+	assert.equal(lines.length, 5);
+	assert.equal(lines[3], '"1","MA-002","Alba","\'=1+1","Muñoz"');
+	assert.equal(lines[4], '"2","MA-001","Santos","Ána, ""Luz""",""');
+	assert.ok(!csv.includes('alice@example.com'));
+	assert.ok(!csv.includes('dropped'));
+	for (const query of [
+		'schoolYearStart=bad',
+		'semester=0',
+		'yearLevel=1.5',
+		'programCode=missing',
+		'section=unknown'
+	]) {
+		assert.throws(
+			() => f.csv(query),
+			(cause) => isHttpError(cause) && cause.status === 400
+		);
+	}
+	const empty = await f.csv('schoolYearStart=2099&semester=9').text();
+	assert.equal(empty.trimEnd().split('\r\n').length, 3);
 });
