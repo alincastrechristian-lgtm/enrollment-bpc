@@ -1,6 +1,6 @@
 # Enrollment system: actions and flowcharts
 
-Updated October 16, 2026. These charts describe current application behavior, including the public landing page, `/login`, staff dashboards, and mandatory completed Registrar meetings before reenrollment for current failed grades. Unfinished controls are identified separately. Open this file in a Mermaid-capable Markdown preview to render the diagrams.
+Updated October 17, 2026. These charts describe current application behavior, including enrollment corrections, voiding, admin reopening, and mandatory completed Registrar meetings before reenrollment for current failed grades. Unfinished controls are identified separately. Open this file in a Mermaid-capable Markdown preview to render the diagrams.
 
 **Reading guide:** rectangles are actions/results; diamonds are checks. A confirmation's **Cancel/No** path stops without saving unless stated otherwise. Database updates and email delivery are separate steps.
 
@@ -13,6 +13,7 @@ Updated October 16, 2026. These charts describe current application behavior, in
 5. [Enrollment editor and saving](#5-enrollment-editor-and-saving)
 6. [Failed and incomplete subjects](#6-failed-and-incomplete-subjects)
 7. [Editing and finalizing grades](#7-editing-and-finalizing-grades)
+   - [Correcting, voiding, and reopening enrollment](#7a-correcting-voiding-and-reopening-enrollment)
 8. [Clearance and completion](#8-clearance-and-completion)
 9. [Meeting requests and completing follow-ups](#9-meeting-requests-and-completing-follow-ups)
 10. [Dropping and reenrolling](#10-dropping-and-reenrolling)
@@ -68,25 +69,28 @@ flowchart TD
     Student --> Own[View own enrollment, history, curriculum, and profile]
 ```
 
-| Capability | Admin | Registrar | Student |
-| ----------------------------------------- | ----------------------------------------- | --------------------------------- | ---------------------------- |
-| Create/view students; enroll students | Yes | Yes | No |
-| View student masterlist by term and class | Yes | Yes | No |
-| Generate reports, export CSV, and print | Yes | Yes | No |
-| Create/list registrar accounts | Yes | No | No |
-| Delete unfinished students without enrollment history | Yes | Yes | No |
-| Disable/enable registrar accounts | Yes | No | No |
-| Delete registrar accounts | Yes | No | No |
-| Revoke account sessions | Students and registrars | Students only | No |
-| Manage programs, subjects, curricula | Yes | View only | Own assigned curriculum only |
-| Edit grades | Current/historical, including finalized | Current, unfinalized only | No |
-| Finalize grades | Current/historical, not already finalized | Current, not already finalized | No |
-| Verify clearance; send/complete follow-up | Yes, subject to enrollment checks | Yes, subject to enrollment checks | No |
-| Drop enrollment | Current, status `enrolled` | Current, status `enrolled` | No |
-| Configure outgoing email | Yes | No | No |
-| View own profile | Yes | Yes | Yes |
+| Capability                                            | Admin                                                  | Registrar                                   | Student                      |
+| ----------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------- | ---------------------------- |
+| Create/view students; enroll students                 | Yes                                                    | Yes                                         | No                           |
+| View student masterlist by term and class             | Yes                                                    | Yes                                         | No                           |
+| Generate reports, export CSV, and print               | Yes                                                    | Yes                                         | No                           |
+| Create/list registrar accounts                        | Yes                                                    | No                                          | No                           |
+| Delete unfinished students without enrollment history | Yes                                                    | Yes                                         | No                           |
+| Disable/enable registrar accounts                     | Yes                                                    | No                                          | No                           |
+| Delete registrar accounts                             | Yes                                                    | No                                          | No                           |
+| Revoke account sessions                               | Students and registrars                                | Students only                               | No                           |
+| Manage programs, subjects, curricula                  | Yes                                                    | View only                                   | Own assigned curriculum only |
+| Edit grades                                           | Current/historical, unfinalized only                   | Current, unfinalized only                   | No                           |
+| Finalize grades                                       | Current/historical, not already finalized              | Current, not already finalized              | No                           |
+| Correct enrollment details and subjects               | Current/historical, status `enrolled`, unfinalized     | Current, status `enrolled`, unfinalized     | No                           |
+| Void incorrect enrollment                             | Current/historical, unfinalized and not already voided | Current, unfinalized and not already voided | No                           |
+| Reopen finalized enrollment with reason               | Current/historical, enrolled or completed              | No                                          | No                           |
+| Verify clearance; send/complete follow-up             | Yes, subject to enrollment checks                      | Yes, subject to enrollment checks           | No                           |
+| Drop enrollment                                       | Current, status `enrolled`                             | Current, status `enrolled`                  | No                           |
+| Configure outgoing email                              | Yes                                                    | No                                          | No                           |
+| View own profile                                      | Yes                                                    | Yes                                         | Yes                          |
 
-Grade editing/finalization always requires completed student account setup and a non-dropped enrollment. Role restrictions are checked on the server as well as reflected in the UI. Public sign-up is disabled.
+Grade editing/finalization always requires completed student account setup, unfinalized grades, and an enrollment that is neither dropped nor voided. Finalized grades are locked for both roles until an admin explicitly reopens the enrollment with a reason. Role restrictions are checked on the server as well as reflected in the UI. Public sign-up is disabled.
 
 ## 2. Create students and registrars
 
@@ -225,7 +229,7 @@ flowchart TD
 
 - Same-year/semester subjects in the selected curriculum are marked **curriculum**. Other selected subjects are **extra**, including subjects from another year/semester.
 - Curriculum subject names/codes come from published snapshots; extra subject names/codes come from the catalog. Custom positive units are accepted for both.
-- Duplicate non-dropped enrollment for the same student, school year, and semester is rejected. Duplicate subject rows are rejected.
+- Duplicate enrollment for the same student, school year, and semester is rejected unless the existing attempt is dropped or voided. Duplicate subject rows are rejected.
 - Changing **program** reloads its curriculum automatically. Changing **year/semester** changes the term selection; **Use term subjects** explicitly replaces rows. Existing selections are not silently discarded.
 - Leaving a changed draft or switching programs asks to discard unsaved work. Cancel keeps the draft and restores program selection.
 - Once saved, resubmission is blocked even if navigation fails. An enrollment-confirmation email failure does not undo enrollment.
@@ -234,7 +238,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Load[Load student's finalized, non-dropped subject attempts] --> Latest[Keep latest finalized attempt for each subject]
+    Load[Load student's finalized attempts excluding dropped and voided enrollments] --> Latest[Keep latest finalized attempt for each subject]
     Latest --> Result{Latest result}
     Result -->|1.00 to 3.00| Passed[Exclude from outstanding list]
     Result -->|Above 3.00| Failed[Include as failed]
@@ -253,18 +257,24 @@ flowchart TD
     Draft --> Save[Saved only when Enroll Student is confirmed]
 ```
 
-This list can include earlier terms. The reenrollment confirmation warning specifically checks the current enrollment's finalized failed/INC grades. Failed grades (above 3.00) in the current non-dropped enrollment require a completed Registrar follow-up before reenrollment; sending the meeting email alone is insufficient. Both staff roles must meet this requirement. INC-only grades retain the acknowledgment warning without requiring a completed meeting. Completing a meeting does not clear those grades or remove the warning.
+This list can include earlier terms. The reenrollment confirmation warning specifically checks the current enrollment's finalized failed/INC grades. Failed grades (above 3.00) in the current valid enrollment require a completed Registrar follow-up before reenrollment; sending the meeting email alone is insufficient. Both staff roles must meet this requirement. INC-only grades retain the acknowledgment warning without requiring a completed meeting. Completing a meeting does not clear those grades or remove the warning. Voided attempts do not contribute grades or enrollment requirements.
 
 ## 7. Editing and finalizing grades
 
 ```mermaid
 flowchart TD
     View[Click View enrollment from current card or history] --> Page[Load student, enrollment, subjects, and role permissions]
-    Page --> Dropped{Dropped or account setup unfinished?}
+    Page --> Dropped{Dropped, voided, or account setup unfinished?}
     Dropped -->|Yes| Locked[Show read-only grades and lock explanation]
-    Dropped -->|No| Role{Staff role}
-    Role -->|Admin| Admin[Can edit current or historical grades, including finalized]
-    Role -->|Registrar| Registrar{Current enrollment AND unfinalized?}
+    Dropped -->|No| Finalized{Grades finalized?}
+    Finalized -->|Yes| Locked
+    Locked --> Reopen{Admin and finalized enrolled or completed record?}
+    Reopen -->|Yes| Reason[Reopen with reason and confirmation]
+    Reason --> Reset[Reset finalization, clearance, meeting request, and follow-up; notify student]
+    Reset --> Page
+    Finalized -->|No| Role{Staff role}
+    Role -->|Admin| Admin[Can edit current or historical unfinalized grades]
+    Role -->|Registrar| Registrar{Current enrollment?}
     Registrar -->|No| Locked
     Registrar -->|Yes| Editable[Edit grades available]
     Admin --> Editable
@@ -273,9 +283,7 @@ flowchart TD
     Save --> Valid{Values valid and original grades still match database?}
     Valid -->|No| Reject[Show validation or concurrent-change error]
     Valid -->|Yes| Write[Save changed grades atomically; leave editing mode]
-    Write --> Finalized{Already finalized?}
-    Finalized -->|Yes| Correction[Admin correction saved; finalized state remains]
-    Finalized -->|No| Finalize[Click Finalize grades with saved changes only]
+    Write --> Finalize[Click Finalize grades with saved changes only]
     Page -->|Eligible, already saved grades| Finalize
     Finalize --> Confirm{Confirm release and warning for blank grades?}
     Confirm -->|No| Page
@@ -285,25 +293,76 @@ flowchart TD
     Success -->|Yes| Commit[Save finalizedGrades=true; blank grades represent INC]
     Commit --> Status[Status becomes completed if clearance already verified; otherwise enrolled]
     Status --> Notify[Attempt grades-finalized email, including program and term]
-    Notify --> Release[Grades visible to student; registrar editing locked]
+    Notify --> Release[Grades visible to student; grade editing locked for both roles]
 ```
 
 Grade meanings: **1.00–3.00 = passed**, **above 3.00–5.00 = failed**, **null before finalization = no grade**, **null after finalization = INC**. INC is represented by a null value plus finalized state, not by storing the text `INC` in the grade column.
 
-**Cancel editing** restores saved grades; dirty drafts require confirmation. Navigating away from unsaved grades also prompts. Finalization does not save an unsaved grade draft. Admin corrections do not re-finalize grades or automatically resend a finalization email.
+**Cancel editing** restores saved grades; dirty drafts require confirmation. Navigating away from unsaved grades also prompts. Finalization does not save an unsaved grade draft. After reopening, an admin can correct details/grades, finalize again to release them and send a new finalization notice, then verify clearance again. Reopening alone sends its own enrollment-update email; it does not finalize grades.
+
+## 7a. Correcting, voiding, and reopening enrollment
+
+Open **View enrollment**, then choose the correction action. **Edit enrollment** opens `/user/students/[userId]/enrollments/[enrollmentId]/edit`. Both roles can correct current unfinalized enrollments with status `enrolled`; only admins can correct historical records. A dropped enrollment can be voided if it is unfinalized, but cannot be edited or reopened.
+
+```mermaid
+flowchart TD
+    View[Staff opens enrollment details] --> Action{Choose action}
+    Action -->|Edit enrollment| Editable{Enrolled, unfinalized, and permitted current or historical scope?}
+    Editable -->|No| Block[Show lock explanation; reject writes on server]
+    Editable -->|Yes| Editor[Open correction editor; preload saved term, program, section, subjects, and units]
+    Editor --> Change[Change academic details, subjects, or custom positive units; enter reason]
+    Change --> Program{Changing program?}
+    Program -->|Yes| Curriculum[Reload selected curriculum; confirm before replacing changed subject draft]
+    Program -->|No| Save[Review and save correction]
+    Curriculum --> Save
+    Save --> Removed{Removing a subject with a saved grade?}
+    Removed -->|Yes| ConfirmRemove{Explicitly confirm graded-subject removal?}
+    ConfirmRemove -->|No| Editor
+    ConfirmRemove -->|Yes| Validate
+    Removed -->|No| Validate[Recheck role, ownership, revision, curriculum, term order, uniqueness, and subjects]
+    Validate --> Correct[Transaction: retain matching attempt IDs and grades; add subjects with null grades; remove deselected rows]
+    Correct --> Reset[Reset clearance, meeting request, and follow-up; increment revision]
+    Action -->|Reopen enrollment| Admin{Admin and finalized enrolled or completed record?}
+    Admin -->|No| Block
+    Admin -->|Yes| Reopen[Enter reason; confirm reopening]
+    Reopen --> Recheck[Recheck ownership, revision, and permission]
+    Recheck --> Unfinalize[Set enrolled and unfinalized; reset clearance, meeting request, and follow-up; retain grades]
+    Action -->|Void enrollment| Voidable{Unfinalized, not already voided, permitted scope?}
+    Voidable -->|No| Block
+    Voidable -->|Yes| VoidConfirm[Enter reason; confirm void warning]
+    VoidConfirm --> VoidCheck[Recheck ownership, revision, and permission]
+    VoidCheck --> Void[Set status voided; preserve enrollment and subject rows]
+    Void --> Current{Was current enrollment?}
+    Current -->|Yes| Restore[Set current pointer to most recent nonvoid enrollment, or null]
+    Current -->|No| History[Leave current pointer unchanged]
+    Reset --> Audit[Save before and after snapshots, staff identity, reason, and timestamp; save student notification]
+    Unfinalize --> Audit
+    Restore --> Audit
+    History --> Audit
+    Audit --> Email[Commit transaction; attempt matching correction, reopen, or void email]
+    Email --> Result[Show saved result and separate email outcome]
+```
+
+Matching subjects retain their attempt IDs, grades, and original staff attribution even after program changes. Newly added subjects start without grades. Removed graded subjects remain available in the audit's before snapshot. Replacing draft subjects requires confirmation; saving a correction also requires explicit acknowledgment when removing any graded subject. Corrections cannot cross the student's earlier/later valid enrollment terms or create a duplicate valid enrollment for a term.
+
+Voiding records an enrollment entered in error; **Drop enrollment** remains the action for an actual withdrawal. Voided records stay visible in enrollment history and staff audit, but are excluded from academic reports, masterlists, grade outcomes, failed/INC calculations, and reenrollment requirements. They do not consume the unique student/term slot, so staff can create a correct enrollment for that same term. A restored previous current enrollment still imposes its own normal reenrollment requirements.
+
+Every correction, void, and reopen saves audit snapshots and a student notification in the same transaction. Notification visibility remains student recipient / acting registrar / all admins. Email failure does not undo saved changes. Stale revisions and an active meeting-email send claim reject changes without partial updates. Reopened provisional grades remain hidden from students until finalized again.
+
+Migration `0030_smiling_microbe` adds `voided`, the revision counter, and enrollment audit storage. It preserves existing enrollment IDs, grades, student pointers, and notification links, including when foreign keys are enabled. Its guarded rollback refuses while audit entries or voided rows exist, rather than discarding them.
 
 ## 8. Clearance and completion
 
 ```mermaid
 flowchart TD
-    View[Open enrollment details as admin or registrar] --> Final{Grades finalized and enrollment not dropped?}
+    View[Open enrollment details as admin or registrar] --> Final{Grades finalized and enrollment neither dropped nor voided?}
     Final -->|No| Wait[Verify clearance unavailable; finish grading first]
     Final -->|Yes| Verified{Clearance already verified?}
     Verified -->|Yes| Complete[Show verified clearance and completed enrollment]
     Verified -->|No| Click[Click Verify clearance]
     Click --> Confirm{Confirm submitted clearance?}
     Confirm -->|No| View
-    Confirm -->|Yes| Check[Server rechecks ownership, finalization, dropped state, and duplicate verification]
+    Confirm -->|Yes| Check[Server rechecks ownership, finalization, dropped or voided state, and duplicate verification]
     Check --> Commit[Transaction: submittedClearance=true; status=completed]
     Commit --> Complete
     Complete --> Current{This is current enrollment?}
@@ -321,7 +380,7 @@ For a current enrollment with failed grades, `completed` status alone does not m
 
 ```mermaid
 flowchart TD
-    View[Open enrollment details] --> Eligible{Finalized, non-dropped, failed or INC, no request sent?}
+    View[Open enrollment details] --> Eligible{Finalized, neither dropped nor voided, failed or INC, no request sent?}
     Eligible -->|No| Status[Show existing status or no send action]
     Eligible -->|Yes| Click[Click Send meeting request]
     Click --> Confirm{Confirm email recipient and request?}
@@ -338,14 +397,14 @@ flowchart TD
     Meeting --> Close[Staff clicks Complete follow-up]
     Close --> ConfirmClose{Confirm follow-up completed?}
     ConfirmClose -->|No| Dashboard
-    ConfirmClose -->|Yes| Check[Require sent request, finalized grades, non-dropped enrollment, no prior completion]
+    ConfirmClose -->|Yes| Check[Require sent request, finalized grades, valid enrollment, no prior completion]
     Check --> Save[Save followUpCompletedAt]
     Save --> Done[Show completion date; remove pending meeting prompt on next dashboard load]
 ```
 
 - Expired send claims can be retried after 15 minutes. A sent request cannot be sent again through this action.
 - If delivery succeeds but the send claim changed before saving the result, the server asks staff to refresh rather than silently claim success.
-- Pending meeting prompts can include historical enrollments. They disappear when follow-up completes, enrollment is dropped, or its failed/INC concerns are resolved by corrected grades.
+- Pending meeting prompts can include historical enrollments. They disappear when follow-up completes, enrollment is dropped or voided, or its grades are reopened. Reopening and correcting enrollment reset the meeting request and completed follow-up; staff must reassess the corrected results after finalizing again.
 - Completing follow-up changes only its timestamp. It does not change grades, clearance, or enrollment status, and sends no completion email.
 - Current enrollment failures block reenrollment until this completion is recorded. The Next term dashboard worklist and enrollment buttons follow the same requirement; the enrollment command rechecks it inside its transaction.
 - Meeting requests do not schedule a date/time automatically.
@@ -468,7 +527,7 @@ flowchart TD
     Inbox --> Read[Filter recent updates or mark notifications read for this viewer]
 ```
 
-Student data is scoped to the session. Students cannot open another curriculum ID; it returns not found. Unfinalized grades are hidden from student enrollment history and dashboard data, not merely hidden by CSS. Notifications persist from account setup, password reset, enrollment confirmation, finalized grades, meeting requests, and dropped enrollment events. Students see their addressed messages, registrars see events they performed, and admins see all events. Read state belongs only to student recipients. Staff see an activity log without unread counts or read controls, and cannot mark student notifications read. Password reset tokens and one-time URLs are never stored in notifications.
+Student data is scoped to the session. Students cannot open another curriculum ID; it returns not found. Unfinalized grades are hidden from student enrollment history and dashboard data, not merely hidden by CSS, including after admin reopening. Notifications persist from account setup, password reset, enrollment confirmation, finalized grades, meeting requests, dropped enrollments, enrollment corrections, voiding, and reopening. Students see their addressed messages, registrars see events they performed, and admins see all events. Read state belongs only to student recipients. Staff see an activity log without unread counts or read controls, and cannot mark student notifications read. Password reset tokens and one-time URLs are never stored in notifications. Voided records remain in history but do not produce active enrollment, grade-outcome, or pending-meeting data.
 
 Staff **View student** opens personal details, current enrollment, and history. **View enrollment** on a card/history record opens the separate staff details page with the actions allowed for that staff role.
 
@@ -492,8 +551,8 @@ flowchart TD
 
 - Student program filter is searchable and gets options from all programs. Section choices are A–D; year/semester options use stored academic values.
 - Student academic filters follow the linked current enrollment, not any historical enrollment. **Has current enrollment** checks whether a linked record exists; a linked dropped/completed record still counts as present.
-- **Masterlist** (`/user/masterlist`) is available to admin and registrar. School year, semester, searchable program, year level, and section dropdowns update results automatically. It defaults to the latest recorded non-dropped term and lists enrolled/completed records from that specific term, including historical classes even after a student changes program or section. Dropped attempts and students without an enrollment are excluded. There is no name search, Apply button, or pagination: 50 students load initially, with additional batches loaded on scroll or **Load more** until all matching students appear. Each batch rechecks staff access and retains the selected term and class. Changing filters cancels pending row requests and starts a fresh list; failed batches offer **Retry**. Student names open profiles and **View** opens that term's enrollment. **Reset filters** returns to the latest term.
-- Setup/verification filters concern account setup, not an enrollment pending state. Enrollment statuses are `enrolled`, `completed`, and `dropped`.
+- **Masterlist** (`/user/masterlist`) is available to admin and registrar. School year, semester, searchable program, year level, and section dropdowns update results automatically. It defaults to the latest recorded enrolled/completed term and lists enrolled/completed records from that specific term, including historical classes even after a student changes program or section. Dropped/voided attempts and students without an enrollment are excluded; voided-only academic values do not supply filter options. There is no name search, Apply button, or pagination: 50 students load initially, with additional batches loaded on scroll or **Load more** until all matching students appear. Each batch rechecks staff access and retains the selected term and class. Changing filters cancels pending row requests and starts a fresh list; failed batches offer **Retry**. Student names open profiles and **View** opens that term's enrollment. **Reset filters** returns to the latest term.
+- Setup/verification filters concern account setup, not an enrollment pending state. Enrollment statuses are `enrolled`, `completed`, `dropped`, and `voided`.
 - History's **Current** badge means the record matches `currentEnrollmentId`; it is independent of enrollment status. The ordinary `enrolled` badge is omitted while other statuses remain visible.
 - History filters do not write to the database. Staff history links open an enrollment detail record; students review their history read-only.
 
@@ -519,19 +578,22 @@ flowchart TD
 
 Saving settings does not send a test email. Password/API-key visibility controls only show or hide newly entered values; existing secrets are not loaded into the page.
 
-| Trigger | Email attempt | Saved state if delivery fails |
-| ------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------ |
-| Create student | Account setup link | Student remains; invitation failure can be shown |
-| Create registrar | Account setup link | Registrar remains; action can show error |
-| Resend verification | Account setup link | Account remains |
-| Forgot password | Reset/setup link for an existing account | Account remains; request UI does not establish receipt |
-| Enroll Student | Enrollment confirmation | Enrollment remains saved |
-| Finalize grades | Finalized-grades notice with program/term | Grades remain finalized |
-| Send meeting request | Request to arrange a meeting | Send claim released on delivery failure; retry allowed |
-| Drop enrollment | Dropped-enrollment notice | Enrollment remains dropped |
-| Save grades, verify clearance, complete follow-up | No automatic email | Action's database update applies normally |
+| Trigger                                           | Email attempt                                            | Saved state if delivery fails                                                      |
+| ------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Create student                                    | Account setup link                                       | Student remains; invitation failure can be shown                                   |
+| Create registrar                                  | Account setup link                                       | Registrar remains; action can show error                                           |
+| Resend verification                               | Account setup link                                       | Account remains                                                                    |
+| Forgot password                                   | Reset/setup link for an existing account                 | Account remains; request UI does not establish receipt                             |
+| Enroll Student                                    | Enrollment confirmation                                  | Enrollment remains saved                                                           |
+| Finalize grades                                   | Finalized-grades notice with program/term                | Grades remain finalized                                                            |
+| Send meeting request                              | Request to arrange a meeting                             | Send claim released on delivery failure; retry allowed                             |
+| Drop enrollment                                   | Dropped-enrollment notice                                | Enrollment remains dropped                                                         |
+| Correct enrollment                                | Corrected-enrollment notice with program/term and reason | Correction, audit, and notification remain saved                                   |
+| Void enrollment                                   | Voided-enrollment notice with program/term and reason    | Voided record, audit, notification, and restored current pointer remain saved      |
+| Reopen enrollment                                 | Reopened-enrollment notice with program/term and reason  | Grades remain unfinalized; requirements reset; audit and notification remain saved |
+| Save grades, verify clearance, complete follow-up | No automatic email                                       | Action's database update applies normally                                          |
 
-Enrollment/finalization/drop commands report the email result separately from database success. They do not automatically retry failed lifecycle emails. Meeting-request state is recorded only after provider acceptance; provider acceptance is not proof of inbox delivery.
+Enrollment/finalization/drop/correction/void/reopen commands report the email result separately from database success. They do not automatically retry failed lifecycle emails. Finalizing again after an admin reopens an enrollment sends a new finalized-grades notice. Meeting-request state is recorded only after provider acceptance; provider acceptance is not proof of inbox delivery.
 
 ## 16. Errors and shared controls
 
@@ -551,82 +613,85 @@ flowchart TD
     Popup --> Retry[Correct input, refresh stale data, or retry]
 ```
 
-| Control or case | Current effect |
+| Control or case                                        | Current effect                                                                                          |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Open `/user/*` without sign-in | User layout redirects to `/login`; individual protected loads/commands also enforce authentication |
-| Unauthorized protected action | 401; no database mutation |
-| Wrong role | 403; no database mutation |
-| Missing record or student's unauthorized curriculum ID | 404 |
-| Changed/stale record or unmet workflow requirements | 409 or actionable validation response |
-| Unexpected server failure | Generic public message; internal details stay on server |
-| Error-page Back | Browser back; home fallback if no prior entry |
-| Error-page retry | Reload current path/query when retry is offered |
+| Open `/user/*` without sign-in                         | User layout redirects to `/login`; individual protected loads/commands also enforce authentication      |
+| Unauthorized protected action                          | 401; no database mutation                                                                               |
+| Wrong role                                             | 403; no database mutation                                                                               |
+| Missing record or student's unauthorized curriculum ID | 404                                                                                                     |
+| Changed/stale record or unmet workflow requirements    | 409 or actionable validation response                                                                   |
+| Unexpected server failure                              | Generic public message; internal details stay on server                                                 |
+| Error-page Back                                        | Browser back; home fallback if no prior entry                                                           |
+| Error-page retry                                       | Reload current path/query when retry is offered                                                         |
 | Top-bar Back                                           | Explicit student parent route on enrollment screens; otherwise return to the current navigation section |
-| Sidebar link | Navigate to permitted page |
-| Sidebar Settings group | Expand/collapse navigation links |
-| Theme control | Toggle light/dark UI; no academic data change |
-| Password visibility | Toggle input masking; no account change |
-| Modal Cancel/close | Close form; no save |
-| Confirmation No/Cancel | Stop pending operation; no save |
-| Curriculum/enrollment/grade unsaved-work prompt | Keep draft on cancel; discard and navigate on confirmation |
+| Sidebar link                                           | Navigate to permitted page                                                                              |
+| Sidebar Settings group                                 | Expand/collapse navigation links                                                                        |
+| Theme control                                          | Toggle light/dark UI; no academic data change                                                           |
+| Password visibility                                    | Toggle input masking; no account change                                                                 |
+| Modal Cancel/close                                     | Close form; no save                                                                                     |
+| Confirmation No/Cancel                                 | Stop pending operation; no save                                                                         |
+| Curriculum/enrollment/grade unsaved-work prompt        | Keep draft on cancel; discard and navigate on confirmation                                              |
 
 ## 17. Notification inbox and unfinished controls
 
 Notifications use saved backend events. The table also identifies remaining unfinished controls:
 
-| Screen/control | What actually happens now |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Student dashboard notification list | Recent saved messages addressed to the student; recipient read state persists |
-| Notifications page | Saved events with search, email-type filters, pagination and All/Unread views |
-| Notifications: open row | Show safe message details and persist read status only for the student recipient |
-| Notifications: Mark all as read | Student recipients mark their own notifications read; staff have no read controls |
-| Reports                             | Admin/registrar can generate enrollment summaries, grade reports, attention lists, completion reports, and dropped enrollment reports; export CSV or print/Save as PDF |
-| Revoke sessions | Confirm sign-out on all devices. Better Auth revokes all target sessions without changing password or access; admins can target students/registrars, registrars can target students only |
-| Student Edit/Delete | Editing remains unavailable. Admin/registrar can confirm deletion only while setup is incomplete and no current or historical enrollment exists; server rechecks atomically and removes linked auth data and reset tokens |
-| Registrar Delete account | Admin confirms permanent deletion; login data and reset tokens are removed atomically. Student enrollments, subjects, grades, and notifications remain; deleted staff author references become null. Disable account remains available for temporary suspension |
-| Registrar access | Admin confirms Disable/Enable. Better Auth ban/unban APIs control sign-in; disabling revokes active sessions and retains account/history. Actions use the shared dropdown. Setup-link resend is available for enabled, unfinished accounts; admins can also confirm Revoke sessions |
-| Profile editing | Read-only page; no save action |
-| Two-factor account flow | Auth plugin exists, but no complete dedicated verification/enrollment UI in current pages |
+| Screen/control                      | What actually happens now                                                                                                                                                                                                                                                           |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Student dashboard notification list | Recent saved messages addressed to the student; recipient read state persists                                                                                                                                                                                                       |
+| Notifications page                  | Saved events with search, email-type filters, pagination and All/Unread views                                                                                                                                                                                                       |
+| Notifications: open row             | Show safe message details and persist read status only for the student recipient                                                                                                                                                                                                    |
+| Notifications: Mark all as read     | Student recipients mark their own notifications read; staff have no read controls                                                                                                                                                                                                   |
+| Reports                             | Admin/registrar can generate enrollment summaries, grade reports, attention lists, completion reports, and dropped enrollment reports; export CSV or print/Save as PDF                                                                                                              |
+| Revoke sessions                     | Confirm sign-out on all devices. Better Auth revokes all target sessions without changing password or access; admins can target students/registrars, registrars can target students only                                                                                            |
+| Student Edit/Delete                 | Editing remains unavailable. Admin/registrar can confirm deletion only while setup is incomplete and no current or historical enrollment exists; server rechecks atomically and removes linked auth data and reset tokens                                                           |
+| Registrar Delete account            | Admin confirms permanent deletion; login data and reset tokens are removed atomically. Student enrollments, subjects, grades, and notifications remain; deleted staff author references become null. Disable account remains available for temporary suspension                     |
+| Registrar access                    | Admin confirms Disable/Enable. Better Auth ban/unban APIs control sign-in; disabling revokes active sessions and retains account/history. Actions use the shared dropdown. Setup-link resend is available for enabled, unfinished accounts; admins can also confirm Revoke sessions |
+| Profile editing                     | Read-only page; no save action                                                                                                                                                                                                                                                      |
+| Two-factor account flow             | Auth plugin exists, but no complete dedicated verification/enrollment UI in current pages                                                                                                                                                                                           |
 
 The inbox and student dashboard use saved events matching outgoing email types. Academic event notifications are saved with their state changes even if email delivery fails; meeting-request events are saved after successful delivery. Account notifications contain safe setup/reset text only, never one-time links or tokens. The top-bar badge uses the same server-enforced visibility; unread badges are shown only for student recipients. Historical events are not backfilled.
 
-**Reports:** changing the report, school year, semester, program, year level, or section updates results automatically. Rapid dropdown changes are grouped into one request; failed updates offer **Retry**. Print and CSV controls wait until the update finishes. Reports use that term's enrollment records, not current class assignments. Enrollment summary counts include dropped attempts and show distinct student counts separately. Other academic reports exclude dropped attempts; the dropped report lists them explicitly. Draft grade outcomes remain Pending, finalized null grades are INC, and next-term readiness follows the same failed-grade meeting rule as enrollment. Historical enrollments are labeled rather than presented as ready for reenrollment. **Download CSV** exports all matching rows with spreadsheet formula protection and rechecks staff permissions. **Print / PDF** prints the complete generated report with scope and Manila timestamp, omitting workspace controls. Reports do not change student or enrollment data.
+**Reports:** changing the report, school year, semester, program, year level, or section updates results automatically. Rapid dropdown changes are grouped into one request; failed updates offer **Retry**. Print and CSV controls wait until the update finishes. Reports use that term's enrollment records, not current class assignments. Enrollment summary counts include dropped attempts and show distinct student counts separately. Other academic reports exclude dropped attempts; the dropped report lists them explicitly. Every report, export, and academic filter-option query excludes voided records. Draft grade outcomes remain Pending, finalized null grades are INC, and next-term readiness follows the same failed-grade meeting rule as enrollment. Historical enrollments are labeled rather than presented as ready for reenrollment. **Download CSV** exports all matching rows with spreadsheet formula protection and rechecks staff permissions. **Print / PDF** prints the complete generated report with scope and Manila timestamp, omitting workspace controls. Reports do not change student or enrollment data.
 
 ## 18. Backend action index
 
-All 26 exported remote commands are covered above. Source links are relative to this document.
+Exported remote commands are covered above. Source links are relative to this document.
 
-| Source | Command | Workflow |
-| --------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
-| [user.remote.ts](../src/lib/actions/user.remote.ts) | `createStudent` | Create personal record and account, assign student number, request setup email |
-| same | `createRegistrar` | Create registrar account and request setup email |
-| same | `deleteStudent` | Atomically delete an unfinished student only if no enrollment history exists; preserve student numbering |
-| same | `setRegistrarDisabled` | Admin-only Better Auth ban/unban for registrar accounts |
-| same | `deleteRegistrar` | Admin-only permanent registrar deletion; preserve academic records and student notifications |
-| same | `revokeAccountSessions` | Role-scoped Better Auth session revocation for student/registrar accounts |
-| same | `resendMagicLink` | Request account setup/reset link |
-| same | `enrollStudent` | Validate and save enrollment, subjects, current pointer; attempt email |
-| [password.remote.ts](../src/lib/actions/password.remote.ts) | `resetPasswordAndSignIn` | Consume reset token, change password, attempt sign-in |
-| same | `completeFirstLogin` | Mark account setup complete and email verified |
-| [grades.remote.ts](../src/lib/actions/grades.remote.ts) | `updateEnrollmentGrades` | Save permitted grade changes with conflict detection |
-| same | `finalizeEnrollmentGrades` | Release reviewed grades and attempt email |
-| same | `verifyEnrollmentClearance` | Mark clearance verified and enrollment completed |
-| same | `sendEnrollmentMeetingRequest` | Claim/send/record meeting email |
-| same | `completeEnrollmentFollowUp` | Timestamp completed follow-up |
-| same | `dropEnrollment` | Drop current active enrollment and attempt email |
-| [curriculum.remote.ts](../src/lib/actions/curriculum.remote.ts) | `createCurriculum` | Save draft and subject snapshots |
-| same | `updateCurriculum` | Edit unarchived, unpublished draft |
-| same | `activateCurriculum` | Publish/select curriculum and archive previous selection |
-| same | `changeCurriculumState` | Archive, unarchive, or deactivate |
-| same | `deleteCurriculum` | Delete if not selected or referenced by enrollment |
-| [program.remote.ts](../src/lib/actions/program.remote.ts) | `createProgram` | Create catalog program |
-| same | `updateProgram` | Update details/status and optional active curriculum |
-| same | `deleteProgram` | Delete if no curriculum references program |
-| same | `setProgramStatus` | Dedicated status command; current UI uses program form instead |
-| [subject.remote.ts](../src/lib/actions/subject.remote.ts) | `createSubject` | Create catalog subject |
-| same | `updateSubject` | Update catalog details/status |
-| same | `deleteSubject` | Delete if no curriculum references subject |
-| same | `setSubjectStatus` | Dedicated status command; current UI uses subject form instead |
-| [settings.remote.ts](../src/lib/actions/settings.remote.ts) | `updateSystemSettings` | Save outgoing-email settings |
+| Source                                                          | Command                        | Workflow                                                                                                               |
+| --------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| [user.remote.ts](../src/lib/actions/user.remote.ts)             | `createStudent`                | Create personal record and account, assign student number, request setup email                                         |
+| same                                                            | `createRegistrar`              | Create registrar account and request setup email                                                                       |
+| same                                                            | `deleteStudent`                | Atomically delete an unfinished student only if no enrollment history exists; preserve student numbering               |
+| same                                                            | `setRegistrarDisabled`         | Admin-only Better Auth ban/unban for registrar accounts                                                                |
+| same                                                            | `deleteRegistrar`              | Admin-only permanent registrar deletion; preserve academic records and student notifications                           |
+| same                                                            | `revokeAccountSessions`        | Role-scoped Better Auth session revocation for student/registrar accounts                                              |
+| same                                                            | `resendMagicLink`              | Request account setup/reset link                                                                                       |
+| same                                                            | `enrollStudent`                | Validate and save enrollment, subjects, current pointer; attempt email                                                 |
+| [enrollment.remote.ts](../src/lib/actions/enrollment.remote.ts) | `correctEnrollment`            | Correct permitted unfinalized enrollment; retain matching grades, audit before/after, notify student and attempt email |
+| same                                                            | `voidEnrollment`               | Void incorrect unfinalized enrollment; preserve history, restore current pointer, audit, notify and attempt email      |
+| same                                                            | `reopenEnrollment`             | Admin-only reopen with reason; reset finalization/clearance/meeting/follow-up, audit, notify and attempt email         |
+| [password.remote.ts](../src/lib/actions/password.remote.ts)     | `resetPasswordAndSignIn`       | Consume reset token, change password, attempt sign-in                                                                  |
+| same                                                            | `completeFirstLogin`           | Mark account setup complete and email verified                                                                         |
+| [grades.remote.ts](../src/lib/actions/grades.remote.ts)         | `updateEnrollmentGrades`       | Save permitted grade changes with conflict detection                                                                   |
+| same                                                            | `finalizeEnrollmentGrades`     | Release reviewed grades and attempt email                                                                              |
+| same                                                            | `verifyEnrollmentClearance`    | Mark clearance verified and enrollment completed                                                                       |
+| same                                                            | `sendEnrollmentMeetingRequest` | Claim/send/record meeting email                                                                                        |
+| same                                                            | `completeEnrollmentFollowUp`   | Timestamp completed follow-up                                                                                          |
+| same                                                            | `dropEnrollment`               | Drop current active enrollment and attempt email                                                                       |
+| [curriculum.remote.ts](../src/lib/actions/curriculum.remote.ts) | `createCurriculum`             | Save draft and subject snapshots                                                                                       |
+| same                                                            | `updateCurriculum`             | Edit unarchived, unpublished draft                                                                                     |
+| same                                                            | `activateCurriculum`           | Publish/select curriculum and archive previous selection                                                               |
+| same                                                            | `changeCurriculumState`        | Archive, unarchive, or deactivate                                                                                      |
+| same                                                            | `deleteCurriculum`             | Delete if not selected or referenced by enrollment                                                                     |
+| [program.remote.ts](../src/lib/actions/program.remote.ts)       | `createProgram`                | Create catalog program                                                                                                 |
+| same                                                            | `updateProgram`                | Update details/status and optional active curriculum                                                                   |
+| same                                                            | `deleteProgram`                | Delete if no curriculum references program                                                                             |
+| same                                                            | `setProgramStatus`             | Dedicated status command; current UI uses program form instead                                                         |
+| [subject.remote.ts](../src/lib/actions/subject.remote.ts)       | `createSubject`                | Create catalog subject                                                                                                 |
+| same                                                            | `updateSubject`                | Update catalog details/status                                                                                          |
+| same                                                            | `deleteSubject`                | Delete if no curriculum references subject                                                                             |
+| same                                                            | `setSubjectStatus`             | Dedicated status command; current UI uses subject form instead                                                         |
+| [settings.remote.ts](../src/lib/actions/settings.remote.ts)     | `updateSystemSettings`         | Save outgoing-email settings                                                                                           |
 
-Additional source owners: [enrollment rules](../src/lib/server/enrollment.ts), [grade permissions and student history](../src/lib/server/student-enrollment.ts), [curriculum publication](../src/lib/server/curriculum.ts), [dashboard data](../src/lib/server/student-dashboard.ts), [staff enrollment buttons](../src/routes/user/students/EnrollmentDetails.svelte), [enrollment editor](../src/routes/user/students/EnrollmentEditor.svelte), [navigation](../src/lib/components/Sidebar/navigation.ts), [authentication](../src/lib/server/auth.ts), and [public errors](../src/lib/errors.ts).
+Additional source owners: [enrollment rules](../src/lib/server/enrollment.ts), [enrollment correction and audit](../src/lib/server/enrollment-corrections.ts), [grade permissions and student history](../src/lib/server/student-enrollment.ts), [curriculum publication](../src/lib/server/curriculum.ts), [dashboard data](../src/lib/server/student-dashboard.ts), [staff enrollment buttons](../src/routes/user/students/EnrollmentDetails.svelte), [enrollment editor](../src/routes/user/students/EnrollmentEditor.svelte), [navigation](../src/lib/components/Sidebar/navigation.ts), [authentication](../src/lib/server/auth.ts), and [public errors](../src/lib/errors.ts).

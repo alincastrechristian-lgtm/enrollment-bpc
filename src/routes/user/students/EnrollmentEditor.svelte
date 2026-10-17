@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enrollStudent } from '#lib/actions/user.remote.js';
+	import { correctEnrollment } from '#lib/actions/enrollment.remote.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
@@ -12,6 +13,7 @@
 		GraduationCap,
 		Plus,
 		RotateCcw,
+		Save,
 		Trash2,
 		UserPlus,
 		X
@@ -25,7 +27,7 @@
 	}: {
 		data: NonNullable<PageData['plan']> &
 			Pick<PageData, 'student' | 'schoolYearStart'> &
-			Partial<Pick<PageData, 'gradeConcerns'>>;
+			Partial<Pick<PageData, 'gradeConcerns' | 'editing'>>;
 	} = $props();
 	type SubjectRow = { key: string; subjectId: string; units: number | undefined };
 	let yearLevel = $state(
@@ -37,6 +39,14 @@
 	let schoolYearStart = $state<number | undefined>(untrack(() => data.schoolYearStart));
 	let section = $state(untrack(() => data.student.section ?? ''));
 	let outstandingDialog: HTMLDialogElement;
+	let reason = $state('');
+	const correcting = $derived(!!data.editing);
+	const removedGradedSubjects = $derived(
+		(data.editing?.originalSubjects ?? []).filter(
+			(subject) =>
+				subject.grade !== null && !rows.some((row) => row.subjectId === subject.subjectId)
+		)
+	);
 
 	function termRows(year: number, term: number): SubjectRow[] {
 		return data.entries
@@ -66,7 +76,8 @@
 		JSON.stringify({ yearLevel, semester, schoolYearStart, section, rows })
 	);
 	const dirty = $derived(
-		JSON.stringify({ yearLevel, semester, schoolYearStart, section, rows }) !== initial
+		JSON.stringify({ yearLevel, semester, schoolYearStart, section, rows }) !== initial ||
+			!!reason.trim()
 	);
 	let busy = $state(false);
 	let saved = $state(false);
@@ -159,19 +170,38 @@
 			message = 'Each subject can only appear once in an enrollment.';
 			return;
 		}
+		if (correcting && reason.trim().length < 5) {
+			message = 'Explain the correction using at least 5 characters.';
+			return;
+		}
 		busy = true;
 		try {
 			if (
+				removedGradedSubjects.length &&
 				!(await showYesNo({
-					title: hasGradeConcerns ? 'Enroll with grade concerns?' : 'Enroll student?',
-					message: `${gradeWarning}${gradeWarning ? ' ' : ''}Enroll ${data.student.name} for ${schoolYearStart}–${Number(schoolYearStart) + 1}, year ${yearLevel}, ${semesterLabel(semester)}, section ${section.trim()}, with ${rows.length} subjects?`,
-					warning: hasGradeConcerns,
-					yesText: 'Enroll Student',
+					title: 'Remove subjects with saved grades?',
+					message: `These subjects will be removed: ${removedGradedSubjects.map((subject) => `${subject.subjectCode} (grade ${subject.grade})`).join(', ')}. Their grades will remain in the audit history. Matching selected subjects keep their grades.`,
+					warning: true,
+					yesText: 'Confirm removal',
 					noText: 'Cancel'
 				}))
 			)
 				return;
-			const result = await enrollStudent({
+			if (
+				!(await showYesNo({
+					title: correcting
+						? 'Save enrollment correction?'
+						: hasGradeConcerns
+							? 'Enroll with grade concerns?'
+							: 'Enroll student?',
+					message: `${gradeWarning}${gradeWarning ? ' ' : ''}${correcting ? 'Save the corrected enrollment for' : 'Enroll'} ${data.student.name} for ${schoolYearStart}–${Number(schoolYearStart) + 1}, year ${yearLevel}, ${semesterLabel(semester)}, section ${section.trim()}, with ${rows.length} subjects?`,
+					warning: hasGradeConcerns,
+					yesText: correcting ? 'Save correction' : 'Enroll Student',
+					noText: 'Cancel'
+				}))
+			)
+				return;
+			const input = {
 				userId: data.student.userId,
 				programCode: data.program.code,
 				curriculumId: data.curriculum.id,
@@ -182,24 +212,50 @@
 				yearLevel,
 				semester,
 				subjects: rows.map((entry) => ({ id: entry.subjectId, units: Number(entry.units) }))
-			});
+			};
+			const result = data.editing
+				? await correctEnrollment({
+						...input,
+						enrollmentId: data.editing.enrollmentId,
+						revision: data.editing.revision,
+						reason: reason.trim(),
+						confirmGradedSubjectRemoval: removedGradedSubjects.length > 0
+					})
+				: await enrollStudent(input);
 			// Enrollment has committed. Prevent resubmission even if navigation fails.
 			saved = true;
 			enrolledUserId = result.userId;
-			await goto(resolve('/user/students/[userId]', { userId: result.userId }), {
-				refreshAll: true
-			});
-			if (result.notificationSent) showSuccess('Student enrolled and confirmation email sent.');
+			await goto(
+				data.editing
+					? resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
+							userId: data.student.userId,
+							enrollmentId: data.editing.enrollmentId
+						})
+					: resolve('/user/students/[userId]', { userId: result.userId }),
+				{
+					refreshAll: true
+				}
+			);
+			if (result.notificationSent)
+				showSuccess(
+					correcting
+						? 'Enrollment corrected and notification email sent.'
+						: 'Student enrolled and confirmation email sent.'
+				);
 			else
 				showError({
-					title: 'Student enrolled',
-					message: 'Enrollment was saved, but the confirmation email could not be sent.'
+					title: correcting ? 'Enrollment corrected' : 'Student enrolled',
+					message:
+						'Enrollment was saved and a dashboard notification created, but the email could not be sent.'
 				});
 		} catch (cause) {
 			message = saved
-				? 'Student enrolled. Open the student record below to continue.'
-				: getErrorMessage(cause, 'Failed to enroll student');
-			showError({ title: saved ? 'Student enrolled' : 'Unable to enroll student', message });
+				? 'Enrollment saved. Open the student record below to continue.'
+				: getErrorMessage(
+						cause,
+						correcting ? 'Could not save enrollment correction.' : 'Failed to enroll student'
+					);
+			showError({ title: saved ? 'Enrollment saved' : 'Unable to save enrollment', message });
 		} finally {
 			busy = false;
 		}
@@ -207,6 +263,34 @@
 </script>
 
 <form class="w-full space-y-6" onsubmit={save}>
+	{#if correcting}
+		<section class="portal-panel space-y-4 p-5 sm:p-6" aria-labelledby="correction-heading">
+			<div>
+				<h1 id="correction-heading" class="text-xl font-bold">Correct enrollment</h1>
+				<p class="mt-2 text-sm text-base-content/60">
+					Update the program, term, section, and subjects. Matching subjects retain their saved
+					grades. Every correction records the previous values and notifies the student.
+				</p>
+			</div>
+			<label class="block space-y-2">
+				<span class="text-sm font-semibold">Reason for correction</span>
+				<textarea
+					class="textarea min-h-24 w-full bg-base-200"
+					bind:value={reason}
+					required
+					minlength="5"
+					maxlength="1000"
+					disabled={busy || saved}
+					placeholder="Explain the mistake and what you are correcting. This reason is visible to the student."></textarea>
+			</label>
+			{#if removedGradedSubjects.length}
+				<p role="status" class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm">
+					{removedGradedSubjects.length} graded subjects will be removed. You must confirm their removal
+					before saving. Their previous grades remain in change history.
+				</p>
+			{/if}
+		</section>
+	{/if}
 	{#if hasGradeConcerns}
 		<p class="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm" role="status">
 			{gradeWarning}
@@ -368,6 +452,9 @@
 									<th>Subject</th>
 									<th>Source</th>
 									<th>Units</th>
+									{#if correcting}
+										<th>Saved grade</th>
+									{/if}
 									<th><span class="sr-only">Remove</span></th>
 								</tr>
 							</thead>
@@ -420,6 +507,13 @@
 												bind:value={entry.units}
 											/>
 										</td>
+										{#if correcting}
+											<td class="whitespace-nowrap">
+												{data.editing?.originalSubjects.find(
+													(subject) => subject.subjectId === entry.subjectId
+												)?.grade ?? 'No grade'}
+											</td>
+										{/if}
 										<td>
 											<button
 												class="btn btn-square btn-ghost text-error btn-sm"
@@ -472,7 +566,8 @@
 				View curriculum
 			</a>
 			<p class="border-t border-base-300 pt-4 text-xs text-base-content/60">
-				An account setup link will be sent to {data.student.email} after enrollment.
+				{correcting ? 'A correction notification' : 'An enrollment confirmation'} will be sent to {data
+					.student.email} after saving.
 			</p>
 		</aside>
 	</div>
@@ -490,10 +585,12 @@
 		<button type="submit" class="btn btn-primary btn-sm" disabled={busy || saved || !rows.length}>
 			{#if busy}
 				<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>
+			{:else if correcting}
+				<Save class="size-4" aria-hidden="true" />
 			{:else}
 				<UserPlus class="size-4" aria-hidden="true" />
 			{/if}
-			{busy ? 'Enrolling...' : 'Enroll Student'}
+			{busy ? 'Saving...' : correcting ? 'Save correction' : 'Enroll Student'}
 		</button>
 	</footer>
 </form>

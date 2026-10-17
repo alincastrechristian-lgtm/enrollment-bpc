@@ -9,7 +9,10 @@ export const emailEventTypes = [
 	'enrollment_confirmed',
 	'grades_finalized',
 	'meeting_request',
-	'enrollment_dropped'
+	'enrollment_dropped',
+	'enrollment_corrected',
+	'enrollment_voided',
+	'enrollment_reopened'
 ] as const;
 
 export type EmailEventType = (typeof emailEventTypes)[number];
@@ -20,5 +23,8 @@ export const emailEventLabels: Record<EmailEventType, string> = {
 	enrollment_confirmed: 'Enrollment confirmation',
 	grades_finalized: 'Finalized grades',
 	meeting_request: 'Meeting request',
-	enrollment_dropped: 'Dropped enrollment'
+	enrollment_dropped: 'Dropped enrollment',
+	enrollment_corrected: 'Enrollment correction',
+	enrollment_voided: 'Voided enrollment',
+	enrollment_reopened: 'Reopened enrollment'
 };

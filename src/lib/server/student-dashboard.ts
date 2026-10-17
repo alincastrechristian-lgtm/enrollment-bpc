@@ -5,7 +5,9 @@ type EnrollmentHistory = Awaited<ReturnType<typeof getStudentEnrollmentHistory>>
 
 export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 	// The explicit current enrollment link is authoritative, even when a newer record exists.
-	const current = record?.enrollments.find((entry) => entry.id === record.currentEnrollmentId);
+	const current = record?.enrollments.find(
+		(entry) => entry.id === record.currentEnrollmentId && entry.status !== 'voided'
+	);
 	const finalized = current?.finalizedGrades ?? false;
 	const subjects = (current?.subjects ?? []).map((subject) => {
 		// Never expose provisional grades or derive results from them.
@@ -41,6 +43,7 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 	const meetingRequests = (record?.enrollments ?? []).flatMap((entry) => {
 		if (
 			entry.status === 'dropped' ||
+			entry.status === 'voided' ||
 			entry.followUpCompletedAt ||
 			!entry.meetingRequestSentAt ||
 			!entry.finalizedGrades

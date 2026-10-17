@@ -69,6 +69,8 @@ function seed(sqlite) {
 		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,status) VALUES
 		('old','MA-001','c1','A',2026,2,1,'completed'),
 		('dropped','MA-001','c1','A',2026,2,1,'dropped'),
+		('voided','MA-001','c1','A',2026,2,1,'voided'),
+		('voided-future','MA-003','c1','Z',2099,9,9,'voided'),
 		('current','MA-001','c2','B',2027,1,2,'enrolled'),
 		('other','MA-002','c1','B',2026,2,2,'enrolled');
 		UPDATE student SET enrollment_id='current' WHERE user_id='u1';
@@ -76,7 +78,7 @@ function seed(sqlite) {
 	`);
 }
 
-test('masterlist scopes access, validates filters, and uses historical class details without dropped duplicates', (t) => {
+test('masterlist scopes access, validates filters, and excludes dropped or voided attempts from historical rosters', (t) => {
 	const f = fixture(t);
 	assert.equal(f.get().total, 0);
 	seed(f.sqlite);
@@ -91,6 +93,11 @@ test('masterlist scopes access, validates filters, and uses historical class det
 	assert.equal(f.get().filters.schoolYearStart, 2027);
 	assert.equal(f.get().filters.semester, 1);
 	assert.equal(f.get().students[0].enrollmentId, 'current');
+	assert.equal(f.get().options.schoolYears.includes(2099), false);
+	assert.equal(f.get().options.semesters.includes(9), false);
+	assert.equal(f.get().options.yearLevels.includes(9), false);
+	assert.equal(f.get().options.sections.includes('Z'), false);
+	assert.equal(f.get('schoolYearStart=2099&semester=9').total, 0);
 	const query = 'schoolYearStart=2026&semester=2&programCode=BSIS&yearLevel=1&section=A';
 	for (const role of ['admin', 'registrar']) {
 		const result = f.get(query, role);

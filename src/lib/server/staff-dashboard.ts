@@ -63,7 +63,8 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 			enrollment,
 			and(
 				eq(enrollment.id, studentData.currentEnrollmentId),
-				eq(enrollment.studentId, studentData.studentId)
+				eq(enrollment.studentId, studentData.studentId),
+				ne(enrollment.status, 'voided')
 			)
 		)
 		.leftJoin(curriculum, eq(curriculum.id, enrollment.curriculumId))
@@ -128,7 +129,7 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 			.limit(6)
 			.all();
 
-	// Match student meeting prompts: finalized concerns, including historical terms, excluding closed/dropped requests.
+	// Historical concerns exclude closed requests and dropped or voided enrollments.
 	const hasConcerns = exists(
 		db
 			.select({ id: enrollmentSubject.id })
@@ -143,6 +144,7 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 	const needsFollowUp = and(
 		eq(user.role, Role.STUDENT),
 		ne(enrollment.status, 'dropped'),
+		ne(enrollment.status, 'voided'),
 		eq(enrollment.finalizedGrades, true),
 		isNull(enrollment.followUpCompletedAt),
 		hasConcerns
@@ -216,6 +218,7 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 		.where(
 			and(
 				eq(user.role, Role.STUDENT),
+				ne(enrollment.status, 'voided'),
 				gte(enrollment.enrolledAt, start),
 				lt(enrollment.enrolledAt, end),
 				sql`${enrollment.enrolledAt} <= ${now.getTime()}`
@@ -255,7 +258,7 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 		.innerJoin(studentData, eq(studentData.studentId, enrollment.studentId))
 		.innerJoin(user, eq(user.id, studentData.userId))
 		.innerJoin(curriculum, eq(curriculum.id, enrollment.curriculumId))
-		.where(eq(user.role, Role.STUDENT))
+		.where(and(eq(user.role, Role.STUDENT), ne(enrollment.status, 'voided')))
 		.orderBy(desc(enrollment.enrolledAt), desc(enrollment.id))
 		.limit(6)
 		.all();

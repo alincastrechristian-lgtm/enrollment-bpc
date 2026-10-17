@@ -16,7 +16,7 @@ import {
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { error, type RequestEvent } from '@sveltejs/kit';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
 
 export function getReports(
 	{ locals, url }: Pick<RequestEvent, 'locals' | 'url'>,
@@ -37,6 +37,7 @@ export function getReports(
 	const terms = db
 		.selectDistinct({ year: enrollment.schoolYearStart, semester: enrollment.semester })
 		.from(enrollment)
+		.where(ne(enrollment.status, 'voided'))
 		.orderBy(desc(enrollment.schoolYearStart), desc(enrollment.semester))
 		.all();
 	const schoolYearStart = numberFilter(
@@ -63,6 +64,7 @@ export function getReports(
 	const academic = db
 		.selectDistinct({ yearLevel: enrollment.yearLevel, section: enrollment.section })
 		.from(enrollment)
+		.where(ne(enrollment.status, 'voided'))
 		.all();
 	const sections = [
 		...new Set(['A', 'B', 'C', 'D', ...academic.map((item) => item.section)])
@@ -71,6 +73,7 @@ export function getReports(
 		error(400, 'Choose a valid program.');
 	if (section && !sections.includes(section)) error(400, 'Choose a valid section.');
 	const scope = and(
+		ne(enrollment.status, 'voided'),
 		eq(enrollment.schoolYearStart, schoolYearStart),
 		eq(enrollment.semester, semester),
 		programCode ? eq(curriculum.programCode, programCode) : undefined,
@@ -166,6 +169,7 @@ export function getReports(
 			}
 		>();
 		for (const record of records) {
+			if (record.status === 'voided') continue;
 			const key = JSON.stringify([record.programCode, record.yearLevel, record.section]);
 			const group = groups.get(key) ?? {
 				programCode: record.programCode,

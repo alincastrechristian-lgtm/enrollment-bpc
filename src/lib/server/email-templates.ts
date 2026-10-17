@@ -355,3 +355,75 @@ export function createEnrollmentDroppedEmail(
 		note: 'Your enrollment record and subject history have been retained. Reenrollment can use the same term and subjects.'
 	});
 }
+
+export function createEnrollmentChangeEmail({
+	kind,
+	name,
+	schoolYearStart,
+	semester,
+	programCode,
+	yearLevel,
+	section,
+	reason,
+	url
+}: {
+	kind: 'corrected' | 'voided' | 'reopened';
+	name: string;
+	schoolYearStart: number;
+	semester: number;
+	programCode: string;
+	yearLevel: number;
+	section: string;
+	reason: string;
+	url?: string;
+}) {
+	const updates = {
+		corrected: {
+			type: 'enrollment_corrected',
+			title: 'Your enrollment has been corrected',
+			message:
+				'The Registrar or an administrator has corrected your enrollment details. Please review your updated academic details and subjects.',
+			steps: [
+				'Sign in and review your corrected enrollment details, subjects, and any recorded grades.',
+				"Contact the Registrar's Office if any information still needs correction."
+			],
+			note: 'Your student portal contains the updated enrollment record.'
+		},
+		voided: {
+			type: 'enrollment_voided',
+			title: 'Your enrollment has been voided',
+			message:
+				'The Registrar or an administrator has voided this enrollment because it was recorded in error. It is excluded from your active academic record and enrollment requirements; its history has been retained for reference.',
+			steps: [
+				'Review the voided enrollment and the reason below.',
+				"Contact the Registrar's Office to confirm your correct enrollment or arrange enrollment if needed."
+			],
+			note: 'A voided enrollment does not represent withdrawal from classes.'
+		},
+		reopened: {
+			type: 'enrollment_reopened',
+			title: 'Your enrollment has been reopened for correction',
+			message:
+				'An administrator has reopened this enrollment for correction. Its grades are under review and are no longer finalized.',
+			steps: [
+				'Review your enrollment and the reason below. Grades may change while corrections are in progress.',
+				"Wait for a new grade finalization notice or contact the Registrar's Office with questions."
+			],
+			note: 'Enrollment requirements will be checked again after corrections and grade finalization.'
+		}
+	} satisfies Record<
+		typeof kind,
+		{ type: EmailEventType; title: string; message: string; steps: string[]; note: string }
+	>;
+	const update = updates[kind];
+
+	return renderAcademicEmail({
+		...update,
+		name,
+		schoolYearStart,
+		semester,
+		url,
+		category: 'ENROLLMENT UPDATE',
+		message: `${update.message} Program: ${programCode}, Year ${yearLevel}, Section ${section}. Reason: ${reason.trim()}`
+	});
+}

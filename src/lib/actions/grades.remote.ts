@@ -21,7 +21,7 @@ import { command, getRequestEvent } from '$app/server';
 import { resolve } from '$app/paths';
 import { ORIGIN } from '$app/env/private';
 import { error } from '@sveltejs/kit';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 const grade = z.number().min(1).max(5).nullable();
@@ -31,7 +31,8 @@ function enrollmentEmailUrl() {
 
 const enrollmentReferenceSchema = z.object({
 	userId: z.string().min(1),
-	enrollmentId: z.string().min(1)
+	enrollmentId: z.string().min(1),
+	revision: z.number().int().nonnegative()
 });
 
 export const dropEnrollment = command(enrollmentReferenceSchema, async (data) => {
@@ -40,10 +41,21 @@ export const dropEnrollment = command(enrollmentReferenceSchema, async (data) =>
 	const record = db.transaction(
 		(tx) => {
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+			if (record.enrollment.revision !== data.revision)
+				error(409, 'Enrollment changed. Reload and review before continuing.');
+			if (
+				record.enrollment.meetingRequestStartedAt &&
+				Date.now() - record.enrollment.meetingRequestStartedAt.getTime() < 15 * 60 * 1000
+			)
+				error(409, 'A meeting request is being sent. Try again after it finishes.');
 			if (!canDropEnrollment(locals.user.role, record))
 				error(409, 'Only the current, active enrollment can be dropped.');
 			tx.update(enrollment)
-				.set({ status: 'dropped', droppedAt: new Date() })
+				.set({
+					status: 'dropped',
+					droppedAt: new Date(),
+					revision: sql`${enrollment.revision} + 1`
+				})
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
 			const message = createEnrollmentDroppedEmail(
@@ -84,9 +96,12 @@ export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, a
 	const record = db.transaction(
 		(tx) => {
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+			if (record.enrollment.revision !== data.revision)
+				error(409, 'Enrollment changed. Reload and review before continuing.');
 			if (!record.enrollment.finalizedGrades)
 				error(409, 'Finalize grades before sending a meeting request.');
-			if (record.enrollment.status === 'dropped') error(409, 'This enrollment has been dropped.');
+			if (record.enrollment.status === 'dropped' || record.enrollment.status === 'voided')
+				error(409, 'Dropped or voided enrollments cannot be changed.');
 			if (record.enrollment.meetingRequestSentAt)
 				error(409, 'A meeting request has already been sent for this enrollment.');
 			// Expired claims can be retried after a server interruption.
@@ -141,7 +156,11 @@ export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, a
 		(tx) => {
 			const updated = tx
 				.update(enrollment)
-				.set({ meetingRequestSentAt: sentAt, meetingRequestStartedAt: null })
+				.set({
+					meetingRequestSentAt: sentAt,
+					meetingRequestStartedAt: null,
+					revision: sql`${enrollment.revision} + 1`
+				})
 				.where(claim)
 				.returning({ id: enrollment.id })
 				.get();
@@ -168,13 +187,20 @@ export const verifyEnrollmentClearance = command(enrollmentReferenceSchema, (dat
 	return db.transaction(
 		(tx) => {
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+			if (record.enrollment.revision !== data.revision)
+				error(409, 'Enrollment changed. Reload and review before continuing.');
 			if (!record.enrollment.finalizedGrades)
 				error(409, 'Finalize grades before verifying clearance.');
-			if (record.enrollment.status === 'dropped') error(409, 'This enrollment has been dropped.');
+			if (record.enrollment.status === 'dropped' || record.enrollment.status === 'voided')
+				error(409, 'Dropped or voided enrollments cannot be changed.');
 			if (record.enrollment.submittedClearance)
 				error(409, 'Clearance has already been verified. Refresh the page.');
 			tx.update(enrollment)
-				.set({ submittedClearance: true, status: 'completed' })
+				.set({
+					submittedClearance: true,
+					status: 'completed',
+					revision: sql`${enrollment.revision} + 1`
+				})
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
 			return { success: true, submittedClearance: true, status: 'completed' as const };
@@ -189,13 +215,16 @@ export const completeEnrollmentFollowUp = command(enrollmentReferenceSchema, (da
 	return db.transaction(
 		(tx) => {
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
-			if (record.enrollment.status === 'dropped') error(409, 'This enrollment has been dropped.');
+			if (record.enrollment.revision !== data.revision)
+				error(409, 'Enrollment changed. Reload and review before continuing.');
+			if (record.enrollment.status === 'dropped' || record.enrollment.status === 'voided')
+				error(409, 'Dropped or voided enrollments cannot be changed.');
 			if (!record.enrollment.finalizedGrades || !record.enrollment.meetingRequestSentAt)
 				error(409, 'Send a meeting request for finalized grades before completing the follow-up.');
 			if (record.enrollment.followUpCompletedAt) error(409, 'This follow-up is already completed.');
 			const completedAt = new Date();
 			tx.update(enrollment)
-				.set({ followUpCompletedAt: completedAt })
+				.set({ followUpCompletedAt: completedAt, revision: sql`${enrollment.revision} + 1` })
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
 			return { success: true, followUpCompletedAt: completedAt };
@@ -207,6 +236,7 @@ export const completeEnrollmentFollowUp = command(enrollmentReferenceSchema, (da
 const updateGradesSchema = z.object({
 	userId: z.string().min(1),
 	enrollmentId: z.string().min(1),
+	revision: z.number().int().nonnegative(),
 	grades: z.array(z.object({ id: z.string().min(1), grade, originalGrade: grade })).min(1)
 });
 
@@ -219,7 +249,9 @@ export const updateEnrollmentGrades = command(updateGradesSchema, (data) => {
 	return db.transaction(
 		(tx) => {
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
-			const lockReason = getEnrollmentGradeLockReason(record, locals.user.role);
+			if (record.enrollment.revision !== data.revision)
+				error(409, 'Enrollment changed. Reload before saving grades.');
+			const lockReason = getEnrollmentGradeLockReason(record);
 			if (lockReason) error(409, lockReason);
 			if (!canEditEnrollmentGrades(locals.user.role, record))
 				error(
@@ -261,6 +293,10 @@ export const updateEnrollmentGrades = command(updateGradesSchema, (data) => {
 						'Grades have changed since this page was loaded. Refresh before saving again.'
 					);
 			}
+			tx.update(enrollment)
+				.set({ revision: sql`${enrollment.revision} + 1` })
+				.where(eq(enrollment.id, record.enrollment.id))
+				.run();
 			return { success: true, grades: data.grades.map(({ id, grade }) => ({ id, grade })) };
 		},
 		{ behavior: 'immediate' }
@@ -270,6 +306,7 @@ export const updateEnrollmentGrades = command(updateGradesSchema, (data) => {
 const finalizeGradesSchema = z.object({
 	userId: z.string().min(1),
 	enrollmentId: z.string().min(1),
+	revision: z.number().int().nonnegative(),
 	grades: z.array(z.object({ id: z.string().min(1), grade })).min(1)
 });
 
@@ -282,8 +319,10 @@ export const finalizeEnrollmentGrades = command(finalizeGradesSchema, async (dat
 	const record = db.transaction(
 		(tx) => {
 			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+			if (record.enrollment.revision !== data.revision)
+				error(409, 'Enrollment changed. Reload and review before finalizing.');
 			if (record.enrollment.finalizedGrades) error(409, 'Grades are already finalized.');
-			const lockReason = getEnrollmentGradeLockReason(record, locals.user.role);
+			const lockReason = getEnrollmentGradeLockReason(record);
 			if (lockReason) error(409, lockReason);
 			if (!canFinalizeEnrollmentGrades(locals.user.role, record))
 				error(409, 'Registrars can finalize only the current enrollment.');
@@ -323,6 +362,7 @@ export const finalizeEnrollmentGrades = command(finalizeGradesSchema, async (dat
 			tx.update(enrollment)
 				.set({
 					finalizedGrades: true,
+					revision: sql`${enrollment.revision} + 1`,
 					status: record.enrollment.submittedClearance ? 'completed' : 'enrolled'
 				})
 				.where(eq(enrollment.id, record.enrollment.id))

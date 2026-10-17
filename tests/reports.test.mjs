@@ -66,15 +66,16 @@ function fixture(t) {
 
 function seed(sqlite) {
 	sqlite.exec(`
-		INSERT INTO user(id,name,email,role) VALUES('a','Alice','a@example.com','student'),('b','Bea','b@example.com','student'),('c','Cara','c@example.com','student'),('d','=2+2','d@example.com','student');
-		INSERT INTO student(id,user_id) VALUES('A','a'),('B','b'),('C','c'),('D','d');
+		INSERT INTO user(id,name,email,role) VALUES('a','Alice','a@example.com','student'),('b','Bea','b@example.com','student'),('c','Cara','c@example.com','student'),('d','=2+2','d@example.com','student'),('e','Voided Only','e@example.com','student');
+		INSERT INTO student(id,user_id) VALUES('A','a'),('B','b'),('C','c'),('D','d'),('E','e');
 		INSERT INTO program(id,code,name) VALUES('p1','BSIS','Information Systems'),('p2','BSA','Accountancy');
 		INSERT INTO curriculum(id,program_code,name) VALUES('c1','BSIS','Original'),('c2','BSA','Other');
 		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,status,finalized_grades,submitted_clearance) VALUES
 		('e1','A','c1','A',2026,1,1,'completed',1,1),('dropped','A','c1','A',2026,1,1,'dropped',1,0),
 		('e2','B','c1','A',2026,1,1,'enrolled',0,0),('e3','C','c2','B',2026,1,2,'completed',1,1),
-		('e4','D','c1','A',2026,1,1,'completed',1,1),('old','A','c1','C',2025,2,1,'completed',1,1);
-		UPDATE student SET enrollment_id=CASE id WHEN 'A' THEN 'e1' WHEN 'B' THEN 'e2' WHEN 'C' THEN 'e3' ELSE 'e4' END;
+		('e4','D','c1','A',2026,1,1,'completed',1,1),('old','A','c1','C',2025,2,1,'completed',1,1),
+		('voided','E','c1','A',2026,1,1,'voided',1,1),('voided-future','E','c1','Z',2099,9,9,'voided',0,0);
+		UPDATE student SET enrollment_id=CASE id WHEN 'A' THEN 'e1' WHEN 'B' THEN 'e2' WHEN 'C' THEN 'e3' WHEN 'D' THEN 'e4' ELSE NULL END;
 		INSERT INTO subject(id,code,name) VALUES('s1','IS101','Subject 1'),('s2','IS102','Subject 2'),('s3','IS103','Subject 3'),('s4','IS104','Subject 4');
 	`);
 	for (const [enrollmentId, grades] of [
@@ -83,6 +84,7 @@ function seed(sqlite) {
 		['e3', [3]],
 		['e4', [null]],
 		['dropped', [5]],
+		['voided', [5, null]],
 		['old', [2]]
 	]) {
 		grades.forEach((grade, i) =>
@@ -95,7 +97,7 @@ function seed(sqlite) {
 					enrollmentId,
 					`s${i + 1}`,
 					`IS10${i + 1}`,
-					`Subject ${i + 1}`,
+					enrollmentId === 'voided' ? 'Voided-only subject' : `Subject ${i + 1}`,
 					grade
 				)
 		);
@@ -107,6 +109,11 @@ test('reports distinguish students from attempts and honor historical academic f
 	assert.equal(f.get().rows.length, 0);
 	seed(f.sqlite);
 	const report = f.get();
+	assert.equal(report.filters.schoolYearStart, 2026);
+	assert.equal(report.options.schoolYears.includes(2099), false);
+	assert.equal(report.options.semesters.includes(9), false);
+	assert.equal(report.options.yearLevels.includes(9), false);
+	assert.equal(report.options.sections.includes('Z'), false);
 	assert.deepEqual(report.overview, { students: 4, enrolled: 1, completed: 3, dropped: 1 });
 	assert.deepEqual(report.rows.find((row) => row.cells[0] === 'BSIS').cells, [
 		'BSIS',
@@ -127,7 +134,12 @@ test('reports distinguish students from attempts and honor historical academic f
 	for (const kind of ['summary', 'grades', 'attention', 'completion', 'dropped']) {
 		const result = f.get(`report=${kind}`);
 		assert.ok(result.rows.every((row) => row.cells.length === result.columns.length));
+		assert.ok(result.rows.every((row) => !row.id.startsWith('voided')));
+		const csv = f.createReportCsv(result);
+		assert.ok(!csv.includes('Voided Only'));
+		assert.ok(!csv.includes('Voided-only subject'));
 	}
+	assert.equal(f.get('schoolYearStart=2099&semester=9').rows.length, 0);
 });
 
 test('reports use finalized grade boundaries and the actual reenrollment rule', (t) => {

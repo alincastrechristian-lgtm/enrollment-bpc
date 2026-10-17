@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EnrollmentRecordActions from './EnrollmentRecordActions.svelte';
 	import { getErrorMessage } from '#lib/errors.js';
 	import {
 		finalizeEnrollmentGrades,
@@ -8,9 +9,9 @@
 		updateEnrollmentGrades,
 		verifyEnrollmentClearance
 	} from '#lib/actions/grades.remote.js';
-	import { showYesNo } from '#lib/components/Popup/Popup.svelte.js';
+	import { showYesNo, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { getEnrollmentLockReason, getGradeConcerns } from '#lib/enrollment-grades.js';
-	import { beforeNavigate, goto } from '$app/navigation';
+	import { beforeNavigate, goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
 		ArrowRight,
@@ -51,12 +52,19 @@
 	let droppedHere = $state(false);
 	const clearanceVerified = $derived(clearanceVerifiedHere || data.enrollment.submittedClearance);
 	const finalized = $derived(finalizedHere || data.enrollment.finalizedGrades);
+	const voided = $derived(data.enrollment.status === 'voided');
 	const dropped = $derived(droppedHere || data.enrollment.status === 'dropped');
 	const enrollmentStatus = $derived(
-		dropped ? 'dropped' : finalized && clearanceVerified ? 'completed' : data.enrollment.status
+		voided
+			? 'voided'
+			: dropped
+				? 'dropped'
+				: finalized && clearanceVerified
+					? 'completed'
+					: data.enrollment.status
 	);
-	const canEdit = $derived(!dropped && data.canEdit && (!finalized || data.canEditFinalized));
-	const canFinalize = $derived(!dropped && data.canFinalize && !finalized);
+	const canEdit = $derived(!voided && !dropped && data.canEdit && !finalized);
+	const canFinalize = $derived(!voided && !dropped && data.canFinalize && !finalized);
 	const incompleteCount = $derived(rows.filter((row) => row.savedGrade === null).length);
 	const gradeConcerns = $derived(
 		getGradeConcerns(
@@ -93,11 +101,13 @@
 			)
 	);
 	const lockReason = $derived(
-		dropped
-			? 'Dropped enrollments cannot be edited or finalized.'
-			: finalized && !data.canEditFinalized
-				? 'Grades are finalized. Only administrators can edit them.'
-				: data.gradeLockReason
+		voided
+			? 'Voided enrollments are retained for reference and cannot be changed.'
+			: dropped
+				? 'Dropped enrollments cannot be edited or finalized.'
+				: finalized
+					? 'Grades are finalized. An administrator must reopen this enrollment before making corrections.'
+					: data.gradeLockReason
 	);
 	let confirmingDiscard = false;
 	let discardAllowed = false;
@@ -153,6 +163,7 @@
 			const result = await updateEnrollmentGrades({
 				userId: data.student.id,
 				enrollmentId: data.enrollment.id,
+				revision: data.enrollment.revision,
 				grades: changedRows.map((row) => ({
 					id: row.id,
 					grade: row.grade ?? null,
@@ -166,6 +177,8 @@
 			}
 			editing = false;
 			success = 'Grades saved successfully.';
+			showSuccess(success);
+			await refreshAll();
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to save grades. Please try again.');
 		} finally {
@@ -191,12 +204,15 @@
 				return;
 			const result = await dropEnrollment({
 				userId: data.student.id,
-				enrollmentId: data.enrollment.id
+				enrollmentId: data.enrollment.id,
+				revision: data.enrollment.revision
 			});
 			droppedHere = true;
 			success = result.notificationSent
 				? 'Enrollment dropped and notification email sent.'
 				: 'Enrollment dropped. The notification email could not be sent.';
+			showSuccess(success);
+			await refreshAll();
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to drop enrollment. Please try again.');
 		} finally {
@@ -205,7 +221,16 @@
 	}
 
 	async function completeFollowUp() {
-		if (busy || editing || dirty || dropped || !finalized || !meetingSentAt || followUpCompletedAt)
+		if (
+			busy ||
+			editing ||
+			dirty ||
+			dropped ||
+			voided ||
+			!finalized ||
+			!meetingSentAt ||
+			followUpCompletedAt
+		)
 			return;
 		busy = true;
 		message = '';
@@ -222,10 +247,13 @@
 				return;
 			const result = await completeEnrollmentFollowUp({
 				userId: data.student.id,
-				enrollmentId: data.enrollment.id
+				enrollmentId: data.enrollment.id,
+				revision: data.enrollment.revision
 			});
 			followUpCompletedHere = result.followUpCompletedAt;
 			success = 'Academic follow-up completed.';
+			showSuccess(success);
+			await refreshAll();
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to complete follow-up. Please try again.');
 		} finally {
@@ -234,7 +262,16 @@
 	}
 
 	async function requestMeeting() {
-		if (busy || editing || dirty || dropped || !finalized || !hasGradeConcerns || meetingSentAt)
+		if (
+			busy ||
+			editing ||
+			dirty ||
+			dropped ||
+			voided ||
+			!finalized ||
+			!hasGradeConcerns ||
+			meetingSentAt
+		)
 			return;
 		busy = true;
 		message = '';
@@ -251,10 +288,13 @@
 				return;
 			const result = await sendEnrollmentMeetingRequest({
 				userId: data.student.id,
-				enrollmentId: data.enrollment.id
+				enrollmentId: data.enrollment.id,
+				revision: data.enrollment.revision
 			});
 			meetingSentHere = result.meetingRequestSentAt;
 			success = 'Meeting request email sent successfully.';
+			showSuccess(success);
+			await refreshAll();
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to send the meeting request. Please try again.');
 		} finally {
@@ -263,7 +303,7 @@
 	}
 
 	async function verifyClearance() {
-		if (busy || editing || dirty || dropped || !finalized || clearanceVerified) return;
+		if (busy || editing || dirty || dropped || voided || !finalized || clearanceVerified) return;
 		busy = true;
 		message = '';
 		success = '';
@@ -280,10 +320,13 @@
 				return;
 			await verifyEnrollmentClearance({
 				userId: data.student.id,
-				enrollmentId: data.enrollment.id
+				enrollmentId: data.enrollment.id,
+				revision: data.enrollment.revision
 			});
 			clearanceVerifiedHere = true;
 			success = 'Clearance verified successfully.';
+			showSuccess(success);
+			await refreshAll();
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to verify clearance. Please try again.');
 		} finally {
@@ -300,7 +343,7 @@
 			if (
 				!(await showYesNo({
 					title: 'Finalize grades?',
-					message: `Finalize all ${rows.length} subject grades for ${data.student.name}?${incompleteCount ? ` ${incompleteCount} ${incompleteCount === 1 ? 'subject has' : 'subjects have'} no grade and will be marked as INC (Incomplete).` : ''} Registrars will no longer be able to edit these grades. Administrators can still make corrections.`,
+					message: `Finalize all ${rows.length} subject grades for ${data.student.name}?${incompleteCount ? ` ${incompleteCount} ${incompleteCount === 1 ? 'subject has' : 'subjects have'} no grade and will be marked as INC (Incomplete).` : ''} Grades and enrollment details will be locked. An administrator must reopen the enrollment before making corrections.`,
 					warning: true,
 					yesText: 'Finalize grades',
 					noText: 'Cancel'
@@ -310,12 +353,15 @@
 			const result = await finalizeEnrollmentGrades({
 				userId: data.student.id,
 				enrollmentId: data.enrollment.id,
+				revision: data.enrollment.revision,
 				grades: rows.map((row) => ({ id: row.id, grade: row.savedGrade }))
 			});
 			finalizedHere = true;
 			success = result.notificationSent
 				? 'Grades finalized and notification email sent.'
 				: 'Grades finalized. The notification email could not be sent.';
+			showSuccess(success);
+			await refreshAll();
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to finalize grades. Please try again.');
 		} finally {
@@ -383,6 +429,8 @@
 		</dl>
 	</header>
 
+	<EnrollmentRecordActions {data} disabled={busy || editing || dirty} />
+
 	{#if !canEdit}
 		<p
 			class="flex items-center gap-3 rounded-xl border border-base-300 bg-base-100 p-4 text-sm text-base-content/70"
@@ -443,14 +491,14 @@
 					<button
 						type="button"
 						class="btn gap-2 border-base-300 btn-outline btn-sm"
-						disabled={busy || editing || dirty || dropped || !finalized}
+						disabled={busy || editing || dirty || dropped || voided || !finalized}
 						onclick={verifyClearance}
 					>
 						Verify clearance
 					</button>
 				{/if}
 			</div>
-			{#if !dropped && finalized && (hasGradeConcerns || meetingSentAt)}
+			{#if !voided && !dropped && finalized && (hasGradeConcerns || meetingSentAt)}
 				<div
 					class="flex flex-wrap items-center justify-between gap-3 border-t border-base-300/60 p-5 sm:px-6 md:border-t-0 md:border-l"
 				>
@@ -506,7 +554,7 @@
 				</div>
 			{/if}
 		</div>
-		{#if data.isCurrent && (dropped || (finalized && clearanceVerified))}
+		{#if !voided && data.isCurrent && (dropped || (finalized && clearanceVerified))}
 			<div
 				class="flex flex-wrap items-center justify-between gap-4 border-t border-base-300 bg-base-200/35 px-5 py-4 sm:px-6"
 			>
@@ -613,9 +661,7 @@
 		{/if}
 		{#if editing}
 			<p class="border-b border-base-300 bg-base-200/40 px-5 py-3 text-sm text-base-content/70">
-				{finalized
-					? 'Administrators can correct finalized grades. Enter a grade from 1 to 5, or leave blank for INC (Incomplete).'
-					: 'Enter a grade from 1 to 5. Decimals are allowed; leave blank for no grade.'}
+				Enter a grade from 1 to 5. Decimals are allowed; leave blank for no grade.
 			</p>
 		{/if}
 		{#if rows.length}

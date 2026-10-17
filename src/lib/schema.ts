@@ -195,7 +195,7 @@ export const enrollment = sqliteTable(
 		yearLevel: integer('year_level').notNull(),
 
 		status: text('status', {
-			enum: ['enrolled', 'dropped', 'completed']
+			enum: ['enrolled', 'dropped', 'completed', 'voided']
 		})
 			.default('enrolled')
 			.notNull(),
@@ -209,6 +209,8 @@ export const enrollment = sqliteTable(
 		// Claim a send without holding a database transaction open during email delivery.
 		meetingRequestStartedAt: integer('meeting_request_started_at', { mode: 'timestamp_ms' }),
 		droppedAt: integer('dropped_at', { mode: 'timestamp_ms' }),
+		// Optimistic lock for corrections, voiding, and reopening.
+		revision: integer('revision').notNull().default(0),
 
 		enrolledAt: integer('enrolled_at', { mode: 'timestamp_ms' })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
@@ -217,10 +219,13 @@ export const enrollment = sqliteTable(
 	(table) => [
 		uniqueIndex('enrollment_student_year_semester_unique')
 			.on(table.studentId, table.schoolYearStart, table.semester)
-			.where(sql`${table.status} <> 'dropped'`),
+			.where(sql`${table.status} NOT IN ('dropped', 'voided')`),
 		index('enrollment_term_idx').on(table.schoolYearStart, table.semester),
 		check('enrollment_year_range', sql`${table.yearLevel} > 0`),
-		check('enrollment_status_valid', sql`${table.status} IN ('enrolled', 'dropped', 'completed')`)
+		check(
+			'enrollment_status_valid',
+			sql`${table.status} IN ('enrolled', 'dropped', 'completed', 'voided')`
+		)
 	]
 );
 
@@ -236,6 +241,27 @@ export const enrollmentRelations = relations(enrollment, ({ one, many }) => ({
 	}),
 	subjects: many(enrollmentSubject)
 }));
+
+// Append-only snapshots retain removed subjects/grades and staff identity after account deletion.
+export const enrollmentAudit = sqliteTable(
+	'enrollment_audit',
+	{
+		id: uuid(),
+		enrollmentId: text('enrollment_id')
+			.notNull()
+			.references(() => enrollment.id, { onDelete: 'restrict' }),
+		actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
+		actorName: text('actor_name').notNull(),
+		action: text('action', { enum: ['corrected', 'voided', 'reopened'] }).notNull(),
+		reason: text('reason').notNull(),
+		before: text('before', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+		after: text('after', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+	},
+	(table) => [index('enrollment_audit_record_idx').on(table.enrollmentId, table.createdAt)]
+);
 
 export enum SubjectSource {
 	CURRICULUM = 'curriculum',

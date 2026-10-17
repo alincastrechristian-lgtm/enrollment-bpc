@@ -17,7 +17,7 @@ import {
 } from '#lib/schema.js';
 import type { db, Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const enrollStudentSchema = z.object({
@@ -69,7 +69,7 @@ export function getOutstandingEnrollmentSubjects(
 			and(
 				eq(enrollment.studentId, studentId),
 				eq(enrollment.finalizedGrades, true),
-				ne(enrollment.status, 'dropped')
+				notInArray(enrollment.status, ['dropped', 'voided'])
 			)
 		)
 		.orderBy(
@@ -91,7 +91,8 @@ export function getOutstandingEnrollmentSubjects(
 export function getEnrollmentContext(
 	database: typeof db | Transaction,
 	userId: string,
-	programCode: string
+	programCode: string,
+	existingCurriculumId?: string
 ) {
 	const record = database
 		.select({ student: studentData, user: { id: user.id, name: user.name, email: user.email } })
@@ -104,35 +105,46 @@ export function getEnrollmentContext(
 	// Enrollment uses the program's selected, published curriculum.
 	const owner = database.select().from(program).where(eq(program.code, programCode)).get();
 	if (!owner) error(404, 'Program not found.');
-	if (!owner.isActive) error(400, 'The program must be active before enrolling students.');
-	const restoring = record.student.currentEnrollmentId
+	const existing = existingCurriculumId
 		? database
-				.select({ curriculumId: enrollment.curriculumId })
-				.from(enrollment)
-				.innerJoin(curriculum, eq(curriculum.id, enrollment.curriculumId))
-				.where(
-					and(
-						eq(enrollment.id, record.student.currentEnrollmentId),
-						eq(enrollment.studentId, record.student.studentId),
-						eq(enrollment.status, 'dropped'),
-						eq(curriculum.programCode, owner.code)
-					)
-				)
+				.select()
+				.from(curriculum)
+				.where(and(eq(curriculum.id, existingCurriculumId), eq(curriculum.programCode, owner.code)))
 				.get()
 		: undefined;
-	if (!restoring && !owner.activeCurriculumId)
+	if (!owner.isActive && !existing)
+		error(400, 'The program must be active before enrolling students.');
+	const restoring =
+		!existingCurriculumId && record.student.currentEnrollmentId
+			? database
+					.select({ curriculumId: enrollment.curriculumId })
+					.from(enrollment)
+					.innerJoin(curriculum, eq(curriculum.id, enrollment.curriculumId))
+					.where(
+						and(
+							eq(enrollment.id, record.student.currentEnrollmentId),
+							eq(enrollment.studentId, record.student.studentId),
+							eq(enrollment.status, 'dropped'),
+							eq(curriculum.programCode, owner.code)
+						)
+					)
+					.get()
+			: undefined;
+	if (!existing && !restoring && !owner.activeCurriculumId)
 		error(404, 'Select an active curriculum for this program before enrolling students.');
 
 	const selectedCurriculum = database
 		.select()
 		.from(curriculum)
-		.where(eq(curriculum.id, restoring?.curriculumId ?? owner.activeCurriculumId!))
+		.where(eq(curriculum.id, existing?.id ?? restoring?.curriculumId ?? owner.activeCurriculumId!))
 		.get();
 	if (
 		!selectedCurriculum ||
 		selectedCurriculum.programCode !== owner.code ||
 		selectedCurriculum.publishedAt === null ||
-		(!restoring && (selectedCurriculum.archivedAt !== null || !selectedCurriculum.isActive))
+		(!existing &&
+			!restoring &&
+			(selectedCurriculum.archivedAt !== null || !selectedCurriculum.isActive))
 	) {
 		error(409, 'The active curriculum is unavailable. Refresh and try again.');
 	}
@@ -156,7 +168,7 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 				eq(enrollment.studentId, context.student.studentId),
 				eq(enrollment.schoolYearStart, data.schoolYearStart),
 				eq(enrollment.semester, data.semester),
-				ne(enrollment.status, 'dropped')
+				notInArray(enrollment.status, ['dropped', 'voided'])
 			)
 		)
 		.get();
@@ -198,6 +210,15 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 		)
 			error(400, 'Select a term after the current enrollment.');
 	}
+	return { ...context, subjects: getEnrollmentSubjects(database, data, selectedCurriculum) };
+}
+
+// Corrections and new enrollments share catalog validation and subject classification.
+export function getEnrollmentSubjects(
+	database: typeof db | Transaction,
+	data: EnrollStudentInput,
+	selectedCurriculum: typeof curriculum.$inferSelect
+) {
 	if (
 		data.yearLevel > selectedCurriculum.yearLevels ||
 		data.semester > selectedCurriculum.semesters
@@ -251,5 +272,5 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 		};
 	});
 
-	return { ...context, subjects };
+	return subjects;
 }

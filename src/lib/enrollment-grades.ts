@@ -8,7 +8,7 @@ export function getEnrollmentLockReason(
 	> | null,
 	failedCount: number
 ) {
-	if (current?.status === 'dropped') return null;
+	if (current?.status === 'dropped' || current?.status === 'voided') return null;
 	if (current && (!current.finalizedGrades || !current.submittedClearance))
 		return 'Finalize grades and verify clearance for the current enrollment before enrolling this student again.';
 	if (current && failedCount > 0 && !current.followUpCompletedAt)

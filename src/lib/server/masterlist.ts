@@ -3,11 +3,12 @@ import { curriculum, enrollment, program, studentData, user } from '#lib/schema.
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
-import { and, asc, count, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { RequestEvent } from '@sveltejs/kit';
 
 export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'url'>) {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	const eligibleEnrollment = inArray(enrollment.status, ['enrolled', 'completed']);
 
 	function integerParameter(key: string, label: string, fallback?: number) {
 		const raw = url.searchParams.get(key)?.trim();
@@ -20,7 +21,7 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 	const terms = db
 		.selectDistinct({ schoolYearStart: enrollment.schoolYearStart, semester: enrollment.semester })
 		.from(enrollment)
-		.where(ne(enrollment.status, 'dropped'))
+		.where(eligibleEnrollment)
 		.orderBy(desc(enrollment.schoolYearStart), desc(enrollment.semester))
 		.all();
 	const schoolYearStart = integerParameter(
@@ -53,6 +54,7 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 			...db
 				.selectDistinct({ value: enrollment.section })
 				.from(enrollment)
+				.where(eligibleEnrollment)
 				.all()
 				.map(({ value }) => value)
 		])
@@ -60,7 +62,7 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 	if (section && !sections.includes(section)) error(400, 'Choose a valid section.');
 
 	// Historical rosters use the enrollment's class, not the student's current enrollment pointer.
-	// One semester and the non-dropped term constraint give one row per student.
+	// One semester and the valid-term constraint give one row per student.
 	const roster = db.$with('masterlist_rows').as(
 		db
 			.select({
@@ -83,7 +85,7 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 			.where(
 				and(
 					eq(user.role, Role.STUDENT),
-					ne(enrollment.status, 'dropped'),
+					eligibleEnrollment,
 					eq(enrollment.schoolYearStart, schoolYearStart),
 					eq(enrollment.semester, semester),
 					programCode ? eq(curriculum.programCode, programCode) : undefined,
@@ -127,6 +129,7 @@ export function getMasterlist({ locals, url }: Pick<RequestEvent, 'locals' | 'ur
 					...db
 						.selectDistinct({ value: enrollment.yearLevel })
 						.from(enrollment)
+						.where(eligibleEnrollment)
 						.all()
 						.map(({ value }) => value)
 				])

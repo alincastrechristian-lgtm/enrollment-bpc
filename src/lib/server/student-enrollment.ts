@@ -6,16 +6,13 @@ import { and, eq } from 'drizzle-orm';
 
 type StudentEnrollmentRecord = ReturnType<typeof getStudentEnrollment>;
 
-export function getEnrollmentGradeLockReason(
-	record: StudentEnrollmentRecord,
-	role: string | null | undefined
-) {
-	if (record.enrollment.status === 'dropped')
-		return 'Dropped enrollments cannot be edited or finalized.';
+export function getEnrollmentGradeLockReason(record: StudentEnrollmentRecord) {
+	if (record.enrollment.status === 'dropped' || record.enrollment.status === 'voided')
+		return 'Dropped or voided enrollments cannot be edited or finalized.';
 	if (!record.user.setupComplete)
 		return 'The student must complete account setup before grades can be edited or finalized.';
-	if (record.enrollment.finalizedGrades && role !== Role.ADMIN)
-		return 'Grades are finalized. Only administrators can edit them.';
+	if (record.enrollment.finalizedGrades)
+		return 'Grades are finalized. An administrator must reopen this enrollment before making corrections.';
 	return null;
 }
 
@@ -24,7 +21,7 @@ export function canEditEnrollmentGrades(
 	record: StudentEnrollmentRecord
 ) {
 	return (
-		!getEnrollmentGradeLockReason(record, role) &&
+		!getEnrollmentGradeLockReason(record) &&
 		(role === Role.ADMIN ||
 			(role === Role.REGISTRAR && record.student.currentEnrollmentId === record.enrollment.id))
 	);

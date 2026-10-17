@@ -242,14 +242,35 @@ function fixture(t) {
 	deps['#lib/server/notifications.js'] = load('src/lib/server/notifications.ts', deps);
 	deps['#lib/server/enrollment.js'] = load('src/lib/server/enrollment.ts', deps);
 	deps['#lib/server/student-enrollment.js'] = load('src/lib/server/student-enrollment.ts', deps);
+	deps['#lib/server/enrollment-editor.js'] = load('src/lib/server/enrollment-editor.ts', {
+		...deps,
+		'./student-enrollment': deps['#lib/server/student-enrollment.js'],
+		'./enrollment-corrections': load('src/lib/server/enrollment-corrections.ts', {
+			...deps,
+			'./enrollment': deps['#lib/server/enrollment.js'],
+			'./student-enrollment': deps['#lib/server/student-enrollment.js'],
+			'./email-templates': emailTemplates,
+			'./notifications': deps['#lib/server/notifications.js']
+		})
+	});
 	const commands = load('src/lib/actions/user.remote.ts', deps);
 	const gradeCommands = load('src/lib/actions/grades.remote.ts', deps);
 	return {
 		sqlite,
 		db,
 		state,
+		// These lifecycle tests reload the displayed revision between actions.
+		reference: (userId, enrollmentId) => ({
+			userId,
+			enrollmentId,
+			get revision() {
+				return sqlite.prepare('SELECT revision FROM enrollment WHERE id=?').get(enrollmentId)
+					.revision;
+			}
+		}),
 		...commands,
 		...gradeCommands,
+		pageLoad: load('src/routes/user/students/[userId]/enroll/+page.server.ts', deps).load,
 		enrollmentPage: (userId) =>
 			load('src/routes/user/students/[userId]/enroll/+page.server.ts', deps).load({
 				locals: { user: { id: 'caller', role: state.role }, session: {} },
@@ -459,7 +480,7 @@ test('reenrollment with failed grades requires completed Registrar follow-up for
 		f.state.role = role;
 		const created = await f.createStudent({ ...personal, email: `failed-${role}@example.com` });
 		const first = await f.enrollStudent(f.input(created));
-		const reference = { userId: created.userId, enrollmentId: first.enrollmentId };
+		const reference = f.reference(created.userId, first.enrollmentId);
 		f.sqlite.prepare('UPDATE user SET setup_complete=1 WHERE id=?').run(created.userId);
 		f.sqlite
 			.prepare(
@@ -526,7 +547,7 @@ test('staff can drop and reenroll in the same term without losing the dropped re
 		);
 		const created = await f.createStudent({ ...personal, email: role + '@example.com' });
 		const first = await f.enrollStudent(f.input(created, { section: 'C' }));
-		const reference = { userId: created.userId, enrollmentId: first.enrollmentId };
+		const reference = f.reference(created.userId, first.enrollmentId);
 		f.sqlite.prepare('UPDATE enrollment SET finalized_grades=1 WHERE id=?').run(first.enrollmentId);
 		f.sqlite
 			.prepare('UPDATE enrollment_subject SET grade=5 WHERE enrollment_id=?')
@@ -624,7 +645,7 @@ test('staff complete an existing follow-up once without changing grades, clearan
 	const f = fixture(t);
 	const created = await f.createStudent(personal);
 	const first = await f.enrollStudent(f.input(created));
-	const reference = { userId: created.userId, enrollmentId: first.enrollmentId };
+	const reference = f.reference(created.userId, first.enrollmentId);
 	await assert.rejects(f.completeEnrollmentFollowUp(reference), status(409));
 	for (const role of [Role.STUDENT, null]) {
 		f.state.role = role;
@@ -662,7 +683,7 @@ test('clearance verification enforces staff access, ownership and grade finaliza
 	const f = fixture(t);
 	const created = await f.createStudent(personal);
 	const first = await f.enrollStudent(f.input(created));
-	const reference = { userId: created.userId, enrollmentId: first.enrollmentId };
+	const reference = f.reference(created.userId, first.enrollmentId);
 	await assert.rejects(f.verifyEnrollmentClearance(reference), status(409));
 	assert.equal(f.db.select().from(schema.enrollment).get().submittedClearance, false);
 	await assert.rejects(
@@ -700,8 +721,7 @@ test('grade finalization sends email after commit, avoids duplicate sends, and s
 		const created = await f.createStudent({ ...personal, email: role + '@example.com' });
 		const first = await f.enrollStudent(f.input(created));
 		const reference = {
-			userId: created.userId,
-			enrollmentId: first.enrollmentId,
+			...f.reference(created.userId, first.enrollmentId),
 			grades: f.sqlite
 				.prepare('SELECT id,grade FROM enrollment_subject WHERE enrollment_id=?')
 				.all(first.enrollmentId)
@@ -764,7 +784,7 @@ test('meeting requests validate concerns and ownership, retry failed email, and 
 	const f = fixture(t);
 	const created = await f.createStudent(personal);
 	const first = await f.enrollStudent(f.input(created));
-	const reference = { userId: created.userId, enrollmentId: first.enrollmentId };
+	const reference = f.reference(created.userId, first.enrollmentId);
 	await assert.rejects(f.sendEnrollmentMeetingRequest(reference), status(409));
 	for (const role of [Role.STUDENT, null]) {
 		f.state.role = role;
@@ -817,6 +837,8 @@ test('meeting requests validate concerns and ownership, retry failed email, and 
 	assert.equal(f.state.meetingEmails.length, 3);
 	// The additive migration and rollback preserve student, enrollment and grade records.
 	const grades = f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all();
+	f.sqlite.exec(readFileSync('drizzle/rollback/0030_enrollment_corrections.sql', 'utf8'));
+	f.sqlite.exec(readFileSync('drizzle/rollback/0029_registrar_deletion.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0028_notifications.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0027_complete_enrollment_follow_up.sql', 'utf8'));
 	f.sqlite.exec(readFileSync('drizzle/rollback/0026_enrollment_lifecycle.sql', 'utf8'));
@@ -998,20 +1020,7 @@ test('outstanding-subject suggestions use latest finalized results, deduplicate 
 test('enrollment page resolves existing student, program selection, and active curriculum', async (t) => {
 	const f = fixture(t);
 	const created = await f.createStudent(personal);
-	const { load: page } = load('src/routes/user/students/[userId]/enroll/+page.server.ts', {
-		'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts'),
-		'#lib/Roles.js': { Role },
-		'#lib/schema.js': schema,
-		'#lib/server/auth.js': { validateUser },
-		'#lib/server/db/index.js': { db: f.db },
-		'#lib/server/enrollment.js': load('src/lib/server/enrollment.ts', {
-			'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts'),
-			'#lib/Roles.js': { Role },
-			'#lib/schema.js': schema,
-			'@sveltejs/kit': { error }
-		}),
-		'@sveltejs/kit': { error }
-	});
+	const page = f.pageLoad;
 	const event = {
 		locals: { user: { id: 'caller', role: Role.REGISTRAR }, session: {} },
 		params: { userId: created.userId },

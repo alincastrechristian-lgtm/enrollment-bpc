@@ -1,6 +1,4 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { Role } from '#lib/Roles.js';
-import { eq } from 'drizzle-orm';
 import * as schema from '../../schema.ts';
 
 const programs = [
@@ -87,28 +85,28 @@ const curricula = [
 	}
 ] as const;
 
-const names = [
-	'Ana Santos',
-	'Miguel Reyes',
-	'Sofia Cruz',
-	'Gabriel Garcia',
-	'Isabella Ramos',
-	'Luis Mendoza',
-	'Camila Torres',
-	'Daniel Flores',
-	'Maria Rivera',
-	'Joshua Aquino',
-	'Andrea Bautista',
-	'Paolo Navarro',
-	'Nicole Villanueva',
-	'Carlo Dela Cruz',
-	'Angela Castillo',
-	'Rafael Lim',
-	'Bianca Perez',
-	'Marco Gonzales',
-	'Patricia Hernandez',
-	'Adrian Lopez'
-];
+// const names = [
+// 	'Ana Santos',
+// 	'Miguel Reyes',
+// 	'Sofia Cruz',
+// 	'Gabriel Garcia',
+// 	'Isabella Ramos',
+// 	'Luis Mendoza',
+// 	'Camila Torres',
+// 	'Daniel Flores',
+// 	'Maria Rivera',
+// 	'Joshua Aquino',
+// 	'Andrea Bautista',
+// 	'Paolo Navarro',
+// 	'Nicole Villanueva',
+// 	'Carlo Dela Cruz',
+// 	'Angela Castillo',
+// 	'Rafael Lim',
+// 	'Bianca Perez',
+// 	'Marco Gonzales',
+// 	'Patricia Hernandez',
+// 	'Adrian Lopez'
+// ];
 
 export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 	return db.transaction((tx) => {
@@ -175,27 +173,27 @@ export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 					.run();
 			}
 		}
-		for (const [index, name] of names.entries()) {
-			const email = 'student.seed.' + (index + 1) + '@example.com';
-			const id = 'seed-student-user-' + (index + 1);
-			tx.insert(schema.user)
-				.values({ id, name, email, role: Role.STUDENT })
-				.onConflictDoNothing()
-				.run();
-			const existing = tx.select().from(schema.user).where(eq(schema.user.email, email)).get();
-			if (!existing || existing.role !== Role.STUDENT) continue;
-			created.students += tx
-				.insert(schema.studentData)
-				.values({
-					studentId: 'SEED-2026-' + String(index + 1).padStart(6, '0'),
-					userId: existing.id,
-					contactNumber: '0917' + String(1000000 + index),
-					address: 'City of Malolos, Bulacan'
-				})
-				.onConflictDoNothing()
-				.returning()
-				.all().length;
-		}
+		// for (const [index, name] of names.entries()) {
+		// 	const email = 'student.seed.' + (index + 1) + '@example.com';
+		// 	const id = 'seed-student-user-' + (index + 1);
+		// 	tx.insert(schema.user)
+		// 		.values({ id, name, email, role: Role.STUDENT })
+		// 		.onConflictDoNothing()
+		// 		.run();
+		// 	const existing = tx.select().from(schema.user).where(eq(schema.user.email, email)).get();
+		// 	if (!existing || existing.role !== Role.STUDENT) continue;
+		// 	created.students += tx
+		// 		.insert(schema.studentData)
+		// 		.values({
+		// 			studentId: 'SEED-2026-' + String(index + 1).padStart(6, '0'),
+		// 			userId: existing.id,
+		// 			contactNumber: '0917' + String(1000000 + index),
+		// 			address: 'City of Malolos, Bulacan'
+		// 		})
+		// 		.onConflictDoNothing()
+		// 		.returning()
+		// 		.all().length;
+		// }
 		return created;
 	});
 }

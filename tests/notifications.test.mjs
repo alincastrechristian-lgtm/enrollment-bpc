@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { error, isHttpError } from '@sveltejs/kit';
 import ts from 'typescript';
+import { migrationConfigThrough } from './migration-config.mjs';
 
 const require = createRequire(import.meta.url);
 function load(file, dependencies = {}) {
@@ -29,11 +30,16 @@ const viewer = (id, role) => ({ id, role });
 const admin = viewer('a', 'admin');
 const registrar = viewer('r1', 'registrar');
 const student = viewer('s1', 'student');
-function fixture(t) {
+function fixture(t, lastMigration) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
 	const db = drizzle(sqlite, { schema });
-	migrate(db, { migrationsFolder: 'drizzle' });
+	migrate(
+		db,
+		lastMigration === undefined
+			? { migrationsFolder: 'drizzle' }
+			: migrationConfigThrough(t, lastMigration)
+	);
 	sqlite.pragma('foreign_keys=ON');
 	for (const [id, role] of [
 		['a', 'admin'],
@@ -151,7 +157,19 @@ test('email metadata covers all notification types and never contains password r
 			code: 'BSIS'
 		}),
 		templates.createMeetingRequestEmail('Student', 2026, 1),
-		templates.createEnrollmentDroppedEmail('Student', 2026, 1)
+		templates.createEnrollmentDroppedEmail('Student', 2026, 1),
+		...['corrected', 'voided', 'reopened'].map((kind) =>
+			templates.createEnrollmentChangeEmail({
+				kind,
+				name: 'Student',
+				schoolYearStart: 2026,
+				semester: 1,
+				programCode: 'BSIS',
+				yearLevel: 1,
+				section: 'A',
+				reason: 'Incorrect program selected'
+			})
+		)
 	];
 	assert.deepEqual(
 		messages.map((m) => m.notification.type),
@@ -222,7 +240,7 @@ test('auth email events persist safe notifications with the authenticated staff 
 });
 
 test('notification migration rolls back and reapplies without changing accounts', (t) => {
-	const f = fixture(t);
+	const f = fixture(t, 28);
 	const before = f.db.select().from(schema.user).all();
 	f.sqlite.exec(readFileSync('drizzle/rollback/0028_notifications.sql', 'utf8'));
 	assert.deepEqual(f.db.select().from(schema.user).all(), before);

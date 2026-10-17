@@ -32,6 +32,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'ENROLLMENT DETAILS',
 		pageDescription: 'Review enrollment subjects and grades.'
 	},
+	'/user/students/[userId]/enrollments/[enrollmentId]/edit': {
+		pageTitle: 'CORRECT ENROLLMENT',
+		pageDescription: 'Review academic details and subjects, then save corrections with a reason.'
+	},
 	'/user/enrollment': {
 		pageTitle: 'ENROLLMENT',
 		pageDescription: 'Review your enrollment history, subjects, and grades.'
@@ -96,11 +100,18 @@ export const load: LayoutLoad = ({ url, route, params, data }) => {
 	return {
 		...data,
 		backHref:
-			(route.id === '/user/students/[userId]/enrollments/[enrollmentId]' ||
-				route.id === '/user/students/[userId]/enroll') &&
-			params.userId
-				? resolve('/user/students/[userId]', { userId: params.userId })
-				: undefined,
+			route.id === '/user/students/[userId]/enrollments/[enrollmentId]/edit' &&
+			params.userId &&
+			params.enrollmentId
+				? resolve('/user/students/[userId]/enrollments/[enrollmentId]', {
+						userId: params.userId,
+						enrollmentId: params.enrollmentId
+					})
+				: (route.id === '/user/students/[userId]/enrollments/[enrollmentId]' ||
+							route.id === '/user/students/[userId]/enroll') &&
+					  params.userId
+					? resolve('/user/students/[userId]', { userId: params.userId })
+					: undefined,
 		pageTitle: meta.pageTitle,
 		pageDescription: meta.pageDescription
 	};

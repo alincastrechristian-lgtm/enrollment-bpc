@@ -26,12 +26,13 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			window.attemptNavigation=(url)=>{let cancelled=false;for(const hook of hooks)hook({to:{url:new URL(url,window.location.href)},willUnload:false,cancel:()=>cancelled=true});return !cancelled;};
 			export async function goto(url){const target=String(url);if(window.failNavigation)throw new Error('Navigation failed');if(window.attemptNavigation(target)){window.navigation.push(target);if(target.endsWith('/students/u'))window.show('student');}}
 			export async function refreshAll(){}`,
-		'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';export async function revokeAccountSessions(){throw Error('Unexpected session revocation');}export async function deleteStudent(){throw Error('Unexpected deletion');}export async function setRegistrarDisabled(){throw Error('Unexpected access change');}window.accountCalls=[];window.mailCalls=[];window.questions=[];window.messages=[];window.confirm=true;
+		'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';export async function deleteRegistrar(){throw Error('Unexpected registrar deletion');}export async function revokeAccountSessions(){throw Error('Unexpected session revocation');}export async function deleteStudent(){throw Error('Unexpected deletion');}export async function setRegistrarDisabled(){throw Error('Unexpected access change');}window.accountCalls=[];window.mailCalls=[];window.questions=[];window.messages=[];window.confirm=true;
 			export async function enrollStudent(data){window.accountCalls.push(data);if(window.duplicateEmail)throw new HandledHttpError({status:409,message:'A student account already exists with this email.'});if(window.failAccount)throw new HandledHttpError({status:409,message:'Enrollment changed'});if(window.deferAccount)await new Promise(resolve=>window.finishAccount=resolve);return {success:true,userId:'u',studentId:'MA-202610-000001',enrollmentId:'current',notificationSent:true,invitationSent:window.invitationSent!==false};}
 			export async function resendMagicLink(data){window.mailCalls.push(data);if(window.failMail)throw new Error('Mail failed');}
 			export async function createStudent(data){(window.createdStudents??=[]).push(data);return {userId:'u',invitationSent:true};}export async function createRegistrar(){throw new HandledHttpError({status:409,message:window.existingRole==='registrar'?'A registrar account already exists with this email.':'A student account already exists with this email.'});}export async function deleteApplicant(){};export async function createApplicant(){};export async function updateApplicant(){}`,
 		'popup.js': `export async function showYesNo(props){window.questions.push(props);return window.confirm;}
 			export function showLoading(){};export function showError(props){window.messages.push({type:'error',...(typeof props==='string'?{message:props}:props)});}export function showSuccess(message){window.messages.push({type:'success',message});}`,
+		'enrollment-actions.js': `export async function correctEnrollment(){throw Error('Unexpected correction');}export async function voidEnrollment(){throw Error('Unexpected void');}export async function reopenEnrollment(){throw Error('Unexpected reopen');}`,
 		'grades.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.gradeCalls=[];window.finalizeCalls=[];
 			export async function dropEnrollment(){return {success:true,status:'dropped',notificationSent:true};}
 			export async function completeEnrollmentFollowUp(){return {success:true,followUpCompletedAt:new Date()};}
@@ -60,7 +61,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			const curriculum={id:'c',name:'2026 Curriculum',programCode:'BSIS',program,yearLevels:2,semesters:2,publishedAt:new Date(),archivedAt:null,isActive:true};
 			const entries=[{id:'cs1',subjectId:'s1',subjectCode:'SNAP101',subjectName:'Published Introduction',yearLevel:1,semester:1,units:3},{id:'cs2',subjectId:'s2',subjectCode:'SNAP102',subjectName:'Published Programming',yearLevel:1,semester:2,units:4},{id:'cs3',subjectId:'s3',subjectCode:'SNAP201',subjectName:'Published Databases',yearLevel:2,semester:1,units:2}];
 			const subjects=[{id:'s1',code:'LIVE101',name:'Changed Introduction',isActive:true},{id:'s2',code:'LIVE102',name:'Other term',isActive:true},{id:'s3',code:'LIVE201',name:'Databases',isActive:true},{id:'s4',code:'EXTRA',name:'Extra subject',isActive:true}];
-			const current={id:'current',studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'enrolled',finalizedGrades:false,enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
+			const current={id:'current',revision:0,studentId:'MA-202610-000001',curriculumId:'c',curriculum,section:'B',schoolYearStart:2025,semester:1,yearLevel:2,status:'enrolled',finalizedGrades:false,enrolledAt:new Date(),subjects:[{id:'es1',subjectCode:'SNAP201',subjectName:'Published Databases',source:'curriculum',units:0.5,grade:null},{id:'es2',subjectCode:'LIVE101',subjectName:'Changed Introduction',source:'extra',units:1.25,grade:1.25}]};
 			const historical={...current,curriculumId:'old-curriculum',curriculum:{...curriculum,id:'old-curriculum',programCode:'BSIT',program:{...program,id:'it',code:'BSIT',name:'Information Technology'}},id:'old',schoolYearStart:2024,semester:2,yearLevel:1,section:'A',status:'withdrawn',subjects:[{id:'old-subject',subjectCode:'OLD101',subjectName:'Historical subject',source:'curriculum',units:1.5,grade:null}]};
 			const student={id:'u',name:applicant.name,email:applicant.email,image:null,emailVerified:false,setupComplete:false,banned:false,banReason:null,createdAt:new Date(),updatedAt:new Date(),applicant,studentData:{studentId:'MA-202610-000001',contactNumber:applicant.contactNumber,address:applicant.address,currentEnrollmentId:'current',currentEnrollment:current,enrollments:[current,historical]}};
 		</script>
@@ -71,12 +72,12 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			{:else if mode==='my-enrollment'}<MyEnrollment data={{record:{studentId:student.studentData.studentId,currentEnrollmentId:'current',enrollments:[{...current,finalizedGrades:true},historical]}}} />
 			{:else if mode==='my-enrollment-empty'}<MyEnrollment data={{record:null}} />
 			{:else if mode==='student-inc'}<Student data={{student:{...student,studentData:{...student.studentData,enrollments:[{...current,finalizedGrades:true},historical]}}}} />
-			{:else if mode==='grade-pending-account'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:false},enrollment:current,isCurrent:true,gradeLockReason:'The student must complete account setup before grades can be edited or finalized.',canEdit:false,canEditFinalized:false,canFinalize:false}} />
-			{:else if mode==='grade-finalized'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:{...current,finalizedGrades:true,subjects:current.subjects},isCurrent:true,gradeLockReason:'Grades are finalized. Only administrators can edit them.',canEdit:false,canEditFinalized:false,canFinalize:false}} />
-			{:else if mode==='grade-empty'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:{...current,subjects:[]},isCurrent:true,gradeLockReason:null,canEdit:true,canEditFinalized:true,canFinalize:true}} />
-			{:else if mode==='grade-current'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:current,isCurrent:true,gradeLockReason:null,canEdit:true,canEditFinalized:false,canFinalize:true}} />
-			{:else if mode==='grade-past-admin'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:historical,isCurrent:false,gradeLockReason:null,canEdit:true,canEditFinalized:true,canFinalize:true}} />
-			{:else if mode==='grade-past'}<EnrollmentDetails data={{student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:historical,isCurrent:false,gradeLockReason:null,canEdit:false,canEditFinalized:false,canFinalize:false}} />
+			{:else if mode==='grade-pending-account'}<EnrollmentDetails data={{audit:[],canCorrect:false,canVoid:false,canReopen:false,student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:false},enrollment:current,isCurrent:true,gradeLockReason:'The student must complete account setup before grades can be edited or finalized.',canEdit:false,canEditFinalized:false,canFinalize:false}} />
+			{:else if mode==='grade-finalized'}<EnrollmentDetails data={{audit:[],canCorrect:false,canVoid:false,canReopen:false,student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:{...current,finalizedGrades:true,subjects:current.subjects},isCurrent:true,gradeLockReason:'Grades are finalized. An administrator must reopen this enrollment before making corrections.',canEdit:false,canEditFinalized:false,canFinalize:false}} />
+			{:else if mode==='grade-empty'}<EnrollmentDetails data={{audit:[],canCorrect:false,canVoid:false,canReopen:false,student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:{...current,subjects:[]},isCurrent:true,gradeLockReason:null,canEdit:true,canEditFinalized:false,canFinalize:true}} />
+			{:else if mode==='grade-current'}<EnrollmentDetails data={{audit:[],canCorrect:false,canVoid:false,canReopen:false,student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:current,isCurrent:true,gradeLockReason:null,canEdit:true,canEditFinalized:false,canFinalize:true}} />
+			{:else if mode==='grade-past-admin'}<EnrollmentDetails data={{audit:[],canCorrect:false,canVoid:false,canReopen:false,student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:historical,isCurrent:false,gradeLockReason:null,canEdit:true,canEditFinalized:false,canFinalize:true}} />
+			{:else if mode==='grade-past'}<EnrollmentDetails data={{audit:[],canCorrect:false,canVoid:false,canReopen:false,student:{id:'u',name:student.name,email:student.email,studentId:student.studentData.studentId,setupComplete:true},enrollment:historical,isCurrent:false,gradeLockReason:null,canEdit:false,canEditFinalized:false,canFinalize:false}} />
 			{:else if mode==='empty-student'}<Student data={{student:{...student,applicant:null,studentData:null}}} />
 			{:else if mode==='registrars'}<Registrars data={{users:[],total:0,search:'',status:'all',filters:{}}} />
 			{:else if mode==='list'}<Students data={{users:[student],total:1,search:'',status:'all',filters:{}}} />
@@ -99,6 +100,10 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 					{ find: '#lib/auth-client.js', replacement: path.join(root, 'auth-client.js') },
 					{ find: '#lib/actions/user.remote.js', replacement: path.join(root, 'actions.js') },
 					{ find: '#lib/actions/grades.remote.js', replacement: path.join(root, 'grades.js') },
+					{
+						find: '#lib/actions/enrollment.remote.js',
+						replacement: path.join(root, 'enrollment-actions.js')
+					},
 					{ find: '#lib/actions/applicant.remote.js', replacement: path.join(root, 'actions.js') },
 					{
 						find: '#lib/components/Popup/Popup.svelte.js',
@@ -201,13 +206,14 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			window.accountCalls = [];
 		});
 		await page.getByRole('button', { name: 'Enroll Student', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Enrolling...', exact: true })).toBeDisabled();
+		await expect(page.getByRole('button', { name: 'Saving...', exact: true })).toBeDisabled();
 		await expect.poll(() => page.evaluate(() => window.accountCalls.length)).toBe(1);
 		assert.deepEqual(await page.evaluate(() => window.accountCalls[0]), {
 			userId: 'u',
 			programCode: 'BSIS',
 			curriculumId: 'c',
 			currentEnrollmentId: null,
+			acknowledgeGradeConcerns: false,
 			section: 'B',
 			schoolYearStart: 2025,
 			yearLevel: 2,
@@ -312,7 +318,10 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toBeDisabled();
 		await page.evaluate(() => window.show('grade-finalized'));
 		await expect(
-			page.getByText('Grades are finalized. Only administrators can edit them.', { exact: false })
+			page.getByText(
+				'Grades are finalized. An administrator must reopen this enrollment before making corrections.',
+				{ exact: false }
+			)
 		).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toHaveCount(0);
@@ -369,6 +378,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		assert.deepEqual(await page.evaluate(() => window.gradeCalls[1]), {
 			userId: 'u',
 			enrollmentId: 'current',
+			revision: 0,
 			grades: [
 				{ id: 'es1', grade: 2.25, originalGrade: null },
 				{ id: 'es2', grade: null, originalGrade: 1.25 }
@@ -442,7 +452,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		assert.equal(await page.evaluate(() => window.questions.at(-1).warning), true);
 		assert.match(
 			await page.evaluate(() => window.questions.at(-1).message),
-			/Administrators can still make corrections/
+			/administrator must reopen/
 		);
 		await page.evaluate(() => {
 			window.confirm = true;
@@ -464,33 +474,20 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		assert.deepEqual(await page.evaluate(() => window.finalizeCalls[1]), {
 			userId: 'u',
 			enrollmentId: 'old',
+			revision: 0,
 			grades: [{ id: 'old-subject', grade: 1.75 }]
 		});
 		await page.evaluate(() => window.finishFinalize());
-		await expect(page.getByRole('status')).toHaveText('Grades finalized successfully.');
+		await expect(page.getByRole('status')).toHaveText(
+			'Grades finalized and notification email sent.'
+		);
 		await expect(page.getByText('Grades finalized', { exact: true })).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toBeEnabled();
+		// Finalization locks admin grade edits too; reopening is covered by correction tests.
+		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toHaveCount(0);
-		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
-		const finalizedGrade = page.getByLabel('Grade for OLD101', { exact: true });
-		await finalizedGrade.fill('');
-		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
-		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
-		await expect(page.getByText('Grades finalized', { exact: true })).toBeVisible();
-		assert.deepEqual(await page.evaluate(() => window.gradeCalls.at(-1).grades), [
-			{ id: 'old-subject', grade: null, originalGrade: 1.75 }
-		]);
-		await page.getByRole('button', { name: 'Edit grades', exact: true }).click();
-		await expect(finalizedGrade).toHaveValue('');
-		await expect(finalizedGrade).toHaveAttribute('placeholder', 'INC');
-		await finalizedGrade.fill('2.25');
-		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
-		await expect(page.getByRole('status')).toHaveText('Grades saved successfully.');
-		await expect(page.getByRole('cell', { name: '2.25', exact: true })).toBeVisible();
-		await expect(page.getByText('Grades finalized', { exact: true })).toBeVisible();
-		assert.deepEqual(await page.evaluate(() => window.gradeCalls.at(-1).grades), [
-			{ id: 'old-subject', grade: 2.25, originalGrade: null }
-		]);
+		await expect(
+			page.getByText('An administrator must reopen this enrollment', { exact: false })
+		).toBeVisible();
 		await page.getByRole('button', { name: 'Back', exact: true }).click();
 		await page.getByRole('button', { name: 'Resend setup link', exact: true }).click();
 		assert.deepEqual(await page.evaluate(() => window.mailCalls), [

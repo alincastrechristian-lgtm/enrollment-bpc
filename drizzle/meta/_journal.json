@@ -211,6 +211,13 @@
       "when": 1792140954451,
       "tag": "0029_registrar_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1792194219130,
+      "tag": "0030_smiling_microbe",
+      "breakpoints": true
     }
   ]
 }
