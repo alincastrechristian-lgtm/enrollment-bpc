@@ -17,7 +17,7 @@ export function createCORPdf(
 	return new Promise((resolve, reject) => {
 		const doc = new PDFDocument({
 			size: 'LETTER',
-			margins: { top: 42, bottom: 60, left: 42, right: 42 },
+			margins: { top: 36, bottom: 60, left: 42, right: 42 },
 			bufferPages: true,
 			info: {
 				Title: `Certificate of Registration - ${record.student.studentId}`,
@@ -34,15 +34,15 @@ export function createCORPdf(
 			const left = 42;
 			const width = doc.page.width - left * 2;
 			const bottom = doc.page.height - 60;
-			const lineHeight = 15;
-			let y = 42;
+			const lineHeight = 13;
+			let y = 36;
 			const text = (
 				value: string,
 				x: number,
 				top: number,
 				maxWidth: number,
 				strong = false,
-				size = 10,
+				size = 9.5,
 				align: 'left' | 'center' | 'right' = 'left'
 			) => {
 				doc
@@ -52,8 +52,8 @@ export function createCORPdf(
 					.text(value, x, top, { width: maxWidth, lineBreak: false, align });
 			};
 			// Wrap long tokens too, so names, email addresses, and subject codes are never clipped.
-			function wrap(value: string, maxWidth: number, strong = false) {
-				doc.font(strong ? 'COR-Bold' : 'COR-Regular').fontSize(10);
+			function wrap(value: string, maxWidth: number, strong = false, size = 9.5) {
+				doc.font(strong ? 'COR-Bold' : 'COR-Regular').fontSize(size);
 				const lines: string[] = [];
 				let line = '';
 				for (const word of clean(value).split(' ')) {
@@ -78,22 +78,22 @@ export function createCORPdf(
 				return lines;
 			}
 			function heading(continued: boolean) {
-				text('Bulacan Polytechnic College', left, 42, width, true, 17, 'center');
-				text('MALOLOS CAMPUS', left, 68, width, true, 11, 'center');
+				text('Bulacan Polytechnic College', left, 36, width, true, 16, 'center');
+				text('MALOLOS CAMPUS', left, 59, width, true, 10, 'center');
 				text(
 					`School Year ${record.enrollment.schoolYearStart}–${record.enrollment.schoolYearStart + 1} | Semester ${record.enrollment.semester}`,
 					left,
-					89,
+					77,
 					width,
 					false,
-					11,
+					10,
 					'center'
 				);
-				text('CERTIFICATE OF REGISTRATION (COR)', left, 121, width, true, 13, 'center');
-				y = 158;
+				text('CERTIFICATE OF REGISTRATION (COR)', left, 104, width, true, 12, 'center');
+				y = 135;
 				if (continued) {
 					text(`Student ID: ${record.student.studentId} | Continued`, left, y, width, true, 9);
-					y += 26;
+					y += 22;
 				}
 			}
 			function newPage() {
@@ -108,7 +108,7 @@ export function createCORPdf(
 					text(lines[i], left + 140, y, width - 140);
 					y += lineHeight;
 				}
-				y += 4;
+				y += 2;
 			}
 			heading(false);
 			detail('Student ID', record.student.studentId);
@@ -128,24 +128,24 @@ export function createCORPdf(
 				record.enrollment.status === 'enrolled' ? 'OFFICIALLY ENROLLED' : 'COMPLETED'
 			);
 			detail('Campus', 'MALOLOS');
-			y += 17;
+			y += 12;
 			const columns = [112, width - 174, 62];
 			function tableHeader() {
-				text('SUBJECTS ENROLLED', left, y, width, true, 12, 'center');
-				y += 27;
+				text('SUBJECTS ENROLLED', left, y, width, true, 11, 'center');
+				y += 22;
 				let x = left;
 				for (const [index, title] of ['Subject code', 'Subject title', 'Units'].entries()) {
-					doc.rect(x, y, columns[index], 27).fillAndStroke('#f0f0f0', '#666666');
-					text(title, x + 8, y + 6, columns[index] - 16, true, 10, index === 2 ? 'right' : 'left');
+					doc.rect(x, y, columns[index], 22).fillAndStroke('#f0f0f0', '#666666');
+					text(title, x + 8, y + 4, columns[index] - 16, true, 9.5, index === 2 ? 'right' : 'left');
 					x += columns[index];
 				}
-				y += 27;
+				y += 22;
 			}
 			function continueTable() {
 				newPage();
 				tableHeader();
 			}
-			if (y + 100 > bottom) newPage();
+			if (y + 78 > bottom) newPage();
 			tableHeader();
 			function tableRow(values: string[], strong = false) {
 				const lines = values.map((value, i) => wrap(value, columns[i] - 16, strong));
@@ -153,13 +153,13 @@ export function createCORPdf(
 				let offset = 0;
 				// Oversized subject titles may span pages; repeat the document/table headings.
 				while (offset < length) {
-					const room = Math.floor((bottom - y - 12) / lineHeight);
+					const room = Math.floor((bottom - y - 8) / lineHeight);
 					if (room < 1) {
 						continueTable();
 						continue;
 					}
 					const count = Math.min(room, length - offset);
-					const height = count * lineHeight + 12;
+					const height = count * lineHeight + 8;
 					let x = left;
 					for (let col = 0; col < columns.length; col++) {
 						doc.lineWidth(0.5).rect(x, y, columns[col], height).stroke('#888888');
@@ -169,10 +169,10 @@ export function createCORPdf(
 								text(
 									value,
 									x + 8,
-									y + 6 + row * lineHeight,
+									y + 4 + row * lineHeight,
 									columns[col] - 16,
 									strong,
-									10,
+									9.5,
 									col === 2 ? 'right' : 'left'
 								);
 						}
@@ -192,8 +192,42 @@ export function createCORPdf(
 				],
 				true
 			);
-			if (y + 36 > bottom) continueTable();
-			text('*** NOTHING FOLLOWS ***', left, y + 10, width, true, 9, 'center');
+			if (y + 30 > bottom) continueTable();
+			text('*** NOTHING FOLLOWS ***', left, y + 7, width, true, 8.5, 'center');
+			y += 36;
+			const notices = [
+				{
+					title: 'FOR BPC PROGRAMS UNDER CHED - FREE TUITION AND MISC. FEES',
+					lines: ['- Tuition and Miscellaneous Fees shall be CHARGED to CHED UniFAST.']
+				},
+				{
+					title: 'FOR BPC TECH-VOC PROGRAMS UNDER TESDA - FREE TUITION AND MISC. FEES',
+					lines: [
+						'- Tuition and Miscellaneous Fees shall be CHARGED to PROVINCIAL GOVERNMENT OF BULACAN',
+						'Scholarship Program “Tulong Pang-Edukasyon Para Sa Bulakenyo”.'
+					]
+				}
+			].map((notice) => ({
+				title: wrap(notice.title, width, true, 8.5),
+				lines: notice.lines.flatMap((line) => wrap(line, width, false, 8.5))
+			}));
+			// Keep the complete funding notice together, below the subject list.
+			const noticeHeight = notices.reduce(
+				(height, notice) => height + (notice.title.length + notice.lines.length) * 12 + 8,
+				0
+			);
+			if (y + noticeHeight > bottom) newPage();
+			for (const notice of notices) {
+				for (const line of notice.title) {
+					text(line, left, y, width, true, 8.5);
+					y += 12;
+				}
+				for (const line of notice.lines) {
+					text(line, left, y, width, false, 8.5);
+					y += 12;
+				}
+				y += 8;
+			}
 			const pages = doc.bufferedPageRange();
 			const issued = new Intl.DateTimeFormat('en-PH', {
 				dateStyle: 'medium',

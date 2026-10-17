@@ -164,7 +164,7 @@ test('COR data uses selected enrollment and subject snapshots with custom units,
 	);
 });
 
-test('COR download returns actual private PDF attachment with complete registration and no fees/signatures', async (t) => {
+test('COR download includes registration and funding notices without itemized fees or signatures', async (t) => {
 	const f = fixture(t);
 	await assert.rejects(() => f.download('old', locals('student', 'b')), httpStatus(404));
 	const response = await f.download();
@@ -200,12 +200,17 @@ test('COR download returns actual private PDF attachment with complete registrat
 		'Practicum',
 		'2.5',
 		'Total units',
-		'6.5'
+		'6.5',
+		'FOR BPC PROGRAMS UNDER CHED - FREE TUITION AND MISC. FEES',
+		'CHED UniFAST',
+		'FOR BPC TECH-VOC PROGRAMS UNDER TESDA - FREE TUITION AND MISC. FEES',
+		'PROVINCIAL GOVERNMENT OF BULACAN',
+		'Tulong Pang-Edukasyon Para Sa Bulakenyo'
 	])
 		assert.ok(text.includes(value), value);
 	assert.doesNotMatch(
 		text,
-		/fee|tuition|grade|signature|approved by|assessed by|PRIVATE AUTH|Catalog renamed/i
+		/FEE DETAILS|TUITION FEE|AMOUNT PAYABLE|Registration Fee|Laboratory Fee|grade|signature|approved by|assessed by|PRIVATE AUTH|Catalog renamed/i
 	);
 	const missingDemographics = f.get();
 	missingDemographics.student.birthDate = null;
@@ -230,6 +235,22 @@ test('COR download returns actual private PDF attachment with complete registrat
 		unsafe.headers.get('content-disposition'),
 		'attachment; filename="COR-MA____BAD-2025-semester-2.pdf"'
 	);
+});
+
+test('compact COR fits ten subjects and both funding notices on one page', async (t) => {
+	const record = fixture(t).get();
+	record.subjects = Array.from({ length: 10 }, (_, index) => ({
+		code: `SUB${index + 1}`,
+		name: `Registered subject ${index + 1}`,
+		units: 3
+	}));
+	const pages = await readPdf(await renderer.createCORPdf(record));
+	assert.equal(pages.length, 1);
+	const text = pages[0].map((item) => item.str).join(' ');
+	assert.ok(text.includes('Registered subject 10'));
+	assert.ok(text.includes('CHED UniFAST'));
+	assert.ok(text.includes('Tulong Pang-Edukasyon Para Sa Bulakenyo'));
+	assert.ok(text.includes('30'));
 });
 
 test('COR paginates long details, subject lists, and oversized tokens without losing text or leaving bounds', async (t) => {
@@ -258,13 +279,22 @@ test('COR paginates long details, subject lists, and oversized tokens without lo
 	// Repeated page/table headings interrupt text extraction within an oversized row.
 	const tokenParts = pages
 		.flat()
+		.filter((item) => Math.abs(item.transform[4] - 162) < 0.1)
 		.map((item) => item.str)
-		.filter((value) => /^[A-J]+$|^[A-J]*TOKEN-END$/.test(value));
+		.filter((value) => /^[A-Z-]+$/.test(value));
 	assert.equal(tokenParts.join(''), `${token}TOKEN-END`);
 	assert.ok(text.includes('ADDRESS-END'));
 	for (const subject of record.subjects.filter((subject) => subject.name !== `${token}TOKEN-END`))
 		assert.ok(compact.includes(subject.name.replace(/\s/g, '')), subject.code);
 	assert.ok(text.includes('114.5'));
+	assert.equal(text.match(/FOR BPC PROGRAMS UNDER CHED/g)?.length, 1);
+	assert.equal(text.match(/FOR BPC TECH-VOC PROGRAMS UNDER TESDA/g)?.length, 1);
+	const lastPage = pages
+		.at(-1)
+		.map((item) => item.str)
+		.join(' ');
+	assert.ok(lastPage.includes('CHED UniFAST'));
+	assert.ok(lastPage.includes('Tulong Pang-Edukasyon Para Sa Bulakenyo'));
 	for (const [index, items] of pages.entries()) {
 		assert.ok(
 			items.some((item) => item.str.includes('CERTIFICATE OF REGISTRATION')),

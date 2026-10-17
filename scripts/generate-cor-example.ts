@@ -31,6 +31,6 @@ const example: CertificateOfRegistration = {
 
 const directory = new URL('../docs/examples/', import.meta.url);
 mkdirSync(directory, { recursive: true });
-const filename = new URL('certificate-of-registration.pdf', directory);
+const filename = new URL('certificate-of-registration-compact.pdf', directory);
 writeFileSync(filename, await createCORPdf(example, new Date('2026-10-17T00:00:00Z')));
-console.log('Created docs/examples/certificate-of-registration.pdf');
+console.log('Created docs/examples/certificate-of-registration-compact.pdf');
