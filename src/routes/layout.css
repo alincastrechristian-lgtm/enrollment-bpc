@@ -10,33 +10,54 @@
 	default: true;
 	prefersdark: false;
 	color-scheme: 'light';
+
+	/* Background */
 	--color-base-100: oklch(100% 0 0);
-	--color-base-200: oklch(97.466% 0.011 259.822);
-	--color-base-300: oklch(93.268% 0.016 262.751);
-	--color-base-content: oklch(29% 0.04 260);
-	--color-primary: oklch(56.86% 0.255 257.57);
-	--color-primary-content: oklch(99% 0.004 257);
-	--color-secondary: oklch(42.551% 0.161 282.339);
-	--color-secondary-content: oklch(88.51% 0.032 282.339);
-	--color-accent: oklch(59.939% 0.191 335.171);
-	--color-accent-content: oklch(11.988% 0.038 335.171);
-	--color-neutral: oklch(19.616% 0.063 257.651);
-	--color-neutral-content: oklch(83.923% 0.012 257.651);
-	--color-info: oklch(50% 0.13 240);
-	--color-info-content: oklch(99% 0.004 240);
-	--color-success: oklch(48% 0.105 165);
-	--color-success-content: oklch(99% 0.004 165);
-	--color-warning: oklch(50% 0.11 65);
-	--color-warning-content: oklch(99% 0.004 65);
-	--color-error: oklch(53% 0.19 25);
-	--color-error-content: oklch(99% 0.004 25);
-	--radius-selector: 1rem;
+	--color-base-200: oklch(98% 0.005 155);
+	--color-base-300: oklch(93% 0.012 155);
+	--color-base-content: oklch(25% 0.035 230);
+
+	/* BPC Green */
+	--color-primary: oklch(45% 0.13 155);
+	--color-primary-content: oklch(100% 0 0);
+
+	/* Blue */
+	--color-secondary: oklch(55% 0.17 250);
+	--color-secondary-content: oklch(100% 0 0);
+
+	/* Soft Green Accent */
+	--color-accent: oklch(92% 0.045 155);
+	--color-accent-content: oklch(35% 0.1 155);
+
+	/* Dark Blue-Gray */
+	--color-neutral: oklch(29% 0.035 230);
+	--color-neutral-content: oklch(98% 0.005 230);
+
+	/* Status Colors */
+	--color-info: oklch(65% 0.15 245);
+	--color-info-content: oklch(98% 0.01 245);
+
+	--color-success: oklch(62% 0.15 155);
+	--color-success-content: oklch(98% 0.01 155);
+
+	--color-warning: oklch(80% 0.16 85);
+	--color-warning-content: oklch(30% 0.07 75);
+
+	--color-error: oklch(60% 0.2 25);
+	--color-error-content: oklch(98% 0.01 25);
+
+	/* Rounded Corners */
+	--radius-selector: 0.5rem;
 	--radius-field: 0.5rem;
-	--radius-box: 1rem;
+	--radius-box: 0.75rem;
+
+	/* Component Sizing */
 	--size-selector: 0.25rem;
 	--size-field: 0.25rem;
+
+	/* Borders and Effects */
 	--border: 1px;
-	--depth: 0;
+	--depth: 1;
 	--noise: 0;
 }
 
@@ -45,31 +66,52 @@
 	default: false;
 	prefersdark: false;
 	color-scheme: 'dark';
-	--color-base-100: oklch(25.33% 0.016 252.42);
-	--color-base-200: oklch(23.26% 0.014 253.1);
-	--color-base-300: oklch(21.15% 0.012 254.09);
-	--color-base-content: oklch(97.807% 0.029 256.847);
-	--color-primary: oklch(74% 0.14 253);
-	--color-primary-content: oklch(20% 0.04 255);
-	--color-secondary: oklch(65% 0.241 354.308);
-	--color-secondary-content: oklch(94% 0.028 342.258);
-	--color-accent: oklch(77% 0.152 181.912);
-	--color-accent-content: oklch(38% 0.063 188.416);
-	--color-neutral: oklch(14% 0.005 285.823);
-	--color-neutral-content: oklch(92% 0.004 286.32);
-	--color-info: oklch(74% 0.16 232.661);
-	--color-info-content: oklch(29% 0.066 243.157);
-	--color-success: oklch(76% 0.177 163.223);
-	--color-success-content: oklch(37% 0.077 168.94);
-	--color-warning: oklch(82% 0.189 84.429);
-	--color-warning-content: oklch(41% 0.112 45.904);
-	--color-error: oklch(71% 0.194 13.428);
-	--color-error-content: oklch(27% 0.105 12.094);
-	--radius-selector: 1rem;
-	--radius-field: 0.25rem;
-	--radius-box: 0.5rem;
+
+	/* Background */
+	--color-base-100: oklch(24% 0.02 230);
+	--color-base-200: oklch(21% 0.018 230);
+	--color-base-300: oklch(18% 0.016 230);
+	--color-base-content: oklch(93% 0.012 230);
+
+	/* BPC Green */
+	--color-primary: oklch(72% 0.14 155);
+	--color-primary-content: oklch(20% 0.035 155);
+
+	/* Blue */
+	--color-secondary: oklch(75% 0.13 250);
+	--color-secondary-content: oklch(20% 0.04 250);
+
+	/* Soft Green Accent */
+	--color-accent: oklch(30% 0.045 155);
+	--color-accent-content: oklch(84% 0.09 155);
+
+	/* Dark Blue-Gray */
+	--color-neutral: oklch(29% 0.035 230);
+	--color-neutral-content: oklch(93% 0.012 230);
+
+	/* Status Colors */
+	--color-info: oklch(75% 0.13 245);
+	--color-info-content: oklch(22% 0.04 245);
+
+	--color-success: oklch(74% 0.14 155);
+	--color-success-content: oklch(22% 0.04 155);
+
+	--color-warning: oklch(82% 0.15 85);
+	--color-warning-content: oklch(25% 0.05 75);
+
+	--color-error: oklch(73% 0.16 25);
+	--color-error-content: oklch(22% 0.04 25);
+
+	/* Rounded Corners */
+	--radius-selector: 0.5rem;
+	--radius-field: 0.5rem;
+	--radius-box: 0.75rem;
+
+	/* Component Sizing */
 	--size-selector: 0.25rem;
 	--size-field: 0.25rem;
+
+	/* Borders and Effects */
 	--border: 1px;
 	--depth: 1;
 	--noise: 0;
