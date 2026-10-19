@@ -387,7 +387,18 @@ test('ownership, roles, stale template, missing office setup, malformed outlines
 		.update(schema.clearanceTemplate)
 		.set({ definition: { ...f.config, schoolYear: '2026-2027' } })
 		.run();
-	await assert.rejects(f.upload(), status(409));
+	await assert.rejects(
+		f.upload(),
+		(cause) =>
+			status(409)(cause) &&
+			cause.body.message.includes('requires Semester 2, SY 2025-2026') &&
+			cause.body.message.includes('template is Semester 2, SY 2026-2027')
+	);
+	assert.equal(
+		f.state.reads,
+		0,
+		'Term mismatch must stop before downloading the reference or running OCR.'
+	);
 	f.db
 		.update(schema.clearanceTemplate)
 		.set({ definition: f.config, revision: crypto.randomUUID() })

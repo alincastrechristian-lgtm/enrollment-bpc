@@ -246,6 +246,11 @@ test('all-passing grades and completed enrollment status do not produce false co
 	assert.equal(data.attentionCount, 0);
 	assert.deepEqual(
 		data.nextSteps.map((step) => step.id),
+		['clearance']
+	);
+	f.sqlite.exec("UPDATE enrollment SET submitted_clearance=1 WHERE id='current'");
+	assert.deepEqual(
+		(await f.load()).studentDashboard.nextSteps.map((step) => step.id),
 		['history']
 	);
 });

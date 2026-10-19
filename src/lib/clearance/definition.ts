@@ -134,6 +134,15 @@ export const definitionSchema = z
 			ctx.addIssue({ code: 'custom', message: 'Use unique area labels.' });
 	});
 export type TemplateDefinition = z.infer<typeof definitionSchema>;
+export function templateTermIssue(
+	definition: Pick<TemplateDefinition, 'semester' | 'schoolYear'>,
+	enrollment: { semester: number; schoolYearStart: number }
+) {
+	const schoolYear = `${enrollment.schoolYearStart}-${enrollment.schoolYearStart + 1}`;
+	if (Number(definition.semester) === enrollment.semester && definition.schoolYear === schoolYear)
+		return null;
+	return `Your enrollment requires Semester ${enrollment.semester}, SY ${schoolYear}. The available clearance template is Semester ${definition.semester}, SY ${definition.schoolYear}. Contact the Registrar to provide a matching template.`;
+}
 export type TemplateInfo = {
 	revision: string;
 	filename: string;

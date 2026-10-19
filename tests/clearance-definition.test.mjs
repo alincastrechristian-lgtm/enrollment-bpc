@@ -13,9 +13,12 @@ function load(file, deps = {}) {
 	return exports;
 }
 const core = load('src/lib/clearance/clearance.ts');
-const { definitionSchema, checkAreaText, compareVisual } = load('src/lib/clearance/definition.ts', {
-	'./clearance': core
-});
+const { definitionSchema, checkAreaText, compareVisual, templateTermIssue } = load(
+	'src/lib/clearance/definition.ts',
+	{
+		'./clearance': core
+	}
+);
 const definition = () => ({
 	corners: structuredClone(core.UNIT_CORNERS),
 	semester: '2',
@@ -27,6 +30,20 @@ const definition = () => ({
 		expected: kind === 'text' ? 'School name' : '',
 		box: { x: 0.1, y: 0.1 + i * 0.1, width: 0.4, height: 0.05 }
 	}))
+});
+
+test('template coverage compares the current enrollment semester and school year', () => {
+	const enrollment = { semester: 2, schoolYearStart: 2025 };
+	assert.equal(templateTermIssue(definition(), enrollment), null);
+	for (const template of [
+		{ ...definition(), semester: '1' },
+		{ ...definition(), schoolYear: '2026-2027' },
+		{ ...definition(), semester: '1', schoolYear: '2026-2027' }
+	]) {
+		const issue = templateTermIssue(template, enrollment);
+		assert.match(issue, /requires Semester 2, SY 2025-2026/);
+		assert(issue.includes(`template is Semester ${template.semester}, SY ${template.schoolYear}`));
+	}
 });
 
 test('custom layout requires distinct text, visual and term evidence with bounded in-page areas', () => {

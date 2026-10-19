@@ -4,7 +4,7 @@ import { error, isHttpError } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { clearanceSubmission, clearanceTemplate } from '#lib/schema.js';
-import { definitionSchema } from '#lib/clearance/definition.js';
+import { definitionSchema, templateTermIssue } from '#lib/clearance/definition.js';
 import { clearancePassed, hasCurrentOfficeChecks } from '#lib/clearance/report.js';
 import type { Corners } from '#lib/clearance/clearance.js';
 import { checkClearance, decodeClearance } from './clearance-checker';
@@ -50,12 +50,8 @@ export async function uploadStudentClearance(
 	)
 		error(503, 'The Registrar must finish configuring the clearance template and office boxes.');
 	const definition = parsed.data;
-	if (
-		Number(definition.semester) !== record.enrollment.semester ||
-		definition.schoolYear !==
-			`${record.enrollment.schoolYearStart}-${record.enrollment.schoolYearStart + 1}`
-	)
-		error(409, 'The saved template does not cover your enrollment term. Contact the Registrar.');
+	const termIssue = templateTermIssue(definition, record.enrollment);
+	if (termIssue) error(409, termIssue);
 	const file = input.file;
 	if (!file.size || file.size > MAX_FILE_BYTES)
 		error(400, 'Choose a clearance image up to 10 MiB.');

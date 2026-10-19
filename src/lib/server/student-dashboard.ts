@@ -28,9 +28,9 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 	if (finalized && current?.status !== 'dropped' && !current?.submittedClearance)
 		nextSteps.push({
 			id: 'clearance',
-			title: 'Upload clearance and request enrollment',
+			title: 'Complete clearance for your next enrollment',
 			detail:
-				'Open Enrollment to upload your clearance. Complete template and office checks, then send your enrollment request for Registrar review.'
+				'Open Enrollment to upload your completed clearance or track your request. The Registrar reviews your clearance before completing your next enrollment.'
 		});
 	const droppedEnrollments = (record?.enrollments ?? [])
 		.filter((entry) => entry.status === 'dropped')
