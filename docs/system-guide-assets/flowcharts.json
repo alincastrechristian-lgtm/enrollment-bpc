@@ -1,0 +1,3525 @@
+[
+  {
+    "id": "01-lifecycle",
+    "title": "Student lifecycle: first account through another enrollment term",
+    "nodes": [
+      [
+        "a",
+        "Staff creates|student account",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Student finishes|password setup",
+        0,
+        1
+      ],
+      [
+        "c",
+        "Staff selects program,|curriculum and subjects",
+        1,
+        1
+      ],
+      [
+        "d",
+        "Save first enrollment;|setup may still be pending",
+        1,
+        2
+      ],
+      [
+        "e",
+        "Setup complete: staff|saves/finalizes grades",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Student uploads passed|clearance and requests",
+        1,
+        4
+      ],
+      [
+        "g",
+        "Staff verifies|requested clearance",
+        1,
+        5
+      ],
+      [
+        "h",
+        "Current failed|grades?",
+        1,
+        6,
+        "decision"
+      ],
+      [
+        "i",
+        "Registrar meeting;|complete follow-up",
+        2,
+        6
+      ],
+      [
+        "j",
+        "Staff creates next-term|enrollment record",
+        1,
+        7
+      ],
+      [
+        "k",
+        "Same student account;|new current enrollment",
+        1,
+        8,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b",
+        "Setup",
+        "l",
+        "t"
+      ],
+      [
+        "a",
+        "c"
+      ],
+      [
+        "b",
+        "e",
+        "",
+        "b",
+        "l"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i",
+        "Yes",
+        "r",
+        "l"
+      ],
+      [
+        "h",
+        "j",
+        "No"
+      ],
+      [
+        "i",
+        "j",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "j",
+        "k"
+      ]
+    ]
+  },
+  {
+    "id": "02-access",
+    "title": "Sign-in, session checks and role routing",
+    "nodes": [
+      [
+        "a",
+        "Open landing page|or protected route",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Valid signed-in|session?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "Enter email|and password",
+        0,
+        1
+      ],
+      [
+        "d",
+        "2FA enabled?",
+        0,
+        2,
+        "decision"
+      ],
+      [
+        "e",
+        "TOTP code or|recovery code",
+        0,
+        3
+      ],
+      [
+        "f",
+        "Resolve account role;|authorize each action",
+        1,
+        3
+      ],
+      [
+        "g",
+        "Administrator:|system + academic work",
+        0,
+        4,
+        "end"
+      ],
+      [
+        "h",
+        "Registrar:|academic operations",
+        1,
+        4,
+        "end"
+      ],
+      [
+        "i",
+        "Student:|own records only",
+        2,
+        4,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e",
+        "Yes"
+      ],
+      [
+        "d",
+        "f",
+        "No",
+        "r",
+        "l"
+      ],
+      [
+        "e",
+        "f",
+        "",
+        "r",
+        "l"
+      ],
+      [
+        "b",
+        "f",
+        "Yes"
+      ],
+      [
+        "f",
+        "g",
+        "",
+        "l",
+        "t"
+      ],
+      [
+        "f",
+        "h"
+      ],
+      [
+        "f",
+        "i",
+        "",
+        "r",
+        "t"
+      ]
+    ]
+  },
+  {
+    "id": "03-setup",
+    "title": "Invitation, password setup and recovery",
+    "nodes": [
+      [
+        "a",
+        "Staff creates account|or resends setup",
+        0,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "User submits|Forgot password",
+        2,
+        0,
+        "start"
+      ],
+      [
+        "c",
+        "Save account; request|24-hour setup link",
+        0,
+        1
+      ],
+      [
+        "d",
+        "Generic reset response;|send if account exists",
+        2,
+        1
+      ],
+      [
+        "e",
+        "Open first-login or|reset-password token",
+        1,
+        2
+      ],
+      [
+        "f",
+        "Token and new|password valid?",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "g",
+        "Invalid/expired:|request fresh link",
+        0,
+        3,
+        "end"
+      ],
+      [
+        "h",
+        "Consume token; set|password; revoke sessions",
+        1,
+        4
+      ],
+      [
+        "i",
+        "Auto sign-in|succeeds?",
+        1,
+        5,
+        "decision"
+      ],
+      [
+        "j",
+        "Sign in manually|with new password",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "k",
+        "Set setupComplete|and emailVerified",
+        1,
+        6,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "c"
+      ],
+      [
+        "b",
+        "d"
+      ],
+      [
+        "c",
+        "e",
+        "",
+        "b",
+        "l"
+      ],
+      [
+        "d",
+        "e",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "f",
+        "h",
+        "Yes"
+      ],
+      [
+        "h",
+        "i"
+      ],
+      [
+        "i",
+        "j",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "i",
+        "k",
+        "Yes"
+      ]
+    ]
+  },
+  {
+    "id": "04-accounts",
+    "title": "Create, correct and control accounts",
+    "nodes": [
+      [
+        "a",
+        "Authorized staff opens|account action",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Create account?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "Validate fields and|unique email; create",
+        0,
+        2
+      ],
+      [
+        "d",
+        "Choose edit, disable,|sessions or delete",
+        2,
+        2
+      ],
+      [
+        "e",
+        "Student: allocate ID|and personal record",
+        0,
+        3
+      ],
+      [
+        "f",
+        "Recheck role, target,|self-protection, stale data",
+        2,
+        3
+      ],
+      [
+        "g",
+        "Send setup invitation;|keep account if mail fails",
+        0,
+        4,
+        "end"
+      ],
+      [
+        "h",
+        "Delete eligible?",
+        2,
+        4,
+        "decision"
+      ],
+      [
+        "i",
+        "Reject unsafe action;|keep saved records",
+        1,
+        5,
+        "end"
+      ],
+      [
+        "j",
+        "Apply selected action;|preserve academic history",
+        2,
+        5,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "Yes",
+        "l",
+        "t"
+      ],
+      [
+        "b",
+        "d",
+        "No",
+        "r",
+        "t"
+      ],
+      [
+        "c",
+        "e"
+      ],
+      [
+        "e",
+        "g"
+      ],
+      [
+        "d",
+        "f"
+      ],
+      [
+        "f",
+        "h"
+      ],
+      [
+        "h",
+        "i",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "h",
+        "j",
+        "Yes / other action"
+      ]
+    ]
+  },
+  {
+    "id": "05-catalog",
+    "title": "Programs and subjects: catalog changes and protected deletion",
+    "nodes": [
+      [
+        "a",
+        "Admin opens program|or subject catalog",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Create or edit|code, name, status",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Valid and|unique code?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "d",
+        "Show field/duplicate|error; revise draft",
+        0,
+        2,
+        "end"
+      ],
+      [
+        "e",
+        "Save catalog record;|refresh list",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Delete selected?",
+        1,
+        4,
+        "decision"
+      ],
+      [
+        "g",
+        "Referenced by|curriculum?",
+        1,
+        5,
+        "decision"
+      ],
+      [
+        "h",
+        "Block deletion;|use inactive status",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "i",
+        "Confirm and delete|unreferenced record",
+        1,
+        6,
+        "end"
+      ],
+      [
+        "j",
+        "Registrar can view;|cannot mutate catalog",
+        2,
+        1,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "c",
+        "e",
+        "Yes"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g",
+        "Yes"
+      ],
+      [
+        "g",
+        "h",
+        "Yes",
+        "l",
+        "r"
+      ],
+      [
+        "g",
+        "i",
+        "No"
+      ]
+    ]
+  },
+  {
+    "id": "06-curriculum",
+    "title": "Curriculum drafting, publication and historical preservation",
+    "nodes": [
+      [
+        "a",
+        "Admin creates new|curriculum draft",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Set program, name,|year and term limits",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Arrange unique subjects|with positive units",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Save draft; edit|while unpublished",
+        1,
+        3
+      ],
+      [
+        "e",
+        "Activate and|confirm replacement",
+        1,
+        4
+      ],
+      [
+        "f",
+        "Publish snapshots; select|as program default",
+        1,
+        5
+      ],
+      [
+        "g",
+        "Archive previous|selected curriculum",
+        0,
+        5
+      ],
+      [
+        "h",
+        "Published rows|become read-only",
+        1,
+        6
+      ],
+      [
+        "i",
+        "New enrollments use|selected curriculum",
+        1,
+        7,
+        "end"
+      ],
+      [
+        "j",
+        "Old enrollments keep|original curriculum",
+        2,
+        6,
+        "end"
+      ],
+      [
+        "k",
+        "Archive/deactivate;|delete only if unlinked",
+        0,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g",
+        "",
+        "l",
+        "r"
+      ],
+      [
+        "f",
+        "h"
+      ],
+      [
+        "h",
+        "i"
+      ],
+      [
+        "h",
+        "j",
+        "",
+        "r",
+        "l"
+      ],
+      [
+        "g",
+        "k"
+      ]
+    ]
+  },
+  {
+    "id": "07-enroll",
+    "title": "Enrollment eligibility, defaults and save transaction",
+    "nodes": [
+      [
+        "a",
+        "Staff clicks Enroll,|Next term or Enroll again",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Prior current|record exists?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "First term defaults:|year 1, semester 1",
+        0,
+        2
+      ],
+      [
+        "d",
+        "Dropped attempt?",
+        2,
+        2,
+        "decision"
+      ],
+      [
+        "e",
+        "Restore same term|and subjects",
+        2,
+        3
+      ],
+      [
+        "f",
+        "Finalized grades + clearance;|follow-up if failed grades",
+        1,
+        3
+      ],
+      [
+        "g",
+        "Select active program|and allowed curriculum",
+        1,
+        4
+      ],
+      [
+        "h",
+        "Edit term, section,|subjects and units",
+        1,
+        5
+      ],
+      [
+        "i",
+        "Server rechecks all|eligibility and conflicts",
+        1,
+        6
+      ],
+      [
+        "j",
+        "Transaction inserts rows;|updates current pointer",
+        1,
+        7
+      ],
+      [
+        "k",
+        "Notify; attempt email;|open saved details",
+        1,
+        8,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "No",
+        "l",
+        "t"
+      ],
+      [
+        "b",
+        "d",
+        "Yes",
+        "r",
+        "t"
+      ],
+      [
+        "c",
+        "g",
+        "",
+        "b",
+        "l"
+      ],
+      [
+        "d",
+        "e",
+        "Yes"
+      ],
+      [
+        "d",
+        "f",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "e",
+        "g",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i"
+      ],
+      [
+        "i",
+        "j",
+        "Pass"
+      ],
+      [
+        "j",
+        "k"
+      ]
+    ]
+  },
+  {
+    "id": "08-retakes",
+    "title": "Outstanding failed and incomplete subjects",
+    "nodes": [
+      [
+        "a",
+        "Load finalized attempts;|exclude dropped/voided",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Keep latest attempt|for each subject",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Latest result?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "d",
+        "1.00–3.00:|remove concern",
+        0,
+        3,
+        "end"
+      ],
+      [
+        "e",
+        "Above 3.00: failed;|null: incomplete",
+        2,
+        3
+      ],
+      [
+        "f",
+        "Show outstanding list;|add one or add all",
+        2,
+        4
+      ],
+      [
+        "g",
+        "Already in draft?",
+        2,
+        5,
+        "decision"
+      ],
+      [
+        "h",
+        "Skip duplicate",
+        1,
+        5,
+        "end"
+      ],
+      [
+        "i",
+        "Choose term units|or prior attempt units",
+        2,
+        6
+      ],
+      [
+        "j",
+        "Save with enrollment;|no automatic retake",
+        2,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "Passed",
+        "l",
+        "t"
+      ],
+      [
+        "c",
+        "e",
+        "Concern",
+        "r",
+        "t"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h",
+        "Yes",
+        "l",
+        "r"
+      ],
+      [
+        "g",
+        "i",
+        "No"
+      ],
+      [
+        "i",
+        "j"
+      ]
+    ]
+  },
+  {
+    "id": "09-grades",
+    "title": "Grade drafts, finalization and release",
+    "nodes": [
+      [
+        "a",
+        "Staff opens current|or allowed history record",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Setup done, grades|unfinalized, valid status?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "Read-only; resolve|account/status first",
+        0,
+        1,
+        "end"
+      ],
+      [
+        "d",
+        "Enter 1.00–5.00|or leave null",
+        1,
+        2
+      ],
+      [
+        "e",
+        "Save draft with|previous-value checks",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Finalize reviewed|saved grades?",
+        1,
+        4,
+        "decision"
+      ],
+      [
+        "g",
+        "Continue editing;|students see Pending",
+        0,
+        4,
+        "end"
+      ],
+      [
+        "h",
+        "Lock grades; blank|grades become INC",
+        1,
+        5
+      ],
+      [
+        "i",
+        "Create notification;|attempt grade email",
+        1,
+        6
+      ],
+      [
+        "j",
+        "Student sees grades;|continue clearance",
+        1,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "b",
+        "d",
+        "Yes"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "f",
+        "h",
+        "Yes"
+      ],
+      [
+        "h",
+        "i"
+      ],
+      [
+        "i",
+        "j"
+      ]
+    ]
+  },
+  {
+    "id": "10-clearance-setup",
+    "title": "Admin clearance configuration and test",
+    "nodes": [
+      [
+        "a",
+        "Admin opens|Settings > Clearance",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Upload blank reference:|JPEG, PNG or WebP",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Blank reference saved;|adjust outline corners",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Define printed anchors|and optional personal boxes",
+        1,
+        3
+      ],
+      [
+        "e",
+        "Define each office:|label, Cleared, signature",
+        1,
+        4
+      ],
+      [
+        "f",
+        "Save validated|template definition",
+        1,
+        5
+      ],
+      [
+        "g",
+        "Browser-test anchors;|office marks not tested",
+        1,
+        6
+      ],
+      [
+        "h",
+        "Aligned and|findings useful?",
+        1,
+        7,
+        "decision"
+      ],
+      [
+        "i",
+        "Adjust regions;|save new revision",
+        0,
+        7,
+        "end"
+      ],
+      [
+        "j",
+        "Students can submit|against saved template",
+        1,
+        8,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "h",
+        "j",
+        "Yes"
+      ]
+    ]
+  },
+  {
+    "id": "11-clearance-scan",
+    "title": "Production clearance upload: server analysis and ready state",
+    "nodes": [
+      [
+        "a",
+        "Student opens current|Enrollment clearance",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Choose JPEG/PNG/WebP;|adjust form corners",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Send bounded upload;|check current ownership",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Load saved revision;|normalize page and form",
+        1,
+        3
+      ],
+      [
+        "e",
+        "Match printed anchors;|check each office region",
+        1,
+        4
+      ],
+      [
+        "f",
+        "All checks|pass?",
+        1,
+        5,
+        "decision"
+      ],
+      [
+        "g",
+        "Return findings only;|no submission saved",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "h",
+        "Store image in Garage;|save report + snapshot",
+        1,
+        6
+      ],
+      [
+        "i",
+        "Submission ready;|not yet requested",
+        1,
+        7,
+        "end"
+      ],
+      [
+        "j",
+        "Identity comparison|deferred in production",
+        2,
+        4,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "f",
+        "h",
+        "Yes"
+      ],
+      [
+        "h",
+        "i"
+      ]
+    ]
+  },
+  {
+    "id": "12-clearance-request",
+    "title": "Request, staff review, rejection and verification",
+    "nodes": [
+      [
+        "a",
+        "Saved clearance|is ready",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Student explicitly|requests enrollment",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Current + passing;|same template|revision?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "d",
+        "Reject request;|re-upload if needed",
+        0,
+        2,
+        "end"
+      ],
+      [
+        "e",
+        "Mark requested; show|Enrollment requests queue",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Staff reviews|image and findings",
+        1,
+        4
+      ],
+      [
+        "g",
+        "Approve?",
+        1,
+        5,
+        "decision"
+      ],
+      [
+        "h",
+        "Reason required; reject;|student re-uploads",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "i",
+        "Require finalized grades;|verify saved request",
+        1,
+        6
+      ],
+      [
+        "j",
+        "Set verified + submitted|clearance + completed",
+        1,
+        7
+      ],
+      [
+        "k",
+        "Next term still checks|failed-grade follow-up",
+        1,
+        8,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "c",
+        "e",
+        "Yes"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "g",
+        "i",
+        "Yes"
+      ],
+      [
+        "i",
+        "j"
+      ],
+      [
+        "j",
+        "k"
+      ]
+    ]
+  },
+  {
+    "id": "13-followup",
+    "title": "Failed/INC meeting requests and next-term gate",
+    "nodes": [
+      [
+        "a",
+        "Staff chooses meeting|for finalized concerns",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Staff confirms|meeting request",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Claim send;|attempt email",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Delivery call|succeeds?",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "e",
+        "Release claim;|show error; retry",
+        0,
+        3,
+        "end"
+      ],
+      [
+        "f",
+        "Save sent timestamp|and notification",
+        1,
+        4
+      ],
+      [
+        "h",
+        "Current failed|grade exists?",
+        1,
+        5,
+        "decision"
+      ],
+      [
+        "i",
+        "INC only: acknowledgment;|completion optional for gate",
+        0,
+        6,
+        "end"
+      ],
+      [
+        "j",
+        "Completed follow-up|required for next term",
+        2,
+        6
+      ],
+      [
+        "g",
+        "Registrar meets student;|staff completes follow-up",
+        2,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "d",
+        "f",
+        "Yes"
+      ],
+      [
+        "f",
+        "h"
+      ],
+      [
+        "h",
+        "i",
+        "No",
+        "l",
+        "t"
+      ],
+      [
+        "h",
+        "j",
+        "Yes",
+        "r",
+        "t"
+      ],
+      [
+        "j",
+        "g"
+      ]
+    ]
+  },
+  {
+    "id": "14-next-term",
+    "title": "Next-term decision, rollover and curriculum choice",
+    "nodes": [
+      [
+        "a",
+        "Staff opens|Enroll for next term",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Current grades finalized|and clearance verified?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "Blocked; finish|remaining term work",
+        0,
+        1,
+        "end"
+      ],
+      [
+        "d",
+        "Failed grades and|meeting incomplete?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "e",
+        "Blocked; request and|complete Registrar meeting",
+        0,
+        2,
+        "end"
+      ],
+      [
+        "f",
+        "Increment semester using|previous curriculum limit",
+        1,
+        3
+      ],
+      [
+        "g",
+        "Beyond last|semester?",
+        1,
+        4,
+        "decision"
+      ],
+      [
+        "h",
+        "Semester 1; school year|and year level +1",
+        2,
+        5
+      ],
+      [
+        "i",
+        "Keep school year|and year level",
+        0,
+        5
+      ],
+      [
+        "j",
+        "Select current program|default; clamp editor limits",
+        1,
+        6
+      ],
+      [
+        "k",
+        "Review retakes + details;|save new enrollment",
+        1,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "b",
+        "d",
+        "Yes"
+      ],
+      [
+        "d",
+        "e",
+        "Yes",
+        "l",
+        "r"
+      ],
+      [
+        "d",
+        "f",
+        "No"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h",
+        "Yes",
+        "r",
+        "t"
+      ],
+      [
+        "g",
+        "i",
+        "No",
+        "l",
+        "t"
+      ],
+      [
+        "h",
+        "j",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "i",
+        "j",
+        "",
+        "b",
+        "l"
+      ],
+      [
+        "j",
+        "k"
+      ]
+    ]
+  },
+  {
+    "id": "15-corrections",
+    "title": "Correct, void or reopen an enrollment with audit history",
+    "nodes": [
+      [
+        "a",
+        "Staff selects action|and supplies reason",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Role, revision and|lifecycle checks pass?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "Reject stale or|forbidden action",
+        0,
+        1,
+        "end"
+      ],
+      [
+        "s",
+        "Run the selected|permitted action",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Correct unfinalized|enrolled record",
+        0,
+        3
+      ],
+      [
+        "e",
+        "Void unfinalized|incorrect attempt",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Admin reopens finalized|enrolled/completed record",
+        2,
+        3
+      ],
+      [
+        "g",
+        "Update details; preserve|matching draft grades",
+        0,
+        4
+      ],
+      [
+        "h",
+        "Set voided; restore|valid current pointer",
+        1,
+        4
+      ],
+      [
+        "i",
+        "Reset finalization,|clearance and follow-up",
+        2,
+        4
+      ],
+      [
+        "j",
+        "Save before/after audit;|invalidate clearance if needed",
+        1,
+        5
+      ],
+      [
+        "k",
+        "Notify student; attempt|email; retain history",
+        1,
+        6,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "b",
+        "s",
+        "Yes"
+      ],
+      [
+        "s",
+        "d",
+        "Correct",
+        "l",
+        "t"
+      ],
+      [
+        "s",
+        "e",
+        "Void"
+      ],
+      [
+        "s",
+        "f",
+        "Reopen",
+        "r",
+        "t"
+      ],
+      [
+        "d",
+        "g"
+      ],
+      [
+        "e",
+        "h"
+      ],
+      [
+        "f",
+        "i"
+      ],
+      [
+        "g",
+        "j",
+        "",
+        "b",
+        "l"
+      ],
+      [
+        "h",
+        "j"
+      ],
+      [
+        "i",
+        "j",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "j",
+        "k"
+      ]
+    ]
+  },
+  {
+    "id": "16-drop",
+    "title": "Drop a real enrollment and enroll again",
+    "nodes": [
+      [
+        "a",
+        "Staff selects Drop on|current enrolled record",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Confirm action|and consequences",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Server rechecks current|status and revision",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Save droppedAt;|status becomes dropped",
+        1,
+        3
+      ],
+      [
+        "e",
+        "Retain subjects, grades|and historical attempt",
+        1,
+        4
+      ],
+      [
+        "f",
+        "Notify; attempt|drop email",
+        1,
+        5
+      ],
+      [
+        "g",
+        "Enroll again restores|same term and subjects",
+        1,
+        6
+      ],
+      [
+        "h",
+        "Save new attempt;|current pointer changes",
+        1,
+        7,
+        "end"
+      ],
+      [
+        "i",
+        "Voiding is separate:|incorrect record correction",
+        2,
+        3,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ]
+    ]
+  },
+  {
+    "id": "17-portal",
+    "title": "Student dashboard, enrollment history and assigned curriculum",
+    "nodes": [
+      [
+        "a",
+        "Student signs in",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Load own current|enrollment and concerns",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Current record|exists?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "d",
+        "Show no-enrollment|message; contact staff",
+        0,
+        2,
+        "end"
+      ],
+      [
+        "e",
+        "Dashboard shows term,|grades and next action",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Enrollment: inspect|current or history",
+        0,
+        4
+      ],
+      [
+        "g",
+        "Curriculum: inspect|assigned published plan",
+        1,
+        4
+      ],
+      [
+        "h",
+        "Notifications: read|own saved events",
+        2,
+        4
+      ],
+      [
+        "i",
+        "Upload clearance or|download eligible COR",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "j",
+        "Profile read-only;|security self-service",
+        2,
+        5,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "c",
+        "e",
+        "Yes"
+      ],
+      [
+        "e",
+        "f",
+        "",
+        "l",
+        "t"
+      ],
+      [
+        "e",
+        "g"
+      ],
+      [
+        "e",
+        "h",
+        "",
+        "r",
+        "t"
+      ],
+      [
+        "f",
+        "i"
+      ],
+      [
+        "h",
+        "j"
+      ]
+    ]
+  },
+  {
+    "id": "18-reporting",
+    "title": "Masterlist and reports: scoped read-only outputs",
+    "nodes": [
+      [
+        "a",
+        "Staff chooses|Masterlist or Reports",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Select term and|academic filters",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Server validates scope;|excludes voided records",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Masterlist: roster,|50-row lazy batches",
+        0,
+        3
+      ],
+      [
+        "e",
+        "Report: aggregate|all matching records",
+        2,
+        3
+      ],
+      [
+        "f",
+        "CSV export rechecks|permissions and scope",
+        0,
+        4
+      ],
+      [
+        "g",
+        "Choose summary, grades,|attention, completion, drops",
+        2,
+        4
+      ],
+      [
+        "h",
+        "Download safe CSV;|all matching rows",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "i",
+        "Export matching rows;|print with scope/time",
+        2,
+        5,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "Roster",
+        "l",
+        "t"
+      ],
+      [
+        "c",
+        "e",
+        "Report",
+        "r",
+        "t"
+      ],
+      [
+        "d",
+        "f"
+      ],
+      [
+        "f",
+        "h"
+      ],
+      [
+        "e",
+        "g"
+      ],
+      [
+        "g",
+        "i"
+      ]
+    ]
+  },
+  {
+    "id": "19-messaging",
+    "title": "Saved events, notifications and outgoing email",
+    "nodes": [
+      [
+        "a",
+        "Account or academic|event occurs",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Most academic events:|state + event in transaction",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Attempt email using|saved provider settings",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Email succeeds?",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "e",
+        "Keep state + notification;|report mail failure",
+        0,
+        3,
+        "end"
+      ],
+      [
+        "f",
+        "Delivery request|accepted by provider",
+        1,
+        4
+      ],
+      [
+        "g",
+        "Notifications filtered|by account role",
+        1,
+        5
+      ],
+      [
+        "h",
+        "Student: own inbox|and read/unread controls",
+        0,
+        6,
+        "end"
+      ],
+      [
+        "i",
+        "Registrar: events|attributed to registrar",
+        1,
+        6,
+        "end"
+      ],
+      [
+        "j",
+        "Admin: all events;|staff have no unread count",
+        2,
+        6,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "d",
+        "f",
+        "Yes"
+      ],
+      [
+        "e",
+        "g",
+        "",
+        "b",
+        "l"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h",
+        "",
+        "l",
+        "t"
+      ],
+      [
+        "g",
+        "i"
+      ],
+      [
+        "g",
+        "j",
+        "",
+        "r",
+        "t"
+      ]
+    ]
+  },
+  {
+    "id": "20-security",
+    "title": "Password change and two-factor authentication",
+    "nodes": [
+      [
+        "a",
+        "Signed-in user opens|Settings > Security",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Choose security|operation",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Change password:|verify current password",
+        0,
+        2
+      ],
+      [
+        "d",
+        "Enable 2FA: confirm|password; QR/manual key",
+        2,
+        2
+      ],
+      [
+        "e",
+        "Validate new password;|revoke other sessions",
+        0,
+        3
+      ],
+      [
+        "f",
+        "Save recovery codes;|then verify app code",
+        2,
+        3
+      ],
+      [
+        "g",
+        "Password changed",
+        0,
+        4,
+        "end"
+      ],
+      [
+        "h",
+        "Next login needs TOTP|or unused recovery code",
+        2,
+        4
+      ],
+      [
+        "i",
+        "Disable 2FA with|current password",
+        2,
+        5,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "Password",
+        "l",
+        "t"
+      ],
+      [
+        "b",
+        "d",
+        "2FA",
+        "r",
+        "t"
+      ],
+      [
+        "c",
+        "e"
+      ],
+      [
+        "e",
+        "g"
+      ],
+      [
+        "d",
+        "f"
+      ],
+      [
+        "f",
+        "h"
+      ],
+      [
+        "h",
+        "i"
+      ]
+    ]
+  },
+  {
+    "id": "21-storage",
+    "title": "Storage bootstrap, private files and admin explorer",
+    "nodes": [
+      [
+        "a",
+        "Server starts|outside build phase",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Garage admin|configured?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "Skip setup; storage|screens show unavailable",
+        0,
+        1,
+        "end"
+      ],
+      [
+        "d",
+        "Ensure layout + bpc|bucket; lease app key",
+        1,
+        2
+      ],
+      [
+        "e",
+        "Grant read/write;|keep secret in memory",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Private test files:|per-user prefix",
+        0,
+        4
+      ],
+      [
+        "g",
+        "Clearance image and|template objects",
+        1,
+        4
+      ],
+      [
+        "h",
+        "Admin storage:|whole-bucket explorer",
+        2,
+        4
+      ],
+      [
+        "i",
+        "Download requires|owner/server permission",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "j",
+        "Confirmed delete: raw|objects removed permanently",
+        2,
+        5,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "b",
+        "d",
+        "Yes"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f",
+        "",
+        "l",
+        "t"
+      ],
+      [
+        "e",
+        "g"
+      ],
+      [
+        "e",
+        "h",
+        "",
+        "r",
+        "t"
+      ],
+      [
+        "f",
+        "i"
+      ],
+      [
+        "h",
+        "j"
+      ]
+    ]
+  },
+  {
+    "id": "22-capacity",
+    "title": "Admin node-capacity increase with layout safeguards",
+    "nodes": [
+      [
+        "a",
+        "Admin selects online|storage node",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Enter larger decimal GB;|confirm change",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Acquire DB lease;|fetch current layout",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Layout fresh, no staged|changes, node valid?",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "e",
+        "Reject; refresh and|review Garage state",
+        0,
+        3,
+        "end"
+      ],
+      [
+        "f",
+        "Stage only capacity;|preserve zone and tags",
+        1,
+        4
+      ],
+      [
+        "g",
+        "Verify staged layout;|apply next version",
+        1,
+        5
+      ],
+      [
+        "h",
+        "Re-fetch and confirm|applied role + capacity",
+        1,
+        6
+      ],
+      [
+        "i",
+        "Placement capacity raised;|disk hardware unchanged",
+        1,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "d",
+        "f",
+        "Yes"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i"
+      ]
+    ]
+  },
+  {
+    "id": "23-runtime",
+    "title": "Build, deploy, migrate, seed and serve",
+    "nodes": [
+      [
+        "a",
+        "Commit or deploy|prepared application",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Container build installs|dependencies and builds app",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Container starts;|prepare persistent data dir",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Apply pending SQL|migrations in order",
+        1,
+        3
+      ],
+      [
+        "e",
+        "Migrations|succeed?",
+        1,
+        4,
+        "decision"
+      ],
+      [
+        "f",
+        "Stop startup;|repair migration issue",
+        0,
+        4,
+        "end"
+      ],
+      [
+        "g",
+        "Seed if not seeded;|preserve existing records",
+        1,
+        5
+      ],
+      [
+        "h",
+        "Initialize Garage;|load auth session hooks",
+        1,
+        6
+      ],
+      [
+        "i",
+        "Serve portal through|Node adapter on port 3000",
+        1,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "e",
+        "g",
+        "Yes"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i"
+      ]
+    ]
+  },
+  {
+    "id": "24-diagnostics",
+    "title": "Diagnostic clearance page and handwriting endpoint",
+    "nodes": [
+      [
+        "a",
+        "Open /test|diagnostic page",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Choose local page;|adjust form corners",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Prototype template|and checkbox experiments",
+        0,
+        2
+      ],
+      [
+        "d",
+        "Template passed + signed in:|identity test with crops",
+        2,
+        2
+      ],
+      [
+        "e",
+        "Display browser OCR|and geometry findings",
+        0,
+        3,
+        "end"
+      ],
+      [
+        "f",
+        "Server gets expected|identity from DB/session",
+        2,
+        3
+      ],
+      [
+        "g",
+        "Validate PNG crops;|call local Ollama",
+        2,
+        4
+      ],
+      [
+        "h",
+        "Strict transcription;|compare identity; review",
+        2,
+        5
+      ],
+      [
+        "i",
+        "Diagnostic result only;|no enrollment approval",
+        2,
+        6,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "Form checks",
+        "l",
+        "t"
+      ],
+      [
+        "b",
+        "d",
+        "Identity",
+        "r",
+        "t"
+      ],
+      [
+        "c",
+        "e"
+      ],
+      [
+        "d",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i"
+      ]
+    ]
+  },
+  {
+    "id": "25-cor",
+    "title": "Certificate of Registration download",
+    "nodes": [
+      [
+        "a",
+        "Student or staff clicks|Download COR",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Server checks role,|ownership and record",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Eligible saved|enrollment?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "d",
+        "Reject unauthorized,|dropped or voided record",
+        0,
+        2,
+        "end"
+      ],
+      [
+        "e",
+        "Load enrollment|subject snapshots",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Build PDF with term,|student details and units",
+        1,
+        4
+      ],
+      [
+        "g",
+        "Return private PDF|attachment; save locally",
+        1,
+        5,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "c",
+        "e",
+        "Yes"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ]
+    ]
+  },
+  {
+    "id": "26-clearance-states",
+    "title": "Saved clearance states and their permitted transitions",
+    "nodes": [
+      [
+        "a",
+        "No saved submission",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "All-pass upload|saved as ready",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Student requests;|status requested",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Staff decision",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "e",
+        "Rejected with reason",
+        0,
+        4
+      ],
+      [
+        "f",
+        "Verified; enrollment|clearance complete",
+        2,
+        4
+      ],
+      [
+        "g",
+        "Drop/reopen invalidates;|restore upload eligibility",
+        2,
+        5
+      ],
+      [
+        "h",
+        "Correct form; upload|new all-pass image",
+        0,
+        5
+      ],
+      [
+        "i",
+        "Replacement ready;|student requests again",
+        1,
+        6,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e",
+        "Reject",
+        "l",
+        "t"
+      ],
+      [
+        "d",
+        "f",
+        "Verify",
+        "r",
+        "t"
+      ],
+      [
+        "e",
+        "h"
+      ],
+      [
+        "f",
+        "g",
+        "Reopen"
+      ],
+      [
+        "g",
+        "i",
+        "New upload",
+        "b",
+        "r"
+      ],
+      [
+        "h",
+        "i",
+        "",
+        "b",
+        "l"
+      ]
+    ]
+  },
+  {
+    "id": "27-ocr",
+    "title": "Production OCR and office-mark analysis",
+    "nodes": [
+      [
+        "a",
+        "Validate bytes, MIME,|pixels and four corners",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Orient, grayscale, resize;|perspective-normalize",
+        1,
+        1
+      ],
+      [
+        "c",
+        "OCR text/term anchors;|compare printed images",
+        1,
+        2
+      ],
+      [
+        "d",
+        "All template|checks pass?",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "e",
+        "Fail/review findings;|office check withheld",
+        0,
+        3,
+        "end"
+      ],
+      [
+        "f",
+        "Locate checkbox frame;|subtract printed reference",
+        1,
+        4
+      ],
+      [
+        "g",
+        "Check new checkbox ink|and signature/stamp ink",
+        1,
+        5
+      ],
+      [
+        "h",
+        "Aggregate version-2|pass/review/fail report",
+        1,
+        6
+      ],
+      [
+        "i",
+        "All pass may save;|human review still required",
+        1,
+        7,
+        "end"
+      ],
+      [
+        "j",
+        "Student identity and|signature authenticity|are not established",
+        2,
+        6,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "d",
+        "f",
+        "Yes"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i"
+      ]
+    ]
+  },
+  {
+    "id": "28-email-settings",
+    "title": "Email provider configuration and delivery result",
+    "nodes": [
+      [
+        "a",
+        "Admin opens|Settings > Email",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Choose SMTP or Resend;|set sender name/email",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Provider?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "d",
+        "SMTP host, port,|password or saved secret",
+        0,
+        3
+      ],
+      [
+        "e",
+        "Resend API key|or saved secret",
+        2,
+        3
+      ],
+      [
+        "f",
+        "Validate and save;|blank secret preserves old",
+        1,
+        4
+      ],
+      [
+        "g",
+        "Next mail loads|saved provider settings",
+        1,
+        5
+      ],
+      [
+        "h",
+        "Provider accepts?",
+        1,
+        6,
+        "decision"
+      ],
+      [
+        "i",
+        "Failure reported;|academic save persists",
+        0,
+        7,
+        "end"
+      ],
+      [
+        "j",
+        "Send request succeeded;|inbox receipt unproven",
+        2,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "SMTP",
+        "l",
+        "t"
+      ],
+      [
+        "c",
+        "e",
+        "Resend",
+        "r",
+        "t"
+      ],
+      [
+        "d",
+        "f",
+        "",
+        "b",
+        "l"
+      ],
+      [
+        "e",
+        "f",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i",
+        "No",
+        "l",
+        "t"
+      ],
+      [
+        "h",
+        "j",
+        "Yes",
+        "r",
+        "t"
+      ]
+    ]
+  },
+  {
+    "id": "29-account-edit",
+    "title": "Account editing: stale forms and email-change effects",
+    "nodes": [
+      [
+        "a",
+        "Authorized staff opens|existing account editor",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Edit fields; submit|original + new values",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Original values|still current?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "d",
+        "Reject 409; reload|before retrying",
+        0,
+        2,
+        "end"
+      ],
+      [
+        "e",
+        "Validate names/email|and student personal data",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Email changed?",
+        1,
+        4,
+        "decision"
+      ],
+      [
+        "g",
+        "Update data; preserve|sessions and verification",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "h",
+        "Confirm; update email;|emailVerified becomes false",
+        2,
+        5
+      ],
+      [
+        "i",
+        "Delete sessions + reset|tokens; preserve setup flag",
+        2,
+        6,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "c",
+        "e",
+        "Yes"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g",
+        "No",
+        "l",
+        "t"
+      ],
+      [
+        "f",
+        "h",
+        "Yes",
+        "r",
+        "t"
+      ],
+      [
+        "h",
+        "i"
+      ]
+    ]
+  },
+  {
+    "id": "30-architecture",
+    "title": "System architecture and authoritative storage",
+    "nodes": [
+      [
+        "a",
+        "Browser: role-specific|pages and local drafts",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Server: sessions, role|and ownership checks",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Validated commands,|queries and transactions",
+        1,
+        2
+      ],
+      [
+        "d",
+        "SQLite: accounts,|academics, states, audits",
+        0,
+        3
+      ],
+      [
+        "e",
+        "Garage: template and|clearance file objects",
+        1,
+        3
+      ],
+      [
+        "f",
+        "SMTP / Resend:|outgoing messages",
+        2,
+        3
+      ],
+      [
+        "g",
+        "Server OCR: Sharp +|Tesseract English",
+        1,
+        4
+      ],
+      [
+        "h",
+        "PDF generation:|Certificate of Registration",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "i",
+        "Diagnostic only:|Ollama handwriting service",
+        2,
+        5,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "",
+        "l",
+        "t"
+      ],
+      [
+        "c",
+        "e"
+      ],
+      [
+        "c",
+        "f",
+        "",
+        "r",
+        "t"
+      ],
+      [
+        "e",
+        "g"
+      ],
+      [
+        "d",
+        "h"
+      ]
+    ]
+  }
+]
