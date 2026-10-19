@@ -124,34 +124,41 @@
 	}
 </script>
 
-<section aria-labelledby="office-fields-title" class="min-w-0 space-y-4" aria-busy={detecting}>
+<section aria-labelledby="office-fields-title" class="min-w-0 space-y-5" aria-busy={detecting}>
 	<div>
-		<h3 id="office-fields-title" class="text-sm font-bold">Offices, checkboxes and signatures</h3>
-		<p class="mt-1 text-xs text-base-content/65">
+		<h3 id="office-fields-title" class="text-base font-semibold">
+			Offices, checkboxes and signatures
+		</h3>
+		<p class="mt-1 text-sm text-base-content/65">
 			Select an office, then adjust its name, cleared checkbox and signature / stamp area.
 		</p>
 	</div>
-	<button
-		type="button"
-		class="btn btn-outline btn-sm"
-		disabled={locked || !source}
-		onclick={detect}
-	>
-		{#if detecting}
-			<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
-		{:else}
-			<ScanText size={16} aria-hidden="true" />
-		{/if}
-		{detecting ? 'Detecting office rows…' : 'Auto-detect office rows'}
-	</button>
-	{#if detecting}
-		<p role="status" class="text-sm">{progress}</p>
-		<button type="button" class="btn btn-ghost btn-sm" onclick={() => controller?.abort()}>
-			Cancel office detection
+	<div class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4">
+		<button
+			type="button"
+			class="btn btn-outline btn-sm"
+			disabled={locked || !source}
+			onclick={detect}
+		>
+			{#if detecting}
+				<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
+			{:else}
+				<ScanText size={16} aria-hidden="true" />
+			{/if}
+			{detecting ? 'Detecting office rows…' : 'Auto-detect office rows'}
 		</button>
-	{/if}
+		<p class="text-xs text-base-content/65">
+			Find office names, cleared checkboxes and signature spaces. Review the detected rows below.
+		</p>
+		{#if detecting}
+			<p role="status" class="text-sm">{progress}</p>
+			<button type="button" class="btn btn-ghost btn-sm" onclick={() => controller?.abort()}>
+				Cancel office detection
+			</button>
+		{/if}
+	</div>
 	{#if suggestions}
-		<div class="space-y-3 rounded-lg border border-base-300 bg-base-100 p-3">
+		<div class="space-y-3 rounded-xl border border-base-300 bg-base-100 p-4">
 			<p role="status" class="text-sm font-semibold">Found {rows.length} office rows</p>
 			<details class="text-xs text-base-content/65">
 				<summary class="cursor-pointer">Detection notes</summary>
@@ -171,17 +178,22 @@
 			</div>
 		</div>
 	{/if}
-	<button
-		type="button"
-		class="btn btn-outline btn-sm"
-		disabled={locked || rows.length >= 30}
-		onclick={add}
-	>
-		<Plus size={14} aria-hidden="true" />Add office
-	</button>
+	<div class="rounded-xl border border-base-300 p-4">
+		<p class="text-xs font-semibold">Add an office manually</p>
+		<div class="mt-3 flex flex-wrap gap-2">
+			<button
+				type="button"
+				class="btn btn-outline btn-sm"
+				disabled={locked || rows.length >= 30}
+				onclick={add}
+			>
+				<Plus size={14} aria-hidden="true" />Add office
+			</button>
+		</div>
+	</div>
 	{#if active}
 		<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-			<div class="min-w-0 space-y-3">
+			<div class="min-w-0 space-y-4 rounded-xl border border-base-300 bg-base-100 p-4">
 				<ul class="max-h-72 space-y-1.5 overflow-y-auto pr-1" aria-label="Office rows">
 					{#each rows as row, i (row.id)}
 						<li class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1">
@@ -234,7 +246,10 @@
 					</p>
 				{/if}
 			</div>
-			<div class="min-w-0 space-y-3" aria-label="Office area editor">
+			<div
+				class="min-w-0 space-y-3 rounded-xl border border-base-300 bg-base-100 p-4"
+				aria-label="Office area editor"
+			>
 				<p class="text-xs font-semibold">{active.label} · {OFFICE_AREA_LABELS[part]}</p>
 				<div role="group" aria-label="Office area legend" class="flex flex-wrap gap-2">
 					{#each kinds as kind (kind)}
@@ -281,7 +296,9 @@
 			</div>
 		</div>
 	{:else if !detecting}
-		<p class="text-xs text-base-content/65">
+		<p
+			class="rounded-xl border border-dashed border-base-300 bg-base-200/30 p-6 text-sm text-base-content/65"
+		>
 			No offices added. Detect rows or add them manually to enable student clearance checks.
 		</p>
 	{/if}

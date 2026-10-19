@@ -255,39 +255,58 @@
 		<p role="status" class="text-sm">Loading reference...</p>
 	{/if}
 	{#if sourceUrl}
-		<div hidden={step !== 'outline'} class="space-y-3">
-			<h3 class="text-sm font-bold">Confirm reference outline</h3>
-			<div class="mt-4 max-w-3xl space-y-3">
-				<BorderEditor
-					src={sourceUrl}
-					bind:corners
-					bind:drawing
-					bind:dragging
-					disabled={locked}
-					onchange={() => {
-						aligned = '';
-						suggestions = undefined;
-					}}
-				/>
-				<button
-					type="button"
-					class="btn btn-primary btn-sm"
-					onclick={align}
-					disabled={locked || drawing || dragging || !validCorners(corners)}
-				>
-					Use this outline
-				</button>
+		<div hidden={step !== 'outline'} class="space-y-5">
+			<div>
+				<h3 class="text-base font-semibold">Confirm reference outline</h3>
+				<p class="mt-1 text-sm text-base-content/65">
+					Align the clearance form before marking its printed details and writing areas.
+				</p>
+			</div>
+			<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+				<div class="min-w-0 space-y-4 rounded-xl border border-base-300 bg-base-100 p-4">
+					<p class="text-sm font-semibold">Form boundaries</p>
+					<p class="text-xs text-base-content/65">
+						Keep the complete form inside the outline. Drag the corners to follow its outer edges.
+					</p>
+					<p class="text-xs text-base-content/65">
+						Confirm this outline to continue with the remaining setup steps.
+					</p>
+					<button
+						type="button"
+						class="btn btn-primary btn-sm"
+						onclick={align}
+						disabled={locked || drawing || dragging || !validCorners(corners)}
+					>
+						Use this outline
+					</button>
+				</div>
+				<div class="min-w-0 space-y-3 rounded-xl border border-base-300 bg-base-100 p-4">
+					<p class="text-xs font-semibold">Reference outline</p>
+					<BorderEditor
+						src={sourceUrl}
+						bind:corners
+						bind:drawing
+						bind:dragging
+						disabled={locked}
+						onchange={() => {
+							aligned = '';
+							suggestions = undefined;
+						}}
+					/>
+				</div>
 			</div>
 		</div>
 	{/if}
 	{#if aligned}
-		<div hidden={step !== 'printed'} class="space-y-4">
-			<h3 class="text-sm font-bold">Printed areas</h3>
-			<p class="text-xs text-base-content/65">
-				Add school name and form title as text, a logo or table structure as an image, and the
-				semester and academic year. Include whole lines with a little margin. Exclude handwriting,
-				signatures and checkbox interiors.
-			</p>
+		<div hidden={step !== 'printed'} class="space-y-5">
+			<div>
+				<h3 class="text-base font-semibold">Printed areas</h3>
+				<p class="mt-1 text-sm text-base-content/65">
+					Add school name and form title as text, a logo or table structure as an image, and the
+					semester and academic year. Include whole lines with a little margin. Exclude handwriting,
+					signatures and checkbox interiors.
+				</p>
+			</div>
 			<div class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4">
 				<button type="button" class="btn btn-outline btn-sm" onclick={detect} disabled={locked}>
 					{#if detecting}
@@ -311,134 +330,138 @@
 						Cancel area detection
 					</button>
 				{/if}
-				{#if suggestions}
-					<div aria-label="Area suggestions" class="space-y-3">
-						<p role="status" class="text-sm font-semibold">
-							Found {suggestions.areas.length} suggested areas
-						</p>
-						<details class="text-xs text-base-content/65">
-							<summary class="cursor-pointer">Detection notes</summary>
-							<ul class="mt-2 list-inside list-disc space-y-1">
-								{#each suggestions.hints as hint (hint)}
-									<li>{hint}</li>
+			</div>
+			{#if suggestions}
+				<div
+					aria-label="Area suggestions"
+					class="space-y-3 rounded-xl border border-base-300 bg-base-100 p-4"
+				>
+					<p role="status" class="text-sm font-semibold">
+						Found {suggestions.areas.length} suggested areas
+					</p>
+					<details class="text-xs text-base-content/65">
+						<summary class="cursor-pointer">Detection notes</summary>
+						<ul class="mt-2 list-inside list-disc space-y-1">
+							{#each suggestions.hints as hint (hint)}
+								<li>{hint}</li>
+							{/each}
+						</ul>
+					</details>
+					<p class="text-xs text-base-content/65">
+						Using suggestions replaces the draft printed areas. Review and edit them below, then
+						save to apply changes.
+					</p>
+					<div class="flex flex-wrap gap-2">
+						<button
+							type="button"
+							class="btn whitespace-normal btn-primary btn-sm"
+							disabled={locked || !suggestions.areas.length}
+							onclick={applySuggestions}
+						>
+							Use suggestions — replace draft areas
+						</button>
+						<button
+							type="button"
+							class="btn btn-ghost btn-sm"
+							disabled={locked}
+							onclick={() => {
+								suggestions = undefined;
+							}}
+						>
+							Discard suggestions
+						</button>
+					</div>
+				</div>
+				{#if suggestions.areas.length}
+					<p class="text-xs text-base-content/65">
+						Select a suggestion to view its box. Delete unwanted suggestions using the trash button
+						beside them.
+					</p>
+					<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+						<div class="min-w-0 rounded-xl border border-base-300 bg-base-100 p-4">
+							<ul
+								aria-label="Suggested areas"
+								class="max-h-72 space-y-1.5 overflow-y-auto pr-1 text-xs"
+							>
+								{#each suggestions.areas as area (area.id)}
+									<li
+										class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1"
+									>
+										<button
+											type="button"
+											aria-label={`Preview ${area.label}`}
+											aria-pressed={previewSuggestion?.id === area.id}
+											class={`min-w-0 flex-1 rounded-md p-2 text-left hover:bg-base-200 focus-visible:outline-2 focus-visible:outline-primary ${previewSuggestion?.id === area.id ? 'bg-primary/10' : ''}`}
+											disabled={locked}
+											onclick={() => {
+												selectedSuggestionId = area.id;
+											}}
+										>
+											<strong class="block">{area.label}</strong>
+											<span class="mt-1 block break-words text-base-content/65">
+												{area.kind === 'image' ? 'Visual candidate' : area.expected}
+											</span>
+										</button>
+										<button
+											type="button"
+											aria-label={`Delete suggested ${area.label}`}
+											title={`Delete ${area.label}`}
+											class="btn btn-square shrink-0 btn-ghost text-error btn-sm"
+											disabled={locked}
+											onclick={() => removeSuggestion(area.id)}
+										>
+											<Trash2 size={16} aria-hidden="true" />
+										</button>
+									</li>
 								{/each}
 							</ul>
-						</details>
-						{#if suggestions.areas.length}
-							<p class="text-xs text-base-content/65">
-								Select a suggestion to view its box. Delete unwanted suggestions using the trash
-								button beside them.
-							</p>
-							<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-								<ul aria-label="Suggested areas" class="max-h-96 space-y-2 overflow-auto text-xs">
-									{#each suggestions.areas as area (area.id)}
-										<li
-											class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1"
-										>
-											<button
-												type="button"
-												aria-label={`Preview ${area.label}`}
-												aria-pressed={previewSuggestion?.id === area.id}
-												class={`min-w-0 flex-1 rounded-md p-2 text-left hover:bg-base-200 focus-visible:outline-2 focus-visible:outline-primary ${previewSuggestion?.id === area.id ? 'bg-primary/10' : ''}`}
-												disabled={locked}
-												onclick={() => {
-													selectedSuggestionId = area.id;
-												}}
-											>
-												<strong class="block">{area.label}</strong>
-												<span class="mt-1 block break-words text-base-content/65">
-													{area.kind === 'image' ? 'Visual candidate' : area.expected}
-												</span>
-											</button>
-											<button
-												type="button"
-												aria-label={`Delete suggested ${area.label}`}
-												title={`Delete ${area.label}`}
-												class="btn btn-square shrink-0 btn-ghost text-error btn-sm"
-												disabled={locked}
-												onclick={() => removeSuggestion(area.id)}
-											>
-												<Trash2 size={16} aria-hidden="true" />
-											</button>
-										</li>
-									{/each}
-								</ul>
-								{#if previewSuggestion}
-									<section
-										aria-label="Suggested area preview"
-										class="min-w-0 space-y-2 rounded-lg border border-base-300 bg-base-100 p-3"
-									>
-										<h4 class="text-sm font-semibold">{previewSuggestion.label}</h4>
-										<div
-											role="img"
-											aria-label={`${previewSuggestion.label} highlighted on the reference`}
-											class="relative w-fit max-w-full overflow-hidden rounded-md border border-base-300 bg-white"
-										>
-											<img
-												src={aligned}
-												alt=""
-												class="block h-auto max-h-[65vh] w-auto max-w-full"
-											/>
-											<svg
-												class="pointer-events-none absolute inset-0 h-full w-full"
-												viewBox="0 0 100 100"
-												preserveAspectRatio="none"
-												aria-hidden="true"
-											>
-												<rect
-													x={previewSuggestion.box.x * 100}
-													y={previewSuggestion.box.y * 100}
-													width={previewSuggestion.box.width * 100}
-													height={previewSuggestion.box.height * 100}
-													fill="#16a34a30"
-													stroke="#15803d"
-													stroke-width=".5"
-												/>
-											</svg>
-										</div>
-										<p class="text-xs break-words text-base-content/65">
-											{previewSuggestion.kind === 'image'
-												? 'Check that this contains a permanent logo or printed structure.'
-												: previewSuggestion.expected}
-										</p>
-									</section>
-								{/if}
-							</div>
-							<p class="text-xs text-base-content/65">
-								Using suggestions replaces the draft areas and fills readable term values. Review
-								and edit them, then save to apply changes.
-							</p>
-						{:else}
-							<p class="text-sm text-base-content/65">
-								No suggestions remain. Run detection again or mark areas manually.
-							</p>
-						{/if}
-						<div class="flex flex-wrap gap-2">
-							<button
-								type="button"
-								class="btn btn-outline btn-sm"
-								disabled={locked || !suggestions.areas.length}
-								onclick={applySuggestions}
-							>
-								Use suggestions — replace draft areas
-							</button>
-							<button
-								type="button"
-								class="btn btn-ghost btn-sm"
-								disabled={locked}
-								onclick={() => {
-									suggestions = undefined;
-								}}
-							>
-								Discard suggestions
-							</button>
 						</div>
+						{#if previewSuggestion}
+							<section
+								aria-label="Suggested area preview"
+								class="min-w-0 space-y-3 rounded-xl border border-base-300 bg-base-100 p-4"
+							>
+								<h4 class="text-sm font-semibold">{previewSuggestion.label}</h4>
+								<div
+									role="img"
+									aria-label={`${previewSuggestion.label} highlighted on the reference`}
+									class="relative w-fit max-w-full overflow-hidden rounded-md border border-base-300 bg-white"
+								>
+									<img src={aligned} alt="" class="block h-auto max-h-[65vh] w-auto max-w-full" />
+									<svg
+										class="pointer-events-none absolute inset-0 h-full w-full"
+										viewBox="0 0 100 100"
+										preserveAspectRatio="none"
+										aria-hidden="true"
+									>
+										<rect
+											x={previewSuggestion.box.x * 100}
+											y={previewSuggestion.box.y * 100}
+											width={previewSuggestion.box.width * 100}
+											height={previewSuggestion.box.height * 100}
+											fill="#16a34a30"
+											stroke="#15803d"
+											stroke-width=".5"
+										/>
+									</svg>
+								</div>
+								<p class="text-xs break-words text-base-content/65">
+									{previewSuggestion.kind === 'image'
+										? 'Check that this contains a permanent logo or printed structure.'
+										: previewSuggestion.expected}
+								</p>
+							</section>
+						{/if}
 					</div>
+				{:else}
+					<p class="text-sm text-base-content/65">
+						No suggestions remain. Run detection again or mark areas manually.
+					</p>
 				{/if}
-			</div>
+			{/if}
 			{#if !suggestions}
-				<details class="rounded-lg border border-base-300 p-3">
-					<summary class="cursor-pointer text-xs font-semibold">Add an area manually</summary>
+				<div class="rounded-xl border border-base-300 p-4">
+					<p class="text-xs font-semibold">Add an area manually</p>
 					<div class="mt-3 flex flex-wrap gap-2">
 						<button
 							type="button"
@@ -473,10 +496,10 @@
 							Year area
 						</button>
 					</div>
-				</details>
+				</div>
 				{#if areas.length}
-					<div class="grid min-w-0 items-start gap-5 lg:grid-cols-[17rem_minmax(0,1fr)]">
-						<div class="min-w-0 space-y-3">
+					<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+						<div class="min-w-0 space-y-4 rounded-xl border border-base-300 bg-base-100 p-4">
 							<ul class="max-h-72 space-y-1.5 overflow-y-auto pr-1" aria-label="Marked areas">
 								{#each areas as area, i (area.id)}
 									<li
@@ -547,12 +570,21 @@
 							{/if}
 						</div>
 						{#if active}
-							<AreaEditor src={aligned} bind:box={active.box} disabled={locked} />
+							<div class="min-w-0 space-y-3 rounded-xl border border-base-300 bg-base-100 p-4">
+								<p class="text-xs font-semibold">{active.label}</p>
+								<AreaEditor src={aligned} bind:box={active.box} disabled={locked} />
+							</div>
 						{/if}
 					</div>
+				{:else}
+					<p
+						class="rounded-xl border border-dashed border-base-300 bg-base-200/30 p-6 text-sm text-base-content/65"
+					>
+						No printed areas added. Detect areas or add them manually to begin.
+					</p>
 				{/if}
 			{/if}
-			<p class="text-sm text-base-content/65">
+			<p class="text-xs text-base-content/65">
 				Mark where semester and academic year appear. Required values come from the student's
 				enrollment, so this layout can be reused across terms.
 			</p>

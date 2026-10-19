@@ -106,34 +106,41 @@
 	}
 </script>
 
-<section aria-labelledby="personal-fields-title" class="min-w-0 space-y-4" aria-busy={detecting}>
+<section aria-labelledby="personal-fields-title" class="min-w-0 space-y-5" aria-busy={detecting}>
 	<div>
-		<h3 id="personal-fields-title" class="text-sm font-bold">Personal information input areas</h3>
-		<p class="mt-1 text-xs text-base-content/65">
+		<h3 id="personal-fields-title" class="text-base font-semibold">
+			Personal information input areas
+		</h3>
+		<p class="mt-1 text-sm text-base-content/65">
 			Optional: mark the writing areas for future identity checks. Exclude the printed labels.
 		</p>
 	</div>
-	<button
-		type="button"
-		class="btn btn-outline btn-sm"
-		disabled={locked || !source}
-		onclick={detect}
-	>
-		{#if detecting}
-			<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
-		{:else}
-			<ScanText size={16} aria-hidden="true" />
-		{/if}
-		{detecting ? 'Detecting personal areas...' : 'Auto-detect personal inputs'}
-	</button>
-	{#if detecting}
-		<p role="status" class="text-sm">{progress}</p>
-		<button type="button" class="btn btn-ghost btn-sm" onclick={() => controller?.abort()}>
-			Cancel personal detection
+	<div class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4">
+		<button
+			type="button"
+			class="btn btn-outline btn-sm"
+			disabled={locked || !source}
+			onclick={detect}
+		>
+			{#if detecting}
+				<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
+			{:else}
+				<ScanText size={16} aria-hidden="true" />
+			{/if}
+			{detecting ? 'Detecting personal areas...' : 'Auto-detect personal inputs'}
 		</button>
-	{/if}
+		<p class="text-xs text-base-content/65">
+			Find writing areas from the printed student labels. Review suggested boxes before using them.
+		</p>
+		{#if detecting}
+			<p role="status" class="text-sm">{progress}</p>
+			<button type="button" class="btn btn-ghost btn-sm" onclick={() => controller?.abort()}>
+				Cancel personal detection
+			</button>
+		{/if}
+	</div>
 	{#if pending}
-		<div class="space-y-3 rounded-lg border border-base-300 bg-base-100 p-3">
+		<div class="space-y-3 rounded-xl border border-base-300 bg-base-100 p-4">
 			<p role="status" class="text-sm font-semibold">
 				Found {pending.fields.length} personal input areas
 			</p>
@@ -172,8 +179,8 @@
 			</div>
 		</div>
 	{/if}
-	<details class="rounded-lg border border-base-300 p-3">
-		<summary class="cursor-pointer text-xs font-semibold">Add fields manually</summary>
+	<div class="rounded-xl border border-base-300 p-4">
+		<p class="text-xs font-semibold">Add fields manually</p>
 		<div class="mt-3 flex flex-wrap gap-2" aria-label="Add personal input area">
 			{#each kinds as kind (kind)}
 				<button
@@ -186,10 +193,10 @@
 				</button>
 			{/each}
 		</div>
-	</details>
+	</div>
 	{#if displayed.length && active}
 		<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-			<div class="min-w-0 space-y-3">
+			<div class="min-w-0 space-y-4 rounded-xl border border-base-300 bg-base-100 p-4">
 				<ul class="max-h-72 space-y-1.5 overflow-y-auto pr-1" aria-label="Personal input areas">
 					{#each displayed as area, i (area.id)}
 						<li class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1">
@@ -234,10 +241,15 @@
 					boxes only when the inputs are separate.
 				</p>
 			</div>
-			<AreaEditor src={image} bind:box={active.box} disabled={locked} />
+			<div class="min-w-0 space-y-3 rounded-xl border border-base-300 bg-base-100 p-4">
+				<p class="text-xs font-semibold">{PERSONAL_FIELD_LABELS[active.field]}</p>
+				<AreaEditor src={image} bind:box={active.box} disabled={locked} />
+			</div>
 		</div>
 	{:else if !detecting}
-		<p class="text-xs text-base-content/65">
+		<p
+			class="rounded-xl border border-dashed border-base-300 bg-base-200/30 p-6 text-sm text-base-content/65"
+		>
 			No personal areas selected. Detect them or add fields manually. You can save the printed
 			template setup without these optional areas.
 		</p>
