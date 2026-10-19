@@ -30,6 +30,8 @@ Migration `0036_clearance_submission` adds the per-enrollment upload, definition
 
 Uploads recheck enrollment/template revisions before committing and preserve existing files on failure. A request racing a replacement upload prevents replacement. Pending or verified requests cannot be overwritten. Reopening grades or dropping enrollment invalidates its submission; stale reviews and request IDs cannot approve a replacement. After requesting, later template changes do not erase the submitted evidence snapshot. Signature/stamp checking establishes mark presence only; staff review still decides clearance approval.
 
+Checkbox checking locates the printed frame near each saved box and inspects its interior, excluding the frame and isolated specks. Missing or uncertain outlines require review. Reports from the earlier whole-box checker cannot support new enrollment requests or staff verification; unreviewed students can replace those uploads and run the current checks, including previously pending requests. Existing staff approvals remain valid. Signature/stamp presence checks are unchanged.
+
 Focused flow checks:
 
 ```sh

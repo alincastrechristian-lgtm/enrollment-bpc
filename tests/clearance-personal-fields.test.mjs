@@ -133,3 +133,70 @@ test('one shared course/year/section label yields a combined region instead of i
 	assert(!result.hints.some((h) => /Year level was not located/.test(h)));
 	assert.equal(suggestPersonalFields([], width, height, ink).fields.length, 0);
 });
+
+test('office eligibility text is not a year input and cannot suppress the combined student field', () => {
+	const ink = new Uint8Array(width * height);
+	rule(ink, 300, 600, 415);
+	const conditions = [
+		line('(1st year enrollees only)', [
+			word('(1st', 30, 100, 60, 120),
+			word('year', 65, 100, 100, 120),
+			word('enrollees', 105, 100, 175, 120),
+			word('only)', 180, 100, 215, 120)
+		]),
+		line('NSTP Coordinator (1st year enrollees only)', [
+			word('NSTP', 30, 100, 65, 120),
+			word('Coordinator', 70, 100, 150, 120),
+			word('(1st', 155, 100, 185, 120),
+			word('year', 190, 100, 230, 120),
+			word('enrollees', 235, 100, 300, 120),
+			word('only)', 305, 100, 345, 120)
+		]),
+		line('For first year students only', [
+			word('For', 30, 100, 60, 120),
+			word('first', 65, 100, 95, 120),
+			word('year', 100, 100, 140, 120),
+			word('students', 145, 100, 210, 120),
+			word('only', 215, 100, 250, 120)
+		])
+	];
+	for (const condition of conditions) {
+		assert.equal(
+			suggestPersonalFields([condition], width, height, ink).fields.length,
+			0,
+			condition.text
+		);
+		const result = suggestPersonalFields(
+			[
+				condition,
+				line('Course, Yr., & Sec.:', [
+					word('Course,', 80, 400, 150, 420),
+					word('Yr.,', 160, 400, 185, 420),
+					word('&', 195, 400, 210, 420),
+					word('Sec.:', 220, 400, 250, 420)
+				])
+			],
+			width,
+			height,
+			ink
+		);
+		assert.deepEqual(
+			result.fields.map((field) => field.field),
+			['courseYearSection'],
+			condition.text
+		);
+	}
+});
+
+test('standalone year captions and year-level labels still locate the writing area', () => {
+	const ink = new Uint8Array(width * height);
+	rule(ink, 250, 500, 315);
+	for (const caption of ['Year', 'Yr.', 'Year level', 'Year level:']) {
+		const words = caption
+			.split(' ')
+			.map((text, index) => word(text, 100 + index * 50, 300, 145 + index * 50, 320));
+		const result = suggestPersonalFields([line(caption, words)], width, height, ink);
+		assert.equal(result.fields[0]?.field, 'year', caption);
+		assert(result.fields[0].box.x > words.at(-1).bbox.x1 / width, caption);
+	}
+});

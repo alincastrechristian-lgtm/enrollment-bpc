@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { clearanceSubmission, clearanceTemplate } from '#lib/schema.js';
 import { definitionSchema } from '#lib/clearance/definition.js';
-import { clearancePassed } from '#lib/clearance/report.js';
+import { clearancePassed, hasCurrentOfficeChecks } from '#lib/clearance/report.js';
 import type { Corners } from '#lib/clearance/clearance.js';
 import { checkClearance, decodeClearance } from './clearance-checker';
 import {
@@ -33,7 +33,7 @@ export async function uploadStudentClearance(
 	const previous = getSubmission(db, input.enrollmentId);
 	if (
 		record.enrollment.submittedClearance ||
-		previous?.status === 'requested' ||
+		(previous?.status === 'requested' && hasCurrentOfficeChecks(previous.report)) ||
 		previous?.status === 'verified'
 	)
 		error(409, 'Your clearance is already awaiting review or verified.');

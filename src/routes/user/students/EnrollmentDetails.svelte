@@ -4,6 +4,7 @@
 	import { getErrorMessage } from '#lib/errors.js';
 	import { rejectClearance } from '#lib/actions/clearance.remote.js';
 	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
+	import { clearancePassed } from '#lib/clearance/report.js';
 	import {
 		finalizeEnrollmentGrades,
 		completeEnrollmentFollowUp,
@@ -55,6 +56,9 @@
 	let clearanceVerifiedHere = $state(false);
 	let droppedHere = $state(false);
 	const clearanceVerified = $derived(clearanceVerifiedHere || data.enrollment.submittedClearance);
+	const clearanceChecksPassed = $derived(
+		!!data.clearance && clearancePassed(data.clearance.report)
+	);
 	const finalized = $derived(finalizedHere || data.enrollment.finalizedGrades);
 	const voided = $derived(data.enrollment.status === 'voided');
 	const dropped = $derived(droppedHere || data.enrollment.status === 'dropped');
@@ -315,7 +319,8 @@
 			voided ||
 			!finalized ||
 			clearanceVerified ||
-			data.clearance?.status !== 'requested'
+			data.clearance?.status !== 'requested' ||
+			!clearanceChecksPassed
 		)
 			return;
 		busy = true;
@@ -550,7 +555,8 @@
 							voided ||
 							!finalized ||
 							!data.isCurrent ||
-							data.clearance?.status !== 'requested'}
+							data.clearance?.status !== 'requested' ||
+							!clearanceChecksPassed}
 						onclick={verifyClearance}
 					>
 						Verify clearance

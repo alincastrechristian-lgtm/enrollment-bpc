@@ -259,7 +259,10 @@ function fixture(t) {
 	const workflow = load('src/lib/server/clearance-workflow.ts', {
 		...deps,
 		'./student-enrollment': deps['#lib/server/student-enrollment.js'],
-		'#lib/clearance/report.js': load('src/lib/clearance/report.ts', { './clearance': core })
+		'#lib/clearance/report.js': load('src/lib/clearance/report.ts', {
+			'./clearance': core,
+			'./checkbox': load('src/lib/clearance/checkbox.ts', { './clearance': core })
+		})
 	});
 	deps['#lib/server/clearance-workflow.js'] = workflow;
 	deps['#lib/server/enrollment-editor.js'] = load('src/lib/server/enrollment-editor.ts', {
@@ -749,7 +752,8 @@ test('clearance verification enforces staff access, ownership and grade finaliza
 				report: {
 					template: [{ label: 'Template', verdict: 'pass', detail: 'Matched' }],
 					offices: [{ label: 'Office marks', verdict: 'pass', detail: 'Present' }],
-					identity: 'deferred'
+					identity: 'deferred',
+					officeCheckVersion: 2
 				},
 				status: 'requested',
 				uploadedAt: new Date(),

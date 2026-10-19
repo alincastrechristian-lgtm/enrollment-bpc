@@ -118,3 +118,49 @@ test('graphic candidates locate compact ink anywhere and exclude text, page bord
 	assert.deepEqual(suggestGraphicAreas(new Uint8Array(width * height), width, height, []), []);
 	assert.deepEqual(suggestGraphicAreas(new Uint8Array(1), width, height, []), []);
 });
+
+test('empty checkbox outlines are excluded while circular seals and detailed square graphics remain', () => {
+	const width = 400,
+		height = 320,
+		ink = new Uint8Array(width * height);
+	function frame(left, top, size) {
+		for (let p = 0; p <= size; p++) {
+			ink[top * width + left + p] = 1;
+			ink[(top + size) * width + left + p] = 1;
+			ink[(top + p) * width + left] = 1;
+			ink[(top + p) * width + left + size] = 1;
+		}
+	}
+	for (const [x, y, size] of [
+		[40, 40, 18],
+		[100, 80, 24],
+		[160, 120, 32]
+	])
+		frame(x, y, size);
+	frame(260, 60, 42);
+	for (let p = 0; p <= 42; p++) ink[(60 + p) * width + 260 + p] = 1;
+	for (let y = 0; y < height; y++)
+		for (let x = 0; x < width; x++)
+			if (Math.abs(Math.hypot(x - 80, y - 240) - 12) < 1.5) ink[y * width + x] = 1;
+	const boxes = suggestGraphicAreas(ink, width, height, []);
+	assert.equal(boxes.length, 2);
+	const contains = (box, x, y) =>
+		box.x * width <= x &&
+		(box.x + box.width) * width >= x &&
+		box.y * height <= y &&
+		(box.y + box.height) * height >= y;
+	assert(
+		boxes.some((box) => contains(box, 281, 81)),
+		'Detailed square logo retained.'
+	);
+	assert(
+		boxes.some((box) => contains(box, 80, 240)),
+		'Small circular seal retained.'
+	);
+	for (const [x, y] of [
+		[49, 49],
+		[112, 92],
+		[176, 136]
+	])
+		assert(!boxes.some((box) => contains(box, x, y)), 'Checkbox excluded.');
+});

@@ -183,6 +183,26 @@ export function suggestOfficeRows(
 	const boxes = squares(ink, width, height)
 		.filter((b) => b.y1 - b.y0 >= minSize && b.x1 - b.x0 >= minSize)
 		.sort((a, b) => cy(a) - cy(b) || a.x0 - b.x0);
+	// OCR can read a checkbox outline as text such as "[od". It sits left
+	// of the next checkbox but cannot supply that checkbox's office name.
+	for (const word of words)
+		if (
+			boxes.some((box) => {
+				const overlapWidth = Math.max(
+					0,
+					Math.min(word.bbox.x1, box.x1) - Math.max(word.bbox.x0, box.x0)
+				);
+				const overlapHeight = Math.max(
+					0,
+					Math.min(word.bbox.y1, box.y1) - Math.max(word.bbox.y0, box.y0)
+				);
+				return (
+					overlapWidth * overlapHeight >=
+					(word.bbox.x1 - word.bbox.x0) * (word.bbox.y1 - word.bbox.y0) * 0.5
+				);
+			})
+		)
+			used.add(word);
 	const rules = horizontalRules(ink, width, height);
 	const candidates: {
 		row: OfficeRow;

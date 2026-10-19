@@ -6,7 +6,11 @@
 	} from '#lib/actions/clearance.remote.js';
 	import BorderEditor from '#lib/clearance/BorderEditor.svelte';
 	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
-	import { clearancePassed, type ClearanceReport } from '#lib/clearance/report.js';
+	import {
+		clearancePassed,
+		hasCurrentOfficeChecks,
+		type ClearanceReport
+	} from '#lib/clearance/report.js';
 	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
 	import { resolve } from '$app/paths';
 	import { getErrorMessage } from '#lib/errors.js';
@@ -23,11 +27,13 @@
 	const current = $derived(progress.current?.current);
 	const submission = $derived(progress.current?.submission);
 	const template = $derived(progress.current?.template);
+	const currentChecks = $derived(!submission || hasCurrentOfficeChecks(submission.report));
 	const allowed = $derived(
 		!!current?.finalizedGrades &&
 			!['dropped', 'voided'].includes(current.status) &&
 			!current.submittedClearance &&
-			!['requested', 'verified'].includes(submission?.status ?? '')
+			(!['requested', 'verified'].includes(submission?.status ?? '') ||
+				(submission?.status === 'requested' && !currentChecks))
 	);
 	async function open(event: Event) {
 		const file = (event.currentTarget as HTMLInputElement).files?.[0];
@@ -92,7 +98,7 @@
 				1. Grades {current.finalizedGrades ? 'finalized' : 'pending'}
 			</li>
 			<li
-				class={`badge ${submission && submission.status !== 'invalidated' ? 'badge-success' : 'badge-ghost'}`}
+				class={`badge ${submission && currentChecks && submission.status !== 'invalidated' ? 'badge-success' : 'badge-ghost'}`}
 			>
 				2. Upload and checks
 			</li>
@@ -133,7 +139,7 @@
 						Grades or enrollment changed. Upload clearance again after grades are finalized.
 					</p>
 				{/if}
-				{#if submission.status === 'requested'}
+				{#if submission.status === 'requested' && currentChecks}
 					<p role="status" class="text-sm">
 						Your enrollment request is awaiting Registrar/admin clearance review.
 					</p>
@@ -219,7 +225,7 @@
 				Clearance template setup is not ready. Contact the Registrar.
 			</p>
 		{/if}
-		{#if submission?.status === 'ready'}
+		{#if submission?.status === 'ready' && currentChecks}
 			<button
 				type="button"
 				class="btn btn-primary"

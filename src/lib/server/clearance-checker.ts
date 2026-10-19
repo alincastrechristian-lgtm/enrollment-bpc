@@ -162,7 +162,8 @@ export async function checkClearance(
 				overall(checks) === 'pass'
 					? checkOfficeMarks(blank.data, scan.data, width, height, definition.officeRows ?? [])
 					: [],
-			identity: 'deferred'
+			identity: 'deferred',
+			officeCheckVersion: 2
 		};
 	} finally {
 		if (stop) clearTimeout(stop);

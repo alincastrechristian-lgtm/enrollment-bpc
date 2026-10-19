@@ -115,6 +115,20 @@ test('links office names, cleared checkbox and signature underlines with vertica
 	assert.equal(hints.length, 1);
 });
 
+test('OCR fragments on checkbox outlines cannot become office names for the next checkbox', () => {
+	const f = fixture();
+	for (const y of [240, 320]) f.lines.push(line(word('[od', 257, y - 2, 294, y + 34)));
+	const result = suggestOfficeRows(f.lines, width, height, f.ink);
+	assert.deepEqual(
+		result.rows.map((row) => row.label),
+		['Library', 'Registrar']
+	);
+	for (const row of result.rows) {
+		assert(row.office.x + row.office.width < row.cleared.x);
+		assert(row.signature.x >= 0.64);
+	}
+});
+
 test('choice captions determine roles even when columns are reversed or OCR words arrive out of order', () => {
 	const f = fixture({ reverse: true });
 	f.lines.reverse();

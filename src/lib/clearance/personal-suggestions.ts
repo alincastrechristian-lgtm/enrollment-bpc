@@ -18,6 +18,7 @@ function labelsFor(line: PrintedLine): Label[] {
 	const text = line.text.toLowerCase().replace(/[’']/g, '');
 	if (/semester|academic|school\s*year|20\d{2}/i.test(text)) return [];
 	const words = line.words;
+	const standaloneYear = /^\s*(?:year(?:\s*level)?|yr)[\s:.,_]*$/.test(text);
 	if (
 		/\b(?:course|program)\b.*(?:\byear\b|\byr\b|\bsec\b|\bsection\b)/i.test(text) &&
 		(text.match(/:/g)?.length ?? 0) <= 1
@@ -39,8 +40,15 @@ function labelsFor(line: PrintedLine): Label[] {
 		)
 			field = 'studentName';
 		else if (/^(?:course|program)$/.test(word) && !/program\s+head/.test(text)) field = 'course';
-		else if (/^(?:year|yr|yearlevel)$/.test(word)) field = 'year';
-		else if (/^(?:section|sec)$/.test(word)) field = 'section';
+		else if (/^(?:year|yr|yearlevel)$/.test(word)) {
+			end = next === 'level' ? i + 1 : i;
+			if (
+				/\b(?:enrollees?|enrolled|only)\b/.test(text) ||
+				(!standaloneYear && !/[:：]/.test(words[end].text))
+			)
+				continue;
+			field = 'year';
+		} else if (/^(?:section|sec)$/.test(word)) field = 'section';
 		if (!field) continue;
 		const group = words.slice(i, end + 1);
 		labels.push({
@@ -65,7 +73,7 @@ function labelsFor(line: PrintedLine): Label[] {
 		)
 			field = 'studentName';
 		else if (/\bcourse\b/.test(text)) field = 'course';
-		else if (/^\s*(?:year|yr)(?:\s+level)?\s*[:.]*\s*$/.test(text)) field = 'year';
+		else if (standaloneYear) field = 'year';
 		else if (/^\s*(?:section|sec)\s*[:.]*\s*$/.test(text)) field = 'section';
 		if (field)
 			labels.push({

@@ -113,3 +113,41 @@ test('server decoder rejects spoofed MIME types, unsupported formats and tiny im
 	);
 	await assert.rejects(decodeClearance(Buffer.from('not an image')));
 });
+
+test('real written photo rejects four empty checkboxes while accepting the Adviser tick', async () => {
+	const offices = [
+		['SG Adviser', 0.26, 0.289278, 0.052548, 0.267914],
+		['PTCA', 0.26125, 0.348195, 0.052017, 0.344878],
+		['Adviser', 0.262083, 0.408705, 0.051486, 0.404326],
+		['Research', 0.26375, 0.474522, 0.050955, 0.467224],
+		['Program Head', 0.265, 0.535563, 0.050955, 0.53052]
+	] as const;
+	const configured = {
+		...definition,
+		officeRows: offices.map(([label, x, y, height, signatureY]) => ({
+			id: crypto.randomUUID(),
+			label,
+			cleared: { x, y, width: 0.045, height },
+			signature: { x: 0.602, y: signatureY, width: 0.22, height: 0.05 }
+		}))
+	};
+	const report = await checkClearance(
+		readFileSync('static/clearance-reference.jpg'),
+		await decodeClearance(readFileSync('static/clearance-written-example.jpg')),
+		[
+			{ x: 0.161451814768, y: 0.033684210526 },
+			{ x: 0.860611122192, y: 0.012631885295 },
+			{ x: 0.90112640801, y: 0.911578947368 },
+			{ x: 0.170212765957, y: 1 }
+		],
+		configured
+	);
+	assert.equal(overall(report.template), 'pass');
+	assert.deepEqual(
+		report.offices
+			.filter((check) => check.label.endsWith('cleared checkbox'))
+			.map((check) => check.verdict),
+		['fail', 'fail', 'pass', 'fail', 'fail']
+	);
+	assert.equal(clearancePassed(report), false);
+});

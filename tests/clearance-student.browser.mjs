@@ -27,11 +27,11 @@ test(
 					'export const resolve=(route,params={})=>route.replace(/\\[([^\\]]+)\\]/g,(_,key)=>encodeURIComponent(params[key]));',
 				'actions.svelte.js': `const state=$state({current:{id:'e',revision:0,status:'enrolled',finalizedGrades:false,submittedClearance:false,semester:2,schoolYearStart:2025},template:{revision:'template',definition:{}},submission:null});
 			window.finalize=()=>{state.current.finalizedGrades=true;};window.checkPasses=false;window.uploads=[];window.requests=[];
-			window.verify=()=>{state.submission.status='verified';state.current.submittedClearance=true;};
+			window.outdate=()=>{delete state.submission.report.officeCheckVersion;};window.restoreChecks=()=>{state.submission.report.officeCheckVersion=2;};window.verify=()=>{state.submission.status='verified';state.current.submittedClearance=true;};
 			window.newTerm=()=>{state.current={...state.current,id:'next',finalizedGrades:false,submittedClearance:false};state.submission=null;};
 			const check=(verdict)=>({label:'Upload: Printed form',verdict,detail:'Uploaded document evidence'});
 			export function getStudentClearance(){return {get current(){return state;}};}
-			export const uploadClearance={fields:new Proxy({}, {get:(_,name)=>({as:(type,value)=>({name,type,...(value===undefined?{}:{value})})})}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{const data=new FormData(element);window.uploads.push({name:data.get('file')?.name,corners:data.get('corners'),revision:data.get('revision'),enrollmentId:data.get('enrollmentId')});const report={template:[{label:'Reference: Printed form',verdict:'pass',detail:'Saved reference evidence'},check(window.checkPasses?'pass':'fail'),{label:'Logo',verdict:'pass',detail:'Uploaded logo evidence'}],offices:window.checkPasses?[check('pass')]:[],identity:'deferred'};window.lastReport=report;result={success:window.checkPasses,report};if(window.checkPasses)state.submission={id:'submission',filename:'clearance-reference.jpg',status:'ready',report};return true;}});}})};
+			export const uploadClearance={fields:new Proxy({}, {get:(_,name)=>({as:(type,value)=>({name,type,...(value===undefined?{}:{value})})})}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{const data=new FormData(element);window.uploads.push({name:data.get('file')?.name,corners:data.get('corners'),revision:data.get('revision'),enrollmentId:data.get('enrollmentId')});const report={template:[{label:'Reference: Printed form',verdict:'pass',detail:'Saved reference evidence'},check(window.checkPasses?'pass':'fail'),{label:'Logo',verdict:'pass',detail:'Uploaded logo evidence'}],offices:window.checkPasses?[check('pass')]:[],identity:'deferred',officeCheckVersion:2};window.lastReport=report;result={success:window.checkPasses,report};if(window.checkPasses){state.submission={id:'submission',filename:'clearance-reference.jpg',status:'ready',report};result.report=state.submission.report;window.lastReport=state.submission.report;}return true;}});}})};
 			export async function requestEnrollment(data){window.requests.push(data);state.submission.status='requested';state.submission.requestedAt=new Date();}`
 			};
 			for (const [name, content] of Object.entries(files))
@@ -85,6 +85,11 @@ test(
 			await save.click();
 			const request = page.getByRole('button', { name: 'Request enrollment', exact: true });
 			await expect(request).toBeEnabled();
+			await page.evaluate(() => window.outdate());
+			await expect(request).toHaveCount(0);
+			await expect(page.getByText('Office checks are outdated.', { exact: false })).toBeVisible();
+			await page.evaluate(() => window.restoreChecks());
+			await expect(request).toBeEnabled();
 			const uploads = await page.evaluate(() => window.uploads);
 			assert.equal(uploads.length, 2);
 			assert.equal(uploads[1].name, 'clearance-reference.jpg');
@@ -99,6 +104,11 @@ test(
 			]);
 			await expect(page.getByLabel('Upload clearance', { exact: true })).toHaveCount(0);
 			await expect(page.getByText('Saved reference evidence', { exact: true })).toHaveCount(0);
+			await page.evaluate(() => window.outdate());
+			await expect(page.getByLabel('Upload clearance', { exact: true })).toBeVisible();
+			await expect(page.getByText('Office checks are outdated.', { exact: false })).toBeVisible();
+			await page.evaluate(() => window.restoreChecks());
+			await expect(page.getByLabel('Upload clearance', { exact: true })).toHaveCount(0);
 			await expect(
 				page.getByText('Personal information verification:', { exact: false })
 			).toBeVisible();

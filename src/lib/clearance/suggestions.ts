@@ -138,6 +138,36 @@ export function suggestPrintedAreas(
 	return { areas, semester, schoolYear, hints };
 }
 
+function emptyCheckboxOutline(ink: Uint8Array, width: number, box: PrintedLine['bbox']) {
+	const w = box.x1 - box.x0,
+		h = box.y1 - box.y0;
+	if (w / h < 0.7 || w / h > 1.4) return false;
+	const countInk = (left: number, top: number, right: number, bottom: number) => {
+		let count = 0;
+		for (let y = top; y < bottom; y++)
+			for (let x = left; x < right; x++) count += ink[y * width + x];
+		return count;
+	};
+	// Components include a two-pixel dilation. Square corners distinguish a
+	// checkbox frame from a small round seal with a similarly empty centre.
+	const corner = Math.max(3, Math.ceil(Math.min(w, h) * 0.12));
+	if (
+		[
+			[box.x0, box.y0],
+			[box.x1 - corner, box.y0],
+			[box.x0, box.y1 - corner],
+			[box.x1 - corner, box.y1 - corner]
+		].some(([x, y]) => !countInk(x, y, x + corner, y + corner))
+	)
+		return false;
+	const dx = Math.ceil(w * 0.2),
+		dy = Math.ceil(h * 0.2);
+	return (
+		countInk(box.x0 + dx, box.y0 + dy, box.x1 - dx, box.y1 - dy) / ((w - dx * 2) * (h - dy * 2)) <
+		0.01
+	);
+}
+
 // Find compact non-text ink components. Suggestions may be logos, seals or printed graphics;
 // their purpose cannot be established from a single image and needs administrator review.
 export function suggestGraphicAreas(
@@ -234,6 +264,10 @@ export function suggestGraphicAreas(
 			area > width * height * 0.15 ||
 			count / area < 0.08 ||
 			count / area > 0.85
+		)
+			continue;
+		if (
+			emptyCheckboxOutline(remaining, width, { x0: left, y0: top, x1: right + 1, y1: bottom + 1 })
 		)
 			continue;
 		candidates.push({

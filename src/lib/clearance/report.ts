@@ -1,13 +1,22 @@
 import { addedInk, overall, type Check } from './clearance';
 import type { Box, OfficeRow } from './definition';
+import { checkCheckbox } from './checkbox';
 
 export type ClearanceReport = {
 	template: Check[];
 	offices: Check[];
 	identity: 'deferred';
+	officeCheckVersion?: number;
 };
+export function hasCurrentOfficeChecks(report: ClearanceReport) {
+	return report.officeCheckVersion === 2;
+}
 export function clearancePassed(report: ClearanceReport) {
-	return overall(report.template) === 'pass' && overall(report.offices) === 'pass';
+	return (
+		hasCurrentOfficeChecks(report) &&
+		overall(report.template) === 'pass' &&
+		overall(report.offices) === 'pass'
+	);
 }
 
 export function threshold(gray: Uint8Array, width: number, height: number) {
@@ -48,7 +57,7 @@ export function checkOfficeMarks(
 		throw new Error('Invalid office image.');
 	const reference = threshold(blank, width, height),
 		actual = threshold(uploaded, width, height);
-	const check = (label: string, box: Box | undefined, minimum: number): Check => {
+	const check = (label: string, box: Box | undefined, checkbox: boolean): Check => {
 		if (!box)
 			return {
 				label,
@@ -63,6 +72,8 @@ export function checkOfficeMarks(
 			width: Math.min(width - x, Math.ceil(box.width * width)),
 			height: Math.min(height - y, Math.ceil(box.height * height))
 		};
+		if (checkbox) return checkCheckbox(label, reference, actual, width, height, region);
+		const minimum = 0.004;
 		const ink = addedInk(actual, reference, width, height, region);
 		return {
 			label,
@@ -76,7 +87,7 @@ export function checkOfficeMarks(
 		};
 	};
 	return rows.flatMap((row) => [
-		check(`${row.label}: cleared checkbox`, row.cleared, 0.012),
-		check(`${row.label}: signature / stamp`, row.signature, 0.004)
+		check(`${row.label}: cleared checkbox`, row.cleared, true),
+		check(`${row.label}: signature / stamp`, row.signature, false)
 	]);
 }

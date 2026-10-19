@@ -18,7 +18,10 @@ function load(file, deps = {}) {
 }
 const core = load('src/lib/clearance/clearance.ts');
 const definitions = load('src/lib/clearance/definition.ts', { './clearance': core });
-const reports = load('src/lib/clearance/report.ts', { './clearance': core });
+const reports = load('src/lib/clearance/report.ts', {
+	'./clearance': core,
+	'./checkbox': load('src/lib/clearance/checkbox.ts', { './clearance': core })
+});
 const roles = load('src/lib/Roles.ts');
 const schema = load('src/lib/schema.ts', {
 	'#lib/Roles.js': roles,
@@ -29,7 +32,8 @@ const check = (verdict) => ({ label: 'Evidence', verdict, detail: 'Test evidence
 const passed = () => ({
 	template: [check('pass')],
 	offices: [check('pass')],
-	identity: 'deferred'
+	identity: 'deferred',
+	officeCheckVersion: 2
 });
 const bytes = readFileSync('static/clearance-reference.jpg');
 const image = () => new File([bytes], 'clearance.jpg', { type: 'image/jpeg' });
@@ -312,6 +316,47 @@ test('failed or uncertain checks never save a file or permit an enrollment reque
 			report: passed()
 		})
 	);
+});
+
+test('older checkbox reports cannot request or verify; unreviewed submissions can be rechecked', async (t) => {
+	const f = fixture(t);
+	const first = await f.upload();
+	const oldReport = { ...passed(), officeCheckVersion: undefined };
+	f.db.update(schema.clearanceSubmission).set({ report: oldReport }).run();
+	assert.equal(reports.clearancePassed(oldReport), false);
+	await assert.rejects(
+		f.remote.requestEnrollment({ submissionId: first.submission.id }),
+		status(409)
+	);
+	const second = await f.upload();
+	await f.remote.requestEnrollment({ submissionId: second.submission.id });
+	f.db.update(schema.clearanceSubmission).set({ report: oldReport }).run();
+	f.state.role = 'registrar';
+	f.state.userId = 'staff';
+	await assert.rejects(
+		f.grades.verifyEnrollmentClearance(f.reference(second.submission.id)),
+		status(409)
+	);
+	f.state.role = 'student';
+	f.state.userId = 's';
+	const previousKey = f.row().objectKey;
+	const replacement = await f.upload();
+	assert(replacement.success);
+	assert.equal(f.row().status, 'ready');
+	assert(!f.objects.has(previousKey));
+	await assert.rejects(
+		f.remote.requestEnrollment({ submissionId: second.submission.id }),
+		status(404)
+	);
+	await f.remote.requestEnrollment({ submissionId: replacement.submission.id });
+	f.state.role = 'registrar';
+	f.state.userId = 'staff';
+	await f.grades.verifyEnrollmentClearance(f.reference(replacement.submission.id));
+	f.db.update(schema.clearanceSubmission).set({ report: oldReport }).run();
+	assert(f.plan.getEnrollmentPlan(f.db, f.next()), 'Prior staff approvals remain valid.');
+	f.state.role = 'student';
+	f.state.userId = 's';
+	await assert.rejects(f.upload(), status(409));
 });
 
 test('ownership, roles, stale template, missing office setup, malformed outlines and mismatched terms fail closed', async (t) => {
