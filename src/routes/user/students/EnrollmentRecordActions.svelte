@@ -43,7 +43,7 @@
 					message:
 						action === 'voided'
 							? 'This marks the enrollment as entered in error. Its subjects and grades remain in history, but it no longer counts toward reports or enrollment requirements. The student will be notified.'
-							: 'Grades will return to draft. Clearance and academic follow-up verification will reset. Staff must finalize grades and verify clearance again. The student will be notified.',
+							: 'Grades will return to draft and academic follow-up verification will reset. The existing clearance file and its verification will be retained for this term. Staff must finalize grades again. The student will be notified.',
 					warning: true,
 					yesText: action === 'voided' ? 'Void enrollment' : 'Reopen enrollment',
 					noText: 'Cancel'

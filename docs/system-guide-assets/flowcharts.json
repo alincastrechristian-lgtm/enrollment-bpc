@@ -1086,7 +1086,7 @@
       ],
       [
         "j",
-        "Student sees grades;|continue clearance",
+        "Grades released; retain|or complete clearance",
         1,
         7,
         "end"
@@ -1804,7 +1804,7 @@
       ],
       [
         "g",
-        "Update details; preserve|matching draft grades",
+        "Same term: keep clearance;|new term: invalidate",
         0,
         4
       ],
@@ -1816,13 +1816,13 @@
       ],
       [
         "i",
-        "Reset finalization,|clearance and follow-up",
+        "Draft grades; reset follow-up;|preserve clearance",
         2,
         4
       ],
       [
         "j",
-        "Save before/after audit;|invalidate clearance if needed",
+        "Save before/after audit;|retain file evidence",
         1,
         5
       ],
@@ -3002,8 +3002,15 @@
         4
       ],
       [
+        "p",
+        "Reopen / same-term edit:|keep state and approval",
+        1,
+        4,
+        "end"
+      ],
+      [
         "g",
-        "Drop/reopen invalidates;|restore upload eligibility",
+        "Drop or changed term:|invalidate; retain file",
         2,
         5
       ],
@@ -3054,8 +3061,15 @@
       ],
       [
         "f",
+        "p",
+        "",
+        "l",
+        "r"
+      ],
+      [
+        "f",
         "g",
-        "Reopen"
+        "Drop / term edit"
       ],
       [
         "g",

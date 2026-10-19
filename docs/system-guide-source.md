@@ -36,7 +36,7 @@ The central record is an enrollment for one student in one school year and semes
 
 ## 1.3 Scope and evidence
 
-This guide describes implemented behavior in the checked-out source on 20 October 2026, baseline `5b39c02`. It includes changes since the original `d4b7859` edition: current-only student enrollment pages, staff-only curriculum access, Gemini handwriting and manual identity review, required academic documents, and subject prerequisites. It does not inspect a live institution's operational database or assume every service is configured. Current code takes precedence over older notes.
+This guide describes implemented behavior in the checked-out source on 20 October 2026, baseline `ee5eb42` plus the current uncommitted reopening/clearance changes. It includes changes since the original `d4b7859` edition: current-only student enrollment pages, staff-only curriculum access, Gemini handwriting and manual identity review, required academic documents, and subject prerequisites. Reopening now preserves clearance, while school-year/semester corrections invalidate it. This guide does not inspect a live institution's operational database or assume every service is configured. Current code takes precedence over older notes.
 
 Chapter 24 explains required documents in full. Chapter 25 provides possible defense questions with suggested answers and demonstration evidence. These answers describe implemented behavior; they do not invent accuracy, performance, user-satisfaction, or legal-compliance results.
 
@@ -270,7 +270,7 @@ Sources: S03, S06, S07, S24.
 
 An administrator can perform every ordinary registrar workflow. In addition, the administrator maintains account access, creates catalog revisions, configures email/storage/clearance, and handles historical academic exceptions. Opening a dashboard or report is read-only; actual state changes require their dedicated controls.
 
-When a curriculum changes, create a new draft and activate it. Published curricula are not edited in place. When a finalized grade is wrong, reopen the enrollment with a reason, correct and finalize the grades again, then complete any reset clearance requirements. When a staff account should be suspended temporarily, disable it rather than permanently delete it.
+When a curriculum changes, create a new draft and activate it. Published curricula are not edited in place. When a finalized grade is wrong, reopen the enrollment with a reason, correct and finalize the grades again. Existing clearance and its verification remain valid for the same term. When a staff account should be suspended temporarily, disable it rather than permanently delete it.
 
 ## 6.3 Exception ownership
 
@@ -512,7 +512,7 @@ Saving a grade draft increments enrollment revision but does not publish the gra
 
 The operator must finish or cancel active edits before finalization. The subject list must be nonempty, saved grades valid, and the confirmation's reviewed values must match the database's complete subject/grade set. Finalization does not silently save an unsaved draft.
 
-The confirmation identifies blank grades that will be released as INC and explains that corrections need administrator reopening. The server compares the exact reviewed subject IDs/grades, sets `finalizedGrades=true`, increments revision, and records the release notification. Status is completed if clearance was already verified; otherwise it remains enrolled. The current clearance workflow normally verifies only after finalization.
+The confirmation identifies blank grades that will be released as INC and explains that corrections need administrator reopening. The server compares the exact reviewed subject IDs/grades, sets `finalizedGrades=true`, increments revision, and records the release notification. Status is completed if clearance was already verified; otherwise it remains enrolled. This also applies after reopening: retained same-term approval makes refinalization complete the enrollment without another clearance upload or verification. The current clearance workflow normally verifies only after finalization.
 
 After commit, the system attempts the grade-release email. Failure does not unfinalize grades or remove the saved notification. Students can then see the released numeric grades and INC results.
 
@@ -681,11 +681,11 @@ Rejection requires the exact current requested file and a 5–1000-character rea
 | requested | Waiting for staff; current complete reports locked against replacement. |
 | verified | Staff accepted evidence, including explicit identity confirmation when required. |
 | rejected | Staff reason recorded; new eligible upload and request needed. |
-| invalidated | Drop/reopen invalidated prior evidence; restore eligibility before uploading again. |
+| invalidated | Dropping or changing the enrollment term invalidated prior evidence; restore eligibility before uploading again. |
 
-Correction resets the enrollment clearance flag but does not itself rewrite submission state. Drop/reopen explicitly invalidates. Changing the global template blocks requesting old ready evidence; already-requested verification uses saved evidence.
+Reopening and same-term corrections preserve the existing clearance file, submission state and verification. Changing the semester or school year clears the enrollment clearance flag and invalidates the saved submission while retaining its file. Dropping also invalidates clearance. Changing the global template blocks requesting old ready evidence; already-requested verification uses saved evidence.
 
-![Flowchart 20. Submission lifecycle is unchanged; ready can carry an identity-review warning and verified records retain the original machine findings.](system-guide-assets/26-clearance-states.png)
+![Flowchart 20. Reopening and same-term corrections retain clearance state/approval. A term correction or drop invalidates evidence while retaining its file; ready can still carry an identity-review warning.](system-guide-assets/26-clearance-states.png)
 
 Sources: S11–S15, S22, S24, S31–S33.
 
@@ -765,7 +765,7 @@ The same program preserves the existing curriculum, including its historical pub
 
 Matching subject IDs retain their enrollment-subject IDs, draft grades, and original staff attribution. Their snapshot/source/units may update. New subjects receive new rows and acting staff attribution. Removed rows disappear from the active subject list, but the before/after audit retains them and their grades. Removing a numeric graded row requires an additional acknowledgment.
 
-Correction also revalidates current global prerequisite rules using the corrected term and excluding this enrollment. Required-document final-term gating is explicitly exempt in the correction editor and server path; it must not be described as enforced for corrections. Saving resets the enrollment clearance flag and meeting/follow-up timestamps, increments revision, and writes the audit plus notification in the same transaction. It does not itself update the clearance-submission row's status. Email is attempted afterward.
+Correction also revalidates current global prerequisite rules using the corrected term and excluding this enrollment. Required-document final-term gating is explicitly exempt in the correction editor and server path; it must not be described as enforced for corrections. Saving resets meeting/follow-up timestamps, increments revision, and writes the audit plus notification in the same transaction. Same-term corrections preserve clearance and its approval. Changing school year or semester clears approval and invalidates the submission without deleting its file. Email is attempted afterward.
 
 ## 15.3 Void an incorrect attempt
 
@@ -779,9 +779,22 @@ Reports, masterlists, ordinary current-work views, and outstanding calculations 
 
 Only an administrator can reopen. The enrollment must be finalized and have enrolled/completed status. Current and historical records are supported.
 
-Reopening retains saved grades but makes them provisional again. It sets finalization false, status enrolled, clearance false, clears meeting/follow-up timestamps, invalidates uploaded clearance, and increments revision. Student-facing loaders mask those grades until refinalization.
+Reopening retains saved grades but makes them provisional again. It sets finalization false, status enrolled, clears meeting/follow-up timestamps, and increments revision. Existing clearance files, findings, submission state and verification are preserved. Student-facing loaders mask those grades until refinalization.
 
-Staff must review and finalize again. Current clearance must then be resubmitted/reverified through the applicable workflow. A reopened historical record is not automatically the student's current enrollment; current-only clearance rules continue to apply.
+Staff must review and finalize grades again. An already verified clearance for that term does not require another upload or verification. Unverified, rejected or invalidated evidence retains its existing status; reopening does not approve it. A reopened historical record is not automatically the student's current enrollment; current-only clearance rules continue to apply.
+
+Preserved clearance does not remove the grade-finalization gate. While reopened grades are draft, students see Pending and ordinary next enrollment remains blocked. Refinalizing sets the record back to completed when its retained clearance flag is true; otherwise it stays enrolled awaiting the existing clearance workflow. Failed-grade follow-up was reset, so a required meeting must be requested/completed again if the released grades still contain failures.
+
+The correction's term-change check compares only school-year start and semester. Program, year level, section, subject-list, or unit changes alone do not invalidate clearance when those two term values remain unchanged. Staff still follows every other correction, prerequisite, and chronology restriction.
+
+| Action or starting state | Clearance effect and next step |
+| --- | --- |
+| Reopen with verified clearance | Preserve file, findings, submission state, request/reviewer metadata, and approval. Re-finalize grades; no duplicate clearance approval for the unchanged term. |
+| Reopen with ready/requested/rejected/invalidated evidence | Preserve its current state without granting approval. Clearance upload/request/review operations still require finalized grades and their normal eligibility. |
+| Reopen with no submission | Do not create a clearance record or grant approval. |
+| Correct without changing school-year start or semester | Preserve existing submission and clearance flag, including when program/class/subjects change. Meeting/follow-up timestamps still reset. |
+| Correct school-year start or semester | Set clearance flag false and saved submission invalidated; retain original file/findings/reviewer metadata as evidence. After grade finalization, obtain new eligible clearance for the corrected term. |
+| Refinalize after reopening | Completed if retained clearance flag is true; enrolled otherwise. Next enrollment must still satisfy meetings, documents, prerequisites, and other save checks. |
 
 ![Flowchart 23. Correct, void, and reopen each preserve evidence and require current state checks. Reopening is administrator-only.](system-guide-assets/15-corrections.png)
 
@@ -1141,7 +1154,7 @@ If the only concern were INC, the meeting-completion gate would not apply, but t
 
 If staff entered the wrong enrollment and it is unfinalized, correct its details or void it with a reason. Audit snapshots preserve what changed. If a student actually withdraws, drop the current enrolled term. Enroll again creates another attempt with restored same-term defaults; it does not erase or reactivate the old dropped record in place.
 
-If grades are already finalized, an administrator must reopen before academic correction. Reopening invalidates clearance/follow-up and masks grades until rerelease.
+If grades are already finalized, an administrator must reopen before academic correction. Reopening resets follow-up and masks grades until rerelease, while preserving existing clearance and its verification for the same term.
 
 ## 23.4 Common blocked actions and resolution
 
@@ -1301,7 +1314,7 @@ The command validates existing attempts, and a partial unique database index cov
 
 ### Q11. Why separate saving grades from finalizing them?
 
-Saving is a staff draft; students receive Pending rather than provisional values. Finalization compares the reviewed complete saved grade set, releases it, locks it, and creates a notification. Blank saved grades become INC. A later correction needs permitted administrator reopening rather than silent alteration of released results.
+Saving is a staff draft; students receive Pending rather than provisional values. Finalization compares the reviewed complete saved grade set, releases it, locks it, and creates a notification. Blank saved grades become INC. A later correction needs permitted administrator reopening rather than silent alteration of released results. Reopening preserves same-term clearance, so refinalizing can restore completed status without making the student repeat a valid approval.
 
 ### Q12. What is the difference between a failed grade and INC?
 
@@ -1317,7 +1330,7 @@ The previous curriculum's semester count determines rollover. Before its last se
 
 ### Q15. Why have correct, void, reopen, and drop as different actions?
 
-Correct fixes allowed draft enrollment details; void preserves an incorrect attempt as invalid; reopen lets an administrator make finalized grades provisional again; drop records actual withdrawal. Their permissions, audit effects, and current-pointer behavior differ. Conflating them would lose the meaning of historical academic events.
+Correct fixes allowed draft enrollment details; void preserves an incorrect attempt as invalid; reopen lets an administrator make finalized grades provisional again; drop records actual withdrawal. Reopening and same-term corrections preserve clearance; changing school year/semester invalidates its approval while retaining the file. Reopening resets academic follow-up and still requires grade refinalization. Their permissions, audit effects, and current-pointer behavior differ.
 
 ## 25.3 Subject prerequisites
 

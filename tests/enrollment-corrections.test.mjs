@@ -329,8 +329,36 @@ test('removing a graded subject requires confirmation and retains its old grade 
 	);
 });
 
-test('finalized enrollments stay locked until admin reopens; reopening resets requirements and enables correction and finalization', (t) => {
+function saveClearance(f, status = 'verified') {
+	f.db
+		.insert(schema.clearanceSubmission)
+		.values({
+			enrollmentId: 'current',
+			objectKey: 'student-clearances/MA-001/original.jpg',
+			filename: 'original.jpg',
+			contentType: 'image/jpeg',
+			size: 1024,
+			templateRevision: crypto.randomUUID(),
+			definition: {},
+			corners: [],
+			report: { evidence: 'original findings' },
+			status,
+			uploadedAt: new Date(1000),
+			requestedAt: status === 'ready' ? null : new Date(2000),
+			reviewedAt: status === 'verified' ? new Date(3000) : null,
+			reviewedBy: status === 'verified' ? 'registrar' : null,
+			reviewerName: status === 'verified' ? 'Registrar' : null
+		})
+		.run();
+	f.sqlite
+		.prepare("UPDATE enrollment SET submitted_clearance=? WHERE id='current'")
+		.run(status === 'verified' ? 1 : 0);
+	return f.sqlite.prepare('SELECT * FROM clearance_submission').get();
+}
+
+test('finalized enrollments stay locked until admin reopens; same-term correction retains verified clearance', (t) => {
 	const f = fixture(t);
+	const clearance = saveClearance(f);
 	f.sqlite.exec(
 		"UPDATE enrollment SET status='completed',finalized_grades=1,submitted_clearance=1,meeting_request_sent_at=1000,follow_up_completed_at=2000 WHERE id='current'"
 	);
@@ -349,7 +377,9 @@ test('finalized enrollments stay locked until admin reopens; reopening resets re
 	f.reopenStudentEnrollment(f.db, f.change(), admin, url);
 	const reopened = f.row();
 	assert.equal(reopened.status, 'enrolled');
-	for (const key of ['finalized_grades', 'submitted_clearance']) assert.equal(reopened[key], 0);
+	assert.equal(reopened.finalized_grades, 0);
+	assert.equal(reopened.submitted_clearance, 1);
+	assert.deepEqual(f.sqlite.prepare('SELECT * FROM clearance_submission').get(), clearance);
 	for (const key of [
 		'meeting_request_sent_at',
 		'meeting_request_started_at',
@@ -358,6 +388,8 @@ test('finalized enrollments stay locked until admin reopens; reopening resets re
 		assert.equal(reopened[key], null);
 	assert.equal(f.subjects()[0].grade, 2);
 	f.correctStudentEnrollment(f.db, f.input({ revision: 1 }), admin, url);
+	assert.equal(f.row().submitted_clearance, 1);
+	assert.deepEqual(f.sqlite.prepare('SELECT * FROM clearance_submission').get(), clearance);
 	const record = f.guards.getStudentEnrollment(f.db, 'student', 'current');
 	assert.equal(f.guards.canFinalizeEnrollmentGrades('admin', record), true);
 	assert.equal(f.guards.canFinalizeEnrollmentGrades('registrar', record), true);
@@ -366,6 +398,82 @@ test('finalized enrollments stay locked until admin reopens; reopening resets re
 		new Set(f.audit().map((entry) => entry.action)),
 		new Set(['reopened', 'corrected'])
 	);
+});
+
+test('reopening and same-term corrections preserve unverified evidence without approving it', (t) => {
+	for (const state of ['ready', 'requested', 'rejected', 'invalidated']) {
+		const f = fixture(t);
+		const clearance = saveClearance(f, state);
+		f.sqlite.exec("UPDATE enrollment SET finalized_grades=1 WHERE id='current'");
+		f.reopenStudentEnrollment(f.db, f.change(), admin, url);
+		assert.equal(f.row().submitted_clearance, 0);
+		assert.deepEqual(f.sqlite.prepare('SELECT * FROM clearance_submission').get(), clearance);
+		f.correctStudentEnrollment(f.db, f.input({ revision: 1 }), admin, url);
+		assert.equal(f.row().submitted_clearance, 0);
+		assert.deepEqual(f.sqlite.prepare('SELECT * FROM clearance_submission').get(), clearance);
+	}
+	const empty = fixture(t);
+	empty.sqlite.exec("UPDATE enrollment SET finalized_grades=1 WHERE id='current'");
+	empty.reopenStudentEnrollment(empty.db, empty.change(), admin, url);
+	assert.equal(empty.row().submitted_clearance, 0);
+	assert.equal(empty.sqlite.prepare('SELECT count(*) AS n FROM clearance_submission').get().n, 0);
+});
+
+test('correcting semester or school year invalidates approval but retains original clearance file', (t) => {
+	for (const term of [{ semester: 2 }, { schoolYearStart: 2027 }]) {
+		const f = fixture(t);
+		const clearance = saveClearance(f);
+		f.correctStudentEnrollment(f.db, f.input(term), registrar, url);
+		assert.equal(f.row().submitted_clearance, 0);
+		assert.deepEqual(f.sqlite.prepare('SELECT * FROM clearance_submission').get(), {
+			...clearance,
+			status: 'invalidated'
+		});
+	}
+});
+
+test('refinalizing reopened grades completes enrollment using the same clearance and unlocks next enrollment', async (t) => {
+	const f = fixture(t);
+	const clearance = saveClearance(f);
+	f.sqlite.exec(
+		"UPDATE enrollment SET finalized_grades=1,status='completed' WHERE id='current'; UPDATE enrollment_subject SET grade=2;"
+	);
+	f.reopenStudentEnrollment(f.db, f.change(), admin, url);
+	const next = f.input({ semester: 2 });
+	assert.throws(() => f.enrollment.getEnrollmentPlan(f.db, next), rejects(409));
+	const grades = load('src/lib/actions/grades.remote.ts', {
+		'@sveltejs/kit': { error },
+		'#lib/Roles.js': roles,
+		'#lib/schema.js': schema,
+		'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts'),
+		'#lib/server/db/index.js': { db: f.db },
+		'#lib/server/student-enrollment.js': f.guards,
+		'#lib/server/clearance-workflow.js': {},
+		'#lib/server/email/index.js': { sendEmail: async () => true },
+		'#lib/server/notifications.js': load('src/lib/server/notifications.ts', {
+			'@sveltejs/kit': { error },
+			'#lib/Roles.js': roles,
+			'#lib/schema.js': schema
+		}),
+		'#lib/server/email/templates.js': templates,
+		'#lib/server/auth.js': { validateUser: () => {} },
+		'$app/server': {
+			getRequestEvent: () => ({ locals: { user: admin } }),
+			command: (validator, handler) => (input) => handler(validator.parse(input))
+		},
+		'$app/paths': { resolve: (path) => path },
+		'$app/env/private': { ORIGIN: 'https://school.example' }
+	});
+	await grades.finalizeEnrollmentGrades({
+		userId: 'student',
+		enrollmentId: 'current',
+		revision: f.row().revision,
+		grades: f.subjects().map((row) => ({ id: row.id, grade: row.grade }))
+	});
+	assert.equal(f.row().status, 'completed');
+	assert.equal(f.row().submitted_clearance, 1);
+	assert.deepEqual(f.sqlite.prepare('SELECT * FROM clearance_submission').get(), clearance);
+	assert.doesNotThrow(() => f.enrollment.getEnrollmentPlan(f.db, next));
 });
 
 test('populated migration preserves grades and links; historical corrections and reopening remain admin-only', (t) => {

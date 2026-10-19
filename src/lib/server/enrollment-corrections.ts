@@ -206,6 +206,14 @@ export function correctStudentEnrollment(
 						.values({ ...entry, enrollmentId: record.enrollment.id, addedBy: actor.id })
 						.run();
 			}
+			const termChanged =
+				data.schoolYearStart !== record.enrollment.schoolYearStart ||
+				data.semester !== record.enrollment.semester;
+			if (termChanged)
+				tx.update(clearanceSubmission)
+					.set({ status: 'invalidated' })
+					.where(eq(clearanceSubmission.enrollmentId, record.enrollment.id))
+					.run();
 			tx.update(enrollment)
 				.set({
 					curriculumId: context.curriculum.id,
@@ -217,7 +225,7 @@ export function correctStudentEnrollment(
 					meetingRequestSentAt: null,
 					meetingRequestStartedAt: null,
 					followUpCompletedAt: null,
-					submittedClearance: false
+					submittedClearance: termChanged ? false : record.enrollment.submittedClearance
 				})
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();
@@ -287,15 +295,10 @@ export function reopenStudentEnrollment(
 				error(403, 'Only administrators can reopen a finalized enrollment.');
 			checkRevision(record, data.revision);
 			const before = snapshot(tx, record.enrollment.id);
-			tx.update(clearanceSubmission)
-				.set({ status: 'invalidated' })
-				.where(eq(clearanceSubmission.enrollmentId, record.enrollment.id))
-				.run();
 			tx.update(enrollment)
 				.set({
 					finalizedGrades: false,
 					status: 'enrolled',
-					submittedClearance: false,
 					meetingRequestSentAt: null,
 					meetingRequestStartedAt: null,
 					followUpCompletedAt: null,
