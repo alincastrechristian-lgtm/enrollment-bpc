@@ -28,8 +28,7 @@
 		if (!progress.current?.template?.definition)
 			return {
 				title: 'Clearance upload is not available yet',
-				detail:
-					'Your grades are finalized. Contact the Registrar about the clearance form before requesting your next enrollment.',
+				detail: `Your grades are finalized. No active clearance template is available for Semester ${current.semester}, SY ${current.schoolYearStart}-${current.schoolYearStart + 1}. Contact the Registrar before uploading.`,
 				action: 'View clearance status',
 				waiting: true
 			};

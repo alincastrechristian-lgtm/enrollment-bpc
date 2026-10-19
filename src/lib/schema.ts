@@ -47,7 +47,7 @@ export const garageStorage = sqliteTable('garage_storage', {
 	leaseExpiresAt: integer('lease_expires_at').notNull().default(0)
 });
 
-export const clearanceTemplate = sqliteTable(
+export const legacyClearanceTemplate = sqliteTable(
 	'clearance_template',
 	{
 		id: integer('id').primaryKey().default(1),
@@ -61,6 +61,39 @@ export const clearanceTemplate = sqliteTable(
 		uploadedAt: integer('uploaded_at', { mode: 'timestamp_ms' }).notNull()
 	},
 	(table) => [check('clearance_template_singleton', sql`${table.id} = 1`)]
+);
+
+export const clearanceTemplate = sqliteTable(
+	'clearance_template_version',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		revision: text('revision').notNull().unique(),
+		semester: integer('semester'),
+		schoolYearStart: integer('school_year_start'),
+		active: integer('active', { mode: 'boolean' }).notNull().default(false),
+		activatedAt: integer('activated_at', { mode: 'timestamp_ms' }),
+		needsImageUpdate: integer('needs_image_update', { mode: 'boolean' }).notNull().default(false),
+		objectKey: text('object_key').notNull(),
+		filename: text('filename').notNull(),
+		contentType: text('content_type').notNull(),
+		size: integer('size').notNull(),
+		definition: text('definition', { mode: 'json' }).$type<TemplateDefinition>(),
+		uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+		uploadedAt: integer('uploaded_at', { mode: 'timestamp_ms' }).notNull()
+	},
+	(table) => [
+		uniqueIndex('clearance_template_active_term')
+			.on(table.schoolYearStart, table.semester)
+			.where(sql`${table.active} = 1`),
+		check(
+			'clearance_template_version_term',
+			sql`(${table.semester} IS NOT NULL AND ${table.schoolYearStart} IS NOT NULL AND ${table.semester} IN (1, 2) AND ${table.schoolYearStart} BETWEEN 2000 AND 2099) OR (${table.semester} IS NULL AND ${table.schoolYearStart} IS NULL)`
+		),
+		check(
+			'clearance_template_version_active',
+			sql`${table.active} = 0 OR (${table.activatedAt} IS NOT NULL AND ${table.semester} IS NOT NULL AND ${table.schoolYearStart} IS NOT NULL AND ${table.needsImageUpdate} = 0)`
+		)
+	]
 );
 
 export const program = sqliteTable('program', {

@@ -74,6 +74,10 @@ function fixture(t) {
 	db.insert(schema.clearanceTemplate)
 		.values({
 			id: 1,
+			semester: 2,
+			schoolYearStart: 2025,
+			active: true,
+			activatedAt: new Date(),
 			revision,
 			objectKey: 'blank',
 			filename: 'blank.jpg',
@@ -149,6 +153,14 @@ function fixture(t) {
 			form: (validator, handler) => async (input) => handler(validator.parse(input))
 		}
 	};
+	const templates = load('src/lib/server/clearance-template.ts', {
+		...deps,
+		'./db': { db },
+		'./garage': { GARAGE_BUCKET: 'bpc' },
+		'./garage/files': files
+	});
+	deps['#lib/server/clearance-template.js'] = templates;
+	deps['./clearance-template'] = templates;
 	const enrollmentService = load('src/lib/server/student-enrollment.ts', deps);
 	const workflow = load('src/lib/server/clearance-workflow.ts', {
 		...deps,
@@ -173,7 +185,7 @@ function fixture(t) {
 	});
 	const remote = load('src/lib/actions/clearance.remote.ts', {
 		...deps,
-		'#lib/server/clearance-template.js': {},
+		'#lib/server/clearance-template.js': templates,
 		'#lib/server/garage/files.js': files,
 		'#lib/server/clearance-workflow.js': workflow,
 		'#lib/server/clearance-upload.js': upload
@@ -199,6 +211,7 @@ function fixture(t) {
 		state,
 		objects,
 		workflow,
+		templates,
 		remote,
 		grades,
 		plan,
@@ -480,4 +493,43 @@ test('storage failure and template changes during OCR preserve the previous reco
 	assert.equal(f.row().id, first.submission.id);
 	assert(f.objects.has(key));
 	assert.equal(f.objects.size, 2);
+});
+
+test('students select their active term; publishing another version preserves requested clearance evidence and review', async (t) => {
+	const f = fixture(t);
+	f.db
+		.insert(schema.clearanceTemplate)
+		.values({
+			revision: crypto.randomUUID(),
+			semester: 1,
+			schoolYearStart: 2026,
+			active: true,
+			activatedAt: new Date(),
+			objectKey: 'blank',
+			filename: 'other-term.jpg',
+			contentType: 'image/jpeg',
+			size: bytes.length,
+			uploadedAt: new Date(),
+			definition: { ...f.config, semester: '1', schoolYear: '2026-2027' }
+		})
+		.run();
+	assert.equal((await f.remote.getStudentClearance()).template.revision, f.revision);
+	const uploaded = await f.upload();
+	await f.remote.requestEnrollment({ submissionId: uploaded.submission.id });
+	const original = f.row();
+	const draft = f.templates.reuseClearanceTemplate(
+		f.revision,
+		{ semester: 2, schoolYearStart: 2025 },
+		'staff'
+	);
+	f.templates.activateClearanceTemplate(draft.revision, f.revision);
+	assert.equal((await f.remote.getStudentClearance()).template.revision, draft.revision);
+	assert.deepEqual(f.row(), original);
+	assert(f.objects.has(original.objectKey));
+	f.state.role = 'registrar';
+	f.state.userId = 'staff';
+	await f.grades.verifyEnrollmentClearance(f.reference(uploaded.submission.id));
+	assert.equal(f.row().status, 'verified');
+	assert.equal(f.row().templateRevision, f.revision);
+	assert.deepEqual(f.row().definition, original.definition);
 });

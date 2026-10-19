@@ -1,15 +1,10 @@
 import { error } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
-import {
-	clearanceSubmission,
-	clearanceTemplate,
-	enrollment,
-	studentData,
-	user
-} from '#lib/schema.js';
+import { clearanceSubmission, enrollment, studentData, user } from '#lib/schema.js';
 import type { db, Transaction } from './db';
 import { getStudentEnrollment } from './student-enrollment';
 import { clearancePassed } from '#lib/clearance/report.js';
+import { activeTemplateForEnrollment } from './clearance-template';
 
 type Database = typeof db | Transaction;
 export function submissionInfo(record: typeof clearanceSubmission.$inferSelect | undefined) {
@@ -74,7 +69,7 @@ export function requestClearanceEnrollment(
 				!clearancePassed(submission.report)
 			)
 				error(409, 'Upload and pass clearance checks before requesting enrollment.');
-			const template = tx.select().from(clearanceTemplate).where(eq(clearanceTemplate.id, 1)).get();
+			const template = activeTemplateForEnrollment(tx, record.enrollment);
 			if (template?.revision !== submission.templateRevision)
 				error(409, 'The template changed. Upload and check your clearance again.');
 			tx.update(clearanceSubmission)

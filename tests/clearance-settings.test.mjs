@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as kit from '@sveltejs/kit';
 import ts from 'typescript';
@@ -127,10 +128,15 @@ function fixture(t) {
 test('upload stores private image in Garage, saves safe metadata and serves authenticated preview', async (t) => {
 	const f = fixture(t);
 	assert.equal(f.service.getClearanceTemplateInfo(), null);
-	await f.remote.uploadClearanceTemplate({ file: file(), revision: '' });
+	await f.remote.uploadClearanceTemplate({
+		semester: '2',
+		schoolYearStart: '2025',
+		file: file(),
+		revision: ''
+	});
 	const saved = f.service.getClearanceTemplate();
 	assert.match(saved.objectKey, /^clearance-templates\/[\da-f-]+\/clearance.jpg$/);
-	assert.equal(saved.uploadedBy, 'admin');
+	assert.equal(saved.uploadedBy, 'admin', { semester: 2, schoolYearStart: 2025 });
 	assert.deepEqual(f.objects.get(saved.objectKey), jpeg);
 	assert.equal(f.calls[0].input.Bucket, 'bpc');
 	assert.equal(f.calls[0].input.ContentType, 'image/jpeg');
@@ -138,6 +144,21 @@ test('upload stores private image in Garage, saves safe metadata and serves auth
 	assert.equal(info.filename, 'clearance.jpg');
 	assert(!('objectKey' in info));
 	assert(!('uploadedBy' in info));
+	await assert.rejects(
+		f.image({
+			locals: { user: { id: 'student', role: 'student' }, session: {} },
+			request: new Request('http://localhost?revision=' + saved.revision)
+		}),
+		hasStatus(403)
+	);
+	const box = { x: 0.2, y: 0.3, width: 0.1, height: 0.05 };
+	const configured = f.service.saveClearanceDefinition(saved.revision, {
+		...definition(),
+		officeRows: [
+			{ id: crypto.randomUUID(), label: 'Library', office: box, cleared: box, signature: box }
+		]
+	});
+	f.service.activateClearanceTemplate(configured.revision, '');
 	const response = await f.image({
 		locals: { user: { id: 'student', role: 'student' }, session: {} },
 		request: new Request('http://localhost')
@@ -166,7 +187,12 @@ function definition() {
 
 test('area setup is admin-only, revision checked, survives reload and resets on image replacement', async (t) => {
 	const f = fixture(t);
-	await f.remote.uploadClearanceTemplate({ file: file(), revision: '' });
+	await f.remote.uploadClearanceTemplate({
+		semester: '2',
+		schoolYearStart: '2025',
+		file: file(),
+		revision: ''
+	});
 	const original = f.service.getClearanceTemplate();
 	const config = definition();
 	for (const role of ['student', 'registrar']) {
@@ -187,6 +213,10 @@ test('area setup is admin-only, revision checked, survives reload and resets on 
 		definition: config
 	});
 	assert.notEqual(saved.revision, original.revision);
+	await assert.rejects(
+		f.remote.activateClearanceTemplate({ revision: saved.revision, activeRevision: '' }),
+		hasStatus(400)
+	);
 	assert.deepEqual(f.service.getClearanceTemplateInfo().definition, config);
 	assert.equal(f.service.getClearanceTemplate().objectKey, original.objectKey);
 	assert.equal(
@@ -199,8 +229,8 @@ test('area setup is admin-only, revision checked, survives reload and resets on 
 		hasStatus(409)
 	);
 	await assert.rejects(
-		f.service.getClearanceTemplateImage(undefined, original.revision),
-		hasStatus(409)
+		f.service.getClearanceTemplateImage(undefined, original.revision, true),
+		hasStatus(404)
 	);
 	assert.throws(
 		() => f.service.saveClearanceDefinition(saved.revision, { ...config, areas: [] }),
@@ -208,6 +238,8 @@ test('area setup is admin-only, revision checked, survives reload and resets on 
 	);
 	assert.deepEqual(f.service.getClearanceTemplateInfo().definition, config);
 	await f.remote.uploadClearanceTemplate({
+		semester: '2',
+		schoolYearStart: '2025',
 		file: file('replacement.jpg'),
 		revision: saved.revision
 	});
@@ -222,13 +254,23 @@ test('non-admins cannot load settings, query metadata or call upload; anonymous 
 		assert.throws(() => f.page({ locals: viewer, setHeaders() {} }), hasStatus(403));
 		assert.throws(() => f.remote.getClearanceSettings(), hasStatus(403));
 		await assert.rejects(
-			f.remote.uploadClearanceTemplate({ file: file(), revision: '' }),
+			f.remote.uploadClearanceTemplate({
+				semester: '2',
+				schoolYearStart: '2025',
+				file: file(),
+				revision: ''
+			}),
 			hasStatus(403)
 		);
 	}
 	f.state.viewer = {};
 	await assert.rejects(
-		f.remote.uploadClearanceTemplate({ file: file(), revision: '' }),
+		f.remote.uploadClearanceTemplate({
+			semester: '2',
+			schoolYearStart: '2025',
+			file: file(),
+			revision: ''
+		}),
 		hasStatus(401)
 	);
 	await assert.rejects(
@@ -240,7 +282,12 @@ test('non-admins cannot load settings, query metadata or call upload; anonymous 
 
 test('personal input boxes persist with the definition, survive older saves, validate strictly and reset with the image', async (t) => {
 	const f = fixture(t);
-	await f.remote.uploadClearanceTemplate({ file: file(), revision: '' });
+	await f.remote.uploadClearanceTemplate({
+		semester: '2',
+		schoolYearStart: '2025',
+		file: file(),
+		revision: ''
+	});
 	const config = {
 		...definition(),
 		personalFields: ['studentName', 'studentNumber', 'courseYearSection'].map((field, i) => ({
@@ -286,6 +333,8 @@ test('personal input boxes persist with the definition, survive older saves, val
 	);
 	saved = await f.remote.saveClearanceAreas({ revision: saved.revision, definition: config });
 	await f.remote.uploadClearanceTemplate({
+		semester: '2',
+		schoolYearStart: '2025',
 		file: file('replacement.jpg'),
 		revision: saved.revision
 	});
@@ -294,7 +343,12 @@ test('personal input boxes persist with the definition, survive older saves, val
 
 test('office rows round-trip, survive older clients, clear explicitly, reject invalid or stale saves and reset with replacement', async (t) => {
 	const f = fixture(t);
-	await f.remote.uploadClearanceTemplate({ file: file(), revision: '' });
+	await f.remote.uploadClearanceTemplate({
+		semester: '2',
+		schoolYearStart: '2025',
+		file: file(),
+		revision: ''
+	});
 	const box = { x: 0.1, y: 0.3, width: 0.08, height: 0.04 };
 	const config = {
 		...definition(),
@@ -349,6 +403,8 @@ test('office rows round-trip, survive older clients, clear explicitly, reject in
 	assert.equal(f.calls.length, objects, 'Office setup does not change Garage objects.');
 	saved = await f.remote.saveClearanceAreas({ revision: saved.revision, definition: config });
 	await f.remote.uploadClearanceTemplate({
+		semester: '2',
+		schoolYearStart: '2025',
 		file: file('replacement.jpg'),
 		revision: saved.revision
 	});
@@ -357,16 +413,25 @@ test('office rows round-trip, survive older clients, clear explicitly, reject in
 
 test('replacement updates pointer only after upload; upload failures preserve current record and object', async (t) => {
 	const f = fixture(t);
-	await f.service.saveClearanceTemplate(file(), '', 'admin');
+	await f.service.saveClearanceTemplate(file(), '', 'admin', {
+		semester: 2,
+		schoolYearStart: 2025
+	});
 	const previous = f.service.getClearanceTemplate();
 	f.state.failPut = true;
 	await assert.rejects(
-		f.service.saveClearanceTemplate(file('replacement.jpg'), previous.revision, 'admin')
+		f.service.saveClearanceTemplate(file('replacement.jpg'), previous.revision, 'admin', {
+			semester: 2,
+			schoolYearStart: 2025
+		})
 	);
 	assert.equal(f.service.getClearanceTemplate().objectKey, previous.objectKey);
 	assert(f.objects.has(previous.objectKey));
 	f.state.failPut = false;
-	await f.service.saveClearanceTemplate(file('replacement.jpg'), previous.revision, 'admin');
+	await f.service.saveClearanceTemplate(file('replacement.jpg'), previous.revision, 'admin', {
+		semester: 2,
+		schoolYearStart: 2025
+	});
 	assert.equal(f.service.getClearanceTemplateInfo().filename, 'replacement.jpg');
 	assert(!f.objects.has(previous.objectKey));
 	assert.equal(f.objects.size, 1);
@@ -374,16 +439,30 @@ test('replacement updates pointer only after upload; upload failures preserve cu
 
 test('stale replacement cannot overwrite another admin; failed database save cleans staged file', async (t) => {
 	const f = fixture(t);
-	await f.service.saveClearanceTemplate(file(), '', 'admin');
+	await f.service.saveClearanceTemplate(file(), '', 'admin', {
+		semester: 2,
+		schoolYearStart: 2025
+	});
 	const previous = f.service.getClearanceTemplate();
 	const count = f.calls.length;
-	await assert.rejects(f.service.saveClearanceTemplate(file(), '', 'admin'), hasStatus(409));
+	await assert.rejects(
+		f.service.saveClearanceTemplate(file(), crypto.randomUUID(), 'admin', {
+			semester: 2,
+			schoolYearStart: 2025
+		}),
+		hasStatus(409)
+	);
 	assert.equal(f.calls.length, count);
 	f.state.onPut = () => {
-		f.sqlite.prepare("UPDATE clearance_template SET revision='another-admin' WHERE id=1").run();
+		f.sqlite
+			.prepare("UPDATE clearance_template_version SET revision='another-admin' WHERE id=1")
+			.run();
 	};
 	await assert.rejects(
-		f.service.saveClearanceTemplate(file('staged.jpg'), previous.revision, 'admin'),
+		f.service.saveClearanceTemplate(file('staged.jpg'), previous.revision, 'admin', {
+			semester: 2,
+			schoolYearStart: 2025
+		}),
 		hasStatus(409)
 	);
 	assert.equal(f.service.getClearanceTemplate().revision, 'another-admin');
@@ -398,12 +477,16 @@ test('invalid file types, spoofed contents and oversized images cannot change st
 		new File(['<script>malicious()</script>'], 'fake.png', { type: 'image/png' }),
 		new File([], 'empty.jpg', { type: 'image/jpeg' })
 	])
-		await assert.rejects(f.service.saveClearanceTemplate(invalid, '', 'admin'), hasStatus(400));
+		await assert.rejects(
+			f.service.saveClearanceTemplate(invalid, '', 'admin', { semester: 2, schoolYearStart: 2025 }),
+			hasStatus(400)
+		);
 	await assert.rejects(
 		f.service.saveClearanceTemplate(
 			new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'big.jpg', { type: 'image/jpeg' }),
 			'',
-			'admin'
+			'admin',
+			{ semester: 2, schoolYearStart: 2025 }
 		),
 		hasStatus(413)
 	);
@@ -414,16 +497,20 @@ test('invalid file types, spoofed contents and oversized images cannot change st
 test('old-object cleanup failure reports warning while new template remains usable', async (t) => {
 	const f = fixture(t);
 	t.mock.method(console, 'error', () => {});
-	await f.service.saveClearanceTemplate(file(), '', 'admin');
+	await f.service.saveClearanceTemplate(file(), '', 'admin', {
+		semester: 2,
+		schoolYearStart: 2025
+	});
 	f.state.failDelete = true;
 	const result = await f.service.saveClearanceTemplate(
 		file('new.jpg'),
 		f.service.getClearanceTemplate().revision,
-		'admin'
+		'admin',
+		{ semester: 2, schoolYearStart: 2025 }
 	);
 	assert.equal(result.cleanupWarning, true);
 	assert.equal(f.service.getClearanceTemplateInfo().filename, 'new.jpg');
-	assert.equal((await f.service.getClearanceTemplateImage()).status, 200);
+	assert.equal((await f.service.getClearanceTemplateImage(undefined, undefined, true)).status, 200);
 });
 
 test('additive migration preserves existing accounts and singleton constraint', (t) => {
@@ -440,4 +527,300 @@ test('additive migration preserves existing accounts and singleton constraint', 
 	);
 	f.sqlite.exec('DROP TABLE clearance_template');
 	assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM user').get().n, 2);
+});
+
+function completeDefinition() {
+	const box = { x: 0.2, y: 0.3, width: 0.1, height: 0.05 };
+	return {
+		...definition(),
+		personalFields: [{ id: crypto.randomUUID(), field: 'studentName', box }],
+		officeRows: [
+			{ id: crypto.randomUUID(), label: 'Library', office: box, cleared: box, signature: box }
+		]
+	};
+}
+async function published(f) {
+	const image = await f.service.saveClearanceTemplate(file(), '', 'admin', {
+		semester: 2,
+		schoolYearStart: 2025
+	});
+	const areas = f.service.saveClearanceDefinition(image.revision, completeDefinition());
+	f.service.activateClearanceTemplate(areas.revision, '');
+	return f.service.getClearanceTemplate(areas.revision);
+}
+test('reuse preserves mappings and published history; a different term requires an updated image', async (t) => {
+	const f = fixture(t),
+		source = await published(f);
+	const reused = await f.remote.reuseClearanceTemplate({
+		revision: source.revision,
+		semester: 1,
+		schoolYearStart: 2026
+	});
+	let draft = f.service.getClearanceTemplate(reused.revision);
+	assert.equal(draft.active, false);
+	assert.equal(draft.needsImageUpdate, true);
+	assert.equal(draft.objectKey, source.objectKey);
+	assert.deepEqual(draft.definition.officeRows, source.definition.officeRows);
+	assert.deepEqual(draft.definition.personalFields, source.definition.personalFields);
+	assert.deepEqual(draft.definition.areas, source.definition.areas);
+	assert.equal(draft.definition.semester, '1');
+	assert.equal(draft.definition.schoolYear, '2026-2027');
+	assert.equal(
+		f.service.activeTemplateForEnrollment(f.db, { semester: 1, schoolYearStart: 2026 }),
+		null
+	);
+	assert.throws(() => f.service.activateClearanceTemplate(draft.revision, ''), hasStatus(400));
+	const replacement = await f.remote.uploadClearanceTemplate({
+		file: file('new-term.jpg'),
+		revision: draft.revision,
+		semester: '1',
+		schoolYearStart: '2026',
+		preserveAreas: 'yes'
+	});
+	draft = f.service.getClearanceTemplate(replacement.revision);
+	assert.equal(draft.needsImageUpdate, false);
+	assert.deepEqual(draft.definition.officeRows, source.definition.officeRows);
+	assert(
+		f.objects.has(source.objectKey),
+		'Replacing a cloned draft must retain the shared published reference.'
+	);
+	await f.remote.activateClearanceTemplate({ revision: draft.revision, activeRevision: '' });
+	assert.equal(
+		f.service.activeTemplateForEnrollment(f.db, { semester: 1, schoolYearStart: 2026 }).id,
+		draft.id
+	);
+	assert.equal(
+		f.service.activeTemplateForEnrollment(f.db, { semester: 2, schoolYearStart: 2025 }).id,
+		source.id
+	);
+	assert.equal(
+		f.service.activeTemplateForEnrollment(f.db, { semester: 1, schoolYearStart: 2025 }),
+		null
+	);
+	assert.equal(
+		f.service.activeTemplateForEnrollment(f.db, { semester: 2, schoolYearStart: 2026 }),
+		null
+	);
+	assert.deepEqual(f.service.getClearanceTemplate(source.revision), source);
+	await assert.rejects(
+		f.service.saveClearanceTemplate(file(), source.revision, 'admin'),
+		hasStatus(409)
+	);
+	assert.throws(
+		() => f.service.saveClearanceDefinition(source.revision, source.definition),
+		hasStatus(409)
+	);
+	assert.equal((await f.service.getClearanceTemplateImage(undefined, source.revision)).status, 200);
+});
+
+test('activation is admin-only and checks the active revision; draft edits cannot change another term', async (t) => {
+	const f = fixture(t),
+		source = await published(f);
+	const first = f.service.reuseClearanceTemplate(
+		source.revision,
+		{ semester: 2, schoolYearStart: 2025 },
+		'admin'
+	);
+	const second = f.service.reuseClearanceTemplate(
+		source.revision,
+		{ semester: 2, schoolYearStart: 2025 },
+		'admin'
+	);
+	assert.equal(f.service.getClearanceTemplate(first.revision).needsImageUpdate, false);
+	for (const role of ['student', 'registrar']) {
+		f.state.viewer = { user: { id: 'student', role }, session: {} };
+		await assert.rejects(
+			f.remote.activateClearanceTemplate({
+				revision: first.revision,
+				activeRevision: source.revision
+			}),
+			hasStatus(403)
+		);
+		await assert.rejects(
+			f.remote.reuseClearanceTemplate({
+				revision: source.revision,
+				semester: 1,
+				schoolYearStart: 2026
+			}),
+			hasStatus(403)
+		);
+	}
+	f.state.viewer = { user: { id: 'admin', role: 'admin' }, session: {} };
+	await f.remote.activateClearanceTemplate({
+		revision: first.revision,
+		activeRevision: source.revision
+	});
+	await assert.rejects(
+		f.remote.activateClearanceTemplate({
+			revision: second.revision,
+			activeRevision: source.revision
+		}),
+		hasStatus(409)
+	);
+	assert.equal(f.service.getClearanceTemplate(source.revision).active, false);
+	assert(f.service.getClearanceTemplate(source.revision).activatedAt);
+	assert.equal(
+		f.service.activeTemplateForEnrollment(f.db, { semester: 2, schoolYearStart: 2025 }).revision,
+		first.revision
+	);
+	assert.throws(
+		() =>
+			f.service.saveClearanceDefinition(second.revision, {
+				...completeDefinition(),
+				semester: '1'
+			}),
+		hasStatus(400)
+	);
+	assert.throws(
+		() =>
+			f.db
+				.update(schema.clearanceTemplate)
+				.set({ active: true, activatedAt: new Date() })
+				.where(eq(schema.clearanceTemplate.revision, second.revision))
+				.run(),
+		/UNIQUE/
+	);
+});
+
+test('migration copies the legacy revision, image and complete areas, preserves legacy rollback data and leaves incomplete templates as drafts', (t) => {
+	const f = fixture(t),
+		config = completeDefinition(),
+		revision = crypto.randomUUID();
+	f.sqlite.exec('DROP TABLE clearance_template_version');
+	f.sqlite
+		.prepare(
+			'INSERT INTO clearance_template (id,revision,object_key,filename,content_type,size,definition,uploaded_at) VALUES (1,?,?,?,?,?,?,?)'
+		)
+		.run(
+			revision,
+			'legacy/reference.jpg',
+			'original.jpg',
+			'image/jpeg',
+			jpeg.length,
+			JSON.stringify(config),
+			1000
+		);
+	const original = f.sqlite.prepare('SELECT * FROM clearance_template').get();
+	const migration = readFileSync('drizzle/0037_clearance_template_versions.sql', 'utf8');
+	f.sqlite.exec(migration);
+	const migrated = f.service.activeTemplateForEnrollment(f.db, {
+		semester: 2,
+		schoolYearStart: 2025
+	});
+	assert.equal(migrated.revision, revision);
+	assert.equal(migrated.objectKey, original.object_key);
+	assert.deepEqual(migrated.definition, config);
+	assert.deepEqual(f.sqlite.prepare('SELECT * FROM clearance_template').get(), original);
+	f.sqlite.exec('DROP TABLE clearance_template_version');
+	f.sqlite
+		.prepare('UPDATE clearance_template SET definition=?')
+		.run(JSON.stringify({ ...config, officeRows: [] }));
+	f.sqlite.exec(migration);
+	assert.equal(f.service.getClearanceTemplate().active, false);
+	assert.equal(f.service.getClearanceTemplate().activatedAt, null);
+	assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM user').get().n, 2);
+	assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+});
+
+test('admin deletion removes unused drafts and active versions but retains shared reference objects', async (t) => {
+	const f = fixture(t),
+		source = await published(f);
+	const draft = f.service.reuseClearanceTemplate(
+		source.revision,
+		{ semester: 2, schoolYearStart: 2025 },
+		'admin'
+	);
+	for (const role of ['student', 'registrar']) {
+		f.state.viewer = { user: { id: 'student', role }, session: {} };
+		await assert.rejects(
+			f.remote.deleteClearanceTemplate({ revision: draft.revision, confirmed: 'yes' }),
+			hasStatus(403)
+		);
+	}
+	f.state.viewer = {};
+	await assert.rejects(
+		f.remote.deleteClearanceTemplate({ revision: draft.revision, confirmed: 'yes' }),
+		hasStatus(401)
+	);
+	f.state.viewer = { user: { id: 'admin', role: 'admin' }, session: {} };
+	await assert.rejects(async () => f.remote.deleteClearanceTemplate({ revision: draft.revision }));
+	await f.remote.deleteClearanceTemplate({ revision: draft.revision, confirmed: 'yes' });
+	assert.equal(f.service.getClearanceTemplate(draft.revision), null);
+	assert(f.objects.has(source.objectKey));
+	assert(f.service.getClearanceTemplate(source.revision));
+	await assert.rejects(
+		f.remote.deleteClearanceTemplate({ revision: draft.revision, confirmed: 'yes' }),
+		hasStatus(409)
+	);
+	await f.remote.deleteClearanceTemplate({ revision: source.revision, confirmed: 'yes' });
+	assert.equal(
+		f.service.activeTemplateForEnrollment(f.db, { semester: 2, schoolYearStart: 2025 }),
+		null
+	);
+	assert.equal(f.objects.has(source.objectKey), false);
+	assert.equal(f.service.listClearanceTemplates().length, 0);
+});
+
+test('a student submission protects its template even when admin metadata was loaded before the submission', async (t) => {
+	const f = fixture(t),
+		source = await published(f);
+	assert.equal(f.service.listClearanceTemplates()[0].inUse, false);
+	f.sqlite.exec(
+		"INSERT INTO student(id,user_id,birth_date,sex) VALUES ('MA-001','student','2000-01-01','female'); INSERT INTO program(id,code,name) VALUES ('p','BSIS','Information Systems'); INSERT INTO curriculum(id,program_code,name) VALUES ('c','BSIS','Curriculum'); INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level) VALUES ('e','MA-001','c','A',2025,2,1)"
+	);
+	f.db
+		.insert(schema.clearanceSubmission)
+		.values({
+			id: crypto.randomUUID(),
+			enrollmentId: 'e',
+			objectKey: 'student/private.jpg',
+			filename: 'student.jpg',
+			contentType: 'image/jpeg',
+			size: jpeg.length,
+			templateRevision: source.revision,
+			definition: source.definition,
+			corners: core.UNIT_CORNERS,
+			report: { template: [], offices: [], identity: 'deferred', officeCheckVersion: 2 },
+			status: 'rejected',
+			uploadedAt: new Date()
+		})
+		.run();
+	const before = f.db.select().from(schema.clearanceSubmission).get();
+	assert.equal(f.service.listClearanceTemplates()[0].inUse, true);
+	await assert.rejects(
+		f.remote.deleteClearanceTemplate({ revision: source.revision, confirmed: 'yes' }),
+		hasStatus(409)
+	);
+	assert.deepEqual(f.service.getClearanceTemplate(source.revision), source);
+	assert.deepEqual(f.db.select().from(schema.clearanceSubmission).get(), before);
+	assert(f.objects.has(source.objectKey));
+});
+
+test('deletion reports cleanup failure after removing unused metadata and keeps legacy rollback images', async (t) => {
+	const f = fixture(t);
+	const draft = await f.service.saveClearanceTemplate(file(), '', 'admin', {
+		semester: 2,
+		schoolYearStart: 2025
+	});
+	t.mock.method(console, 'error', () => {});
+	f.state.failDelete = true;
+	const result = await f.remote.deleteClearanceTemplate({
+		revision: draft.revision,
+		confirmed: 'yes'
+	});
+	assert.equal(result.cleanupWarning, true);
+	assert.equal(f.service.getClearanceTemplate(draft.revision), null);
+	f.state.failDelete = false;
+	const second = await f.service.saveClearanceTemplate(file(), '', 'admin', {
+		semester: 2,
+		schoolYearStart: 2025
+	});
+	const saved = f.service.getClearanceTemplate(second.revision);
+	f.sqlite
+		.prepare(
+			'INSERT INTO clearance_template(id,revision,object_key,filename,content_type,size,uploaded_at) VALUES (1,?,?,?,?,?,?)'
+		)
+		.run(saved.revision, saved.objectKey, saved.filename, saved.contentType, saved.size, 1000);
+	await f.remote.deleteClearanceTemplate({ revision: second.revision, confirmed: 'yes' });
+	assert(f.objects.has(saved.objectKey), 'Legacy reference must remain available for rollback.');
 });

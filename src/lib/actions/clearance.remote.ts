@@ -1,7 +1,11 @@
 import { Role } from '#lib/Roles.js';
 import { validateUser } from '#lib/server/auth.js';
 import {
-	getClearanceTemplateInfo,
+	listClearanceTemplates,
+	activeTemplateForEnrollment,
+	reuseClearanceTemplate as reuseTemplate,
+	activateClearanceTemplate as activateTemplate,
+	deleteClearanceTemplate as deleteTemplate,
 	saveClearanceTemplate,
 	saveClearanceDefinition
 } from '#lib/server/clearance-template.js';
@@ -11,7 +15,7 @@ import { command, form, getRequestEvent, query } from '$app/server';
 import { error, isHttpError } from '@sveltejs/kit';
 import { z } from 'zod';
 import { db } from '#lib/server/db/index.js';
-import { clearanceTemplate, enrollment, studentData } from '#lib/schema.js';
+import { enrollment, studentData } from '#lib/schema.js';
 import { and, eq } from 'drizzle-orm';
 import { validCorners } from '#lib/clearance/clearance.js';
 import {
@@ -38,7 +42,7 @@ export const getStudentClearance = query(() => {
 				)
 				.get()
 		: null;
-	const template = db.select().from(clearanceTemplate).where(eq(clearanceTemplate.id, 1)).get();
+	const template = current ? activeTemplateForEnrollment(db, current) : null;
 	return {
 		current,
 		template: template
@@ -115,8 +119,51 @@ export const rejectClearance = command(
 
 export const getClearanceSettings = query(() => {
 	validateUser(getRequestEvent().locals, [Role.ADMIN]);
-	return { configured: fileStorageConfigured(), template: getClearanceTemplateInfo() };
+	return { configured: fileStorageConfigured(), templates: listClearanceTemplates() };
 });
+
+const termSchema = z.object({
+	semester: z.coerce.number().int().min(1).max(2),
+	schoolYearStart: z.coerce.number().int().min(2000).max(2098)
+});
+export const deleteClearanceTemplate = command(
+	z.object({ revision: z.string().uuid(), confirmed: z.literal('yes') }).strict(),
+	async ({ revision }) => {
+		validateUser(getRequestEvent().locals, [Role.ADMIN]);
+		try {
+			const result = await deleteTemplate(revision);
+			await getClearanceSettings().refresh();
+			return result;
+		} catch (cause) {
+			if (isHttpError(cause)) throw cause;
+			error(503, 'Could not delete the template. Refresh and try again.');
+		}
+	}
+);
+export const reuseClearanceTemplate = command(
+	termSchema.extend({ revision: z.string().uuid() }).strict(),
+	async ({ revision, ...term }) => {
+		const { locals } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN]);
+		const result = reuseTemplate(revision, term, locals.user.id);
+		await getClearanceSettings().refresh();
+		return result;
+	}
+);
+export const activateClearanceTemplate = command(
+	z
+		.object({
+			revision: z.string().uuid(),
+			activeRevision: z.union([z.literal(''), z.string().uuid()])
+		})
+		.strict(),
+	async ({ revision, activeRevision }) => {
+		validateUser(getRequestEvent().locals, [Role.ADMIN]);
+		const result = activateTemplate(revision, activeRevision);
+		await getClearanceSettings().refresh();
+		return result;
+	}
+);
 
 export const saveClearanceAreas = command(
 	z.object({ revision: z.string().uuid(), definition: definitionSchema }).strict(),
@@ -135,18 +182,31 @@ export const saveClearanceAreas = command(
 
 export const uploadClearanceTemplate = form(
 	z.object({
+		semester: z.enum(['1', '2']).transform(Number),
+		schoolYearStart: z
+			.string()
+			.regex(/^20\d{2}$/)
+			.transform(Number)
+			.refine((year) => year <= 2098),
 		file: z
 			.file()
 			.min(1, 'Choose a blank clearance image.')
 			.max(MAX_FILE_BYTES, 'Maximum template size is 10 MiB.')
 			.mime(['image/jpeg', 'image/png', 'image/webp'], 'Choose a JPG, PNG or WebP image.'),
-		revision: z.string().max(36)
+		revision: z.union([z.literal(''), z.string().uuid()]),
+		preserveAreas: z.enum(['yes', 'no']).default('no')
 	}),
-	async ({ file, revision }) => {
+	async ({ file, revision, semester, schoolYearStart, preserveAreas }) => {
 		const { locals } = getRequestEvent();
 		validateUser(locals, [Role.ADMIN]);
 		try {
-			const result = await saveClearanceTemplate(file, revision, locals.user.id);
+			const result = await saveClearanceTemplate(
+				file,
+				revision,
+				locals.user.id,
+				{ semester, schoolYearStart },
+				preserveAreas === 'yes'
+			);
 			await getClearanceSettings().refresh();
 			return result;
 		} catch (caught) {

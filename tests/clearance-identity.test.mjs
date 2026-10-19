@@ -105,6 +105,7 @@ function fixture(t) {
 		'@sveltejs/kit': { json, isHttpError }
 	}).POST;
 	const page = load('src/routes/test/+page.server.ts', {
+		'#lib/Roles.js': { Role },
 		'./identity.server': service,
 		'#lib/server/clearance-template.js': { getClearanceTemplateInfo: () => null }
 	}).load;

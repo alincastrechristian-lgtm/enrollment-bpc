@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { error, isHttpError } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { db } from './db';
-import { clearanceSubmission, clearanceTemplate } from '#lib/schema.js';
+import { clearanceSubmission } from '#lib/schema.js';
+import { activeTemplateForEnrollment } from './clearance-template';
 import { definitionSchema, templateTermIssue } from '#lib/clearance/definition.js';
 import { clearancePassed, hasCurrentOfficeChecks } from '#lib/clearance/report.js';
 import type { Corners } from '#lib/clearance/clearance.js';
@@ -39,7 +39,7 @@ export async function uploadStudentClearance(
 		error(409, 'Your clearance is already awaiting review or verified.');
 	if (record.enrollment.revision !== input.revision)
 		error(409, 'Enrollment changed. Refresh before uploading.');
-	const template = db.select().from(clearanceTemplate).where(eq(clearanceTemplate.id, 1)).get();
+	const template = activeTemplateForEnrollment(db, record.enrollment);
 	if (!template || template.revision !== input.templateRevision)
 		error(409, 'Clearance template changed. Refresh before uploading.');
 	const parsed = definitionSchema.safeParse(template.definition);
@@ -93,8 +93,7 @@ export async function uploadStudentClearance(
 					current.enrollment.submittedClearance ||
 					currentSubmission?.id !== previous?.id ||
 					currentSubmission?.status !== previous?.status ||
-					tx.select().from(clearanceTemplate).where(eq(clearanceTemplate.id, 1)).get()?.revision !==
-						template.revision
+					activeTemplateForEnrollment(tx, current.enrollment)?.revision !== template.revision
 				)
 					error(
 						409,

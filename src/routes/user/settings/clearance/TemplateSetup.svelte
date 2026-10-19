@@ -22,11 +22,13 @@
 		template,
 		disabled,
 		onbusychange,
+		ondirtychange,
 		step = $bindable('printed')
 	}: {
 		template: TemplateInfo;
 		disabled: boolean;
 		onbusychange: (busy: boolean) => void;
+		ondirtychange?: (dirty: boolean) => void;
 		step?: 'outline' | 'printed' | 'offices' | 'personal';
 	} = $props();
 	const steps = [
@@ -49,8 +51,18 @@
 		untrack(() => structuredClone(template.definition?.officeRows ?? []))
 	);
 	let officeBusy = $state(false);
-	let semester = $state(untrack(() => template.definition?.semester ?? '2'));
-	let schoolYear = $state(untrack(() => template.definition?.schoolYear ?? ''));
+	let semester = $state(
+		untrack(() => template.definition?.semester ?? (template.semester === 1 ? '1' : '2'))
+	);
+	let schoolYear = $state(
+		untrack(
+			() =>
+				template.definition?.schoolYear ??
+				(template.schoolYearStart
+					? `${template.schoolYearStart}-${template.schoolYearStart + 1}`
+					: '')
+		)
+	);
 	let selected = $state(0);
 	let source = $state<HTMLCanvasElement>();
 	let sourceUrl = $state('');
@@ -71,6 +83,12 @@
 		suggestions?.areas.find((area) => area.id === selectedSuggestionId) ?? suggestions?.areas[0]
 	);
 	const draft = $derived({ corners, areas, semester, schoolYear, personalFields, officeRows });
+	let originalDraft = $state(
+		untrack(() =>
+			JSON.stringify({ corners, areas, semester, schoolYear, personalFields, officeRows })
+		)
+	);
+	$effect(() => ondirtychange?.(JSON.stringify(draft) !== originalDraft));
 	const valid = $derived(definitionSchema.safeParse(draft));
 	const locked = $derived(disabled || busy || saving || detecting || personalBusy || officeBusy);
 	$effect(() => onbusychange(busy || saving || detecting || personalBusy || officeBusy));
@@ -78,6 +96,7 @@
 		destroyed = true;
 		detectController?.abort();
 		onbusychange(false);
+		ondirtychange?.(false);
 	});
 	onMount(() => {
 		void load();
@@ -97,6 +116,14 @@
 				const found = p.detectBorder(image);
 				corners = structuredClone(found ?? UNIT_CORNERS);
 				drawing = !found;
+				originalDraft = JSON.stringify({
+					corners,
+					areas,
+					semester,
+					schoolYear,
+					personalFields,
+					officeRows
+				});
 			} else aligned = p.alignTemplate(image, corners).toDataURL('image/png');
 		} catch (cause) {
 			error = getErrorMessage(cause, 'Could not load saved template. Reload to try again.');
@@ -143,8 +170,9 @@
 	function applySuggestions() {
 		if (!suggestions || locked || !suggestions.areas.length) return;
 		areas = structuredClone($state.snapshot(suggestions.areas));
-		if (suggestions.semester) semester = suggestions.semester;
-		if (suggestions.schoolYear) schoolYear = suggestions.schoolYear;
+		if (suggestions.semester && template.semester == null) semester = suggestions.semester;
+		if (suggestions.schoolYear && template.schoolYearStart == null)
+			schoolYear = suggestions.schoolYear;
 		selected = 0;
 		suggestions = undefined;
 	}
@@ -560,7 +588,11 @@
 				<legend class="mb-2 text-sm font-bold">Required term</legend>
 				<label class="text-sm">
 					Semester
-					<select class="select mt-1 w-full" bind:value={semester}>
+					<select
+						class="select mt-1 w-full"
+						bind:value={semester}
+						disabled={template.semester != null}
+					>
 						<option value="1">1st Semester</option>
 						<option value="2">2nd Semester</option>
 					</select>
@@ -572,9 +604,15 @@
 						bind:value={schoolYear}
 						placeholder="2025-2026"
 						maxlength="9"
+						readonly={template.schoolYearStart != null}
 					/>
 				</label>
 			</fieldset>
+			{#if template.semester != null}
+				<p class="text-xs text-base-content/60">
+					Term is fixed for this version. Reuse the template to create a draft for another term.
+				</p>
+			{/if}
 		</div>
 		<div hidden={step !== 'personal'}>
 			<PersonalFieldsSetup

@@ -22,14 +22,19 @@ test(
 				'style.css': "@import '../src/routes/layout.css'; @source '../src';",
 				'paths.js': 'export const resolve=route=>route;',
 				'popup.js':
-					'window.messages=[];export const showLoading=()=>{};export const showSuccess=message=>window.messages.push(message);export const showError=message=>window.messages.push(message);',
+					'window.messages=[];window.confirmations=[];window.confirmDelete=false;export const showYesNo=async props=>{window.confirmations.push(props);return window.confirmDelete;};export const showLoading=()=>{};export const showSuccess=message=>window.messages.push(message);export const showError=message=>window.messages.push(message);',
 				'fixture.js': `const area=(label,kind,x,y,width,height,expected='')=>({id:crypto.randomUUID(),label,kind,box:{x,y,width,height},expected});
 				export const definition={corners:[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],semester:'2',schoolYear:'2025-2026',areas:[area('School name','text',.3,.02,.4,.04,'BULACAN POLYTECHNIC COLLEGE'),area('Form title','text',.32,.12,.35,.04,'Student Clearance Form'),area('School seal','image',.08,.02,.16,.2),area('Semester','semester',.32,.17,.2,.04),area('Academic year','academicYear',.5,.17,.2,.04)],personalFields:[{id:crypto.randomUUID(),field:'studentName',box:{x:.1,y:.7,width:.5,height:.05}}],officeRows:['Library','Registrar'].map((label,i)=>({id:crypto.randomUUID(),label,office:{x:.08,y:.3+i*.08,width:.12,height:.03},cleared:{x:.27,y:.3+i*.08,width:.045,height:.05},signature:{x:.62,y:.3+i*.08,width:.2,height:.05}}))};`,
-				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
-				window.saved=[];window.uploads=[];window.failUpload=false;window.clearTemplate=()=>state={...state,template:null};
-				export function getClearanceSettings(){return{get current(){return state;}};}
-				export async function saveClearanceAreas(input){window.saved.push(input);state={...state,template:{...state.template,revision:crypto.randomUUID(),definition:structuredClone(input.definition)}};return{success:true};}
-				export const uploadClearanceTemplate={fields:new Proxy({allIssues:()=>[]},{get:(target,name)=>target[name]??{as:(type,value)=>({name,type,...(value===undefined?{}:{value})})}}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;await callback({element,result:{},submit:async()=>{if(window.failUpload)throw Error('Simulated storage error');const file=new FormData(element).get('file');window.uploads.push(file.name);state={...state,template:{filename:file.name,size:file.size,uploadedAt:new Date().toISOString(),revision:crypto.randomUUID(),definition:null}};return true;}});}})};`,
+				'actions.svelte.js': `import{definition}from'./fixture.js';let nextId=2;let state=$state.raw({configured:true,others:[],template:{id:1,semester:2,schoolYearStart:2025,active:false,activatedAt:null,needsImageUpdate:false,filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
+                const all=()=>state.template?[state.template,...state.others]:[];
+                window.saved=[];window.uploads=[];window.failUpload=false;window.clearTemplate=()=>state={...state,template:null,others:[]};
+                export function getClearanceSettings(){return{get current(){return{configured:state.configured,templates:all()};}};}
+                export async function saveClearanceAreas(input){window.saved.push(input);state={...state,template:{...state.template,revision:crypto.randomUUID(),definition:structuredClone(input.definition)}};return{success:true};}
+                export async function reuseClearanceTemplate(input){const source=all().find(item=>item.revision===input.revision);const template={...source,id:nextId++,active:false,activatedAt:null,semester:input.semester,schoolYearStart:input.schoolYearStart,revision:crypto.randomUUID(),needsImageUpdate:source.semester!==input.semester||source.schoolYearStart!==input.schoolYearStart,definition:{...structuredClone(source.definition),semester:String(input.semester),schoolYear:input.schoolYearStart+'-'+(input.schoolYearStart+1)}};state={...state,template,others:all()};return{id:template.id};}
+                export async function activateClearanceTemplate(input){state={...state,template:{...state.template,active:true,activatedAt:new Date().toISOString()},others:state.others.map(item=>item.semester===state.template.semester&&item.schoolYearStart===state.template.schoolYearStart?{...item,active:false}:item)};return{success:true};}
+                window.deletions=[];window.protectTemplate=(id,inUse)=>{state={...state,template:state.template?.id===id?{...state.template,inUse}:state.template,others:state.others.map(item=>item.id===id?{...item,inUse}:item)};};
+                export async function deleteClearanceTemplate(input){window.deletions.push(input);const remaining=all().filter(item=>item.revision!==input.revision);state={...state,template:remaining[0]??null,others:remaining.slice(1)};return{success:true,cleanupWarning:false};}
+                export const uploadClearanceTemplate={fields:new Proxy({allIssues:()=>[]},{get:(target,name)=>target[name]??{as:(type,value)=>({name,type,...(value===undefined?{}:{value})})}}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{if(window.failUpload)throw Error('Simulated storage error');const data=new FormData(element),file=data.get('file');window.uploads.push(file.name);const previous=data.get('revision')?state.template:null;const template={...(previous??{}),id:previous?.id??nextId++,semester:Number(data.get('semester')),schoolYearStart:Number(data.get('schoolYearStart')),active:false,activatedAt:null,needsImageUpdate:false,filename:file.name,size:file.size,uploadedAt:new Date().toISOString(),revision:crypto.randomUUID(),definition:data.get('preserveAreas')==='yes'?previous?.definition:null};state={...state,template,others:previous?state.others:all()};result={id:template.id};return true;}});}})};`,
 				'scan.js': `import{definition}from'./fixture.js';
 				export async function loadImage(){const image=new Image();image.src='/reference.jpg';await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);return canvas;}
 				export const loadUpload=loadImage;export const alignTemplate=image=>image;export const detectBorder=()=>structuredClone(definition.corners);
@@ -117,6 +122,10 @@ test(
 			await page.setViewportSize({ width: 1360, height: 1000 });
 			await page.locator('#app').evaluate((element) => (element.style.maxWidth = '1280px'));
 			await page.getByLabel('Area label', { exact: true }).fill('Institution heading');
+			await expect(page.getByLabel('Template versions', { exact: true })).toBeDisabled();
+			await expect(
+				page.getByRole('button', { name: 'Delete template', exact: true })
+			).toBeDisabled();
 			await steps.getByRole('button', { name: 'Offices & signatures', exact: true }).click();
 			const office = page.getByRole('region', {
 				name: 'Offices, checkboxes and signatures',
@@ -221,6 +230,7 @@ test(
 			);
 			await page.evaluate(() => (window.failUpload = false));
 			await page.getByRole('button', { name: 'Replace image', exact: true }).click();
+			await page.getByLabel('Keep existing area mappings (same layout)', { exact: true }).uncheck();
 			await page
 				.getByLabel('Choose template image', { exact: true })
 				.setInputFiles('static/clearance-reference.jpg');
@@ -256,6 +266,76 @@ test(
 			await expect(
 				page.getByRole('button', { name: 'Save template areas', exact: true })
 			).toBeEnabled();
+			await page.getByRole('button', { name: 'Save template areas', exact: true }).click();
+			await page.evaluate(() => (window.deferDetection = false));
+			await steps.getByRole('button', { name: 'Offices & signatures', exact: true }).click();
+			await office.getByRole('button', { name: 'Auto-detect office rows', exact: true }).click();
+			await page.getByRole('button', { name: 'Save template areas', exact: true }).click();
+			await page.getByRole('button', { name: 'Activate for this term', exact: true }).click();
+			await expect(page.getByText('Active template', { exact: true })).toBeVisible();
+			await expect(page.getByRole('button', { name: 'Replace image', exact: true })).toBeDisabled();
+			await workspace.getByRole('button', { name: 'Template setup', exact: true }).click();
+			await expect(
+				page.getByText('Published templates are read-only.', { exact: false })
+			).toBeVisible();
+			await page.getByRole('button', { name: 'Reuse existing template', exact: true }).click();
+			await page.getByLabel('Target school year start', { exact: true }).fill('2026');
+			await page.getByLabel('Target semester', { exact: true }).selectOption('1');
+			await page.getByRole('button', { name: 'Create draft', exact: true }).click();
+			await expect(
+				page.getByRole('button', { name: 'Activate for this term', exact: true })
+			).toBeDisabled();
+			await expect(
+				page.getByText(
+					"Upload an updated reference image showing this draft's semester and school year.",
+					{ exact: false }
+				)
+			).toBeVisible();
+			await page.getByRole('button', { name: 'Replace image', exact: true }).click();
+			await expect(
+				page.getByLabel('Keep existing area mappings (same layout)', { exact: true })
+			).toBeChecked();
+			await page
+				.getByLabel('Choose template image', { exact: true })
+				.setInputFiles('static/clearance-reference.jpg');
+			await page.getByRole('button', { name: 'Replace template', exact: true }).click();
+			await expect(
+				page.getByRole('button', { name: 'Activate for this term', exact: true })
+			).toBeEnabled();
+			await page.getByRole('button', { name: 'Activate for this term', exact: true }).click();
+			await expect(page.getByText('Active template', { exact: true })).toBeVisible();
+			await page.getByLabel('Template versions', { exact: true }).selectOption('1');
+			await expect(page.getByText('Active template', { exact: true })).toBeVisible();
+			await page.getByRole('button', { name: 'Add template', exact: true }).click();
+			await expect(page.getByLabel('School year start', { exact: true })).toBeVisible();
+			await page.getByRole('button', { name: 'Cancel new template', exact: true }).click();
+			await expect(page.getByText('Active template', { exact: true })).toBeVisible();
+			const remove = page.getByRole('button', { name: 'Delete template', exact: true });
+			await remove.click();
+			await expect(remove).toBeEnabled();
+			assert.equal(await page.evaluate(() => window.deletions.length), 0);
+			assert.match(await page.evaluate(() => window.confirmations.at(-1).message), /version #1/);
+			assert.match(
+				await page.evaluate(() => window.confirmations.at(-1).hintText),
+				/Students in this term will be unable to upload/
+			);
+			await page.evaluate(() => window.protectTemplate(1, true));
+			await expect(remove).toBeDisabled();
+			await expect(
+				page.getByText('This version is used by student submissions and cannot be deleted.', {
+					exact: false
+				})
+			).toBeVisible();
+			await page.evaluate(() => {
+				window.protectTemplate(1, false);
+				window.confirmDelete = true;
+			});
+			await remove.click();
+			await expect.poll(() => page.evaluate(() => window.deletions.length)).toBe(1);
+			await expect(page.getByLabel('Template versions', { exact: true })).toHaveValue('2');
+			await remove.click();
+			await expect.poll(() => page.evaluate(() => window.deletions.length)).toBe(2);
+			await expect(page.getByLabel('Choose template image', { exact: true })).toBeVisible();
 			await page.evaluate(() => window.clearTemplate());
 			await expect(page.getByLabel('Choose template image', { exact: true })).toBeVisible();
 			await expect(workspace).toHaveCount(0);

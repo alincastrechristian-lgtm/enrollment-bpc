@@ -9,7 +9,8 @@ export const GET: RequestHandler = async ({ locals, request }) => {
 	try {
 		return await getClearanceTemplateImage(
 			request.signal,
-			new URL(request.url).searchParams.get('revision')
+			new URL(request.url).searchParams.get('revision'),
+			locals.user.role === Role.ADMIN
 		);
 	} catch (caught) {
 		if (isHttpError(caught)) throw caught;

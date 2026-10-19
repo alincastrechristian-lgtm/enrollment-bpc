@@ -147,6 +147,8 @@ export type TemplateInfo = {
 	revision: string;
 	filename: string;
 	definition: TemplateDefinition | null;
+	semester?: number | null;
+	schoolYearStart?: number | null;
 };
 export type Box = TemplateArea['box'];
 

@@ -332,7 +332,8 @@
 				</form>
 			{:else if allowed && !template?.definition}
 				<p class="text-sm text-warning">
-					Clearance template setup is not ready. Contact the Registrar.
+					No active clearance template is available for Semester {current.semester}, SY {current.schoolYearStart}-{current.schoolYearStart +
+						1}. Contact the Registrar.
 				</p>
 			{/if}
 			{#if ready}
