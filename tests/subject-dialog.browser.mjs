@@ -8,7 +8,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { createServer } from 'vite';
 
 test(
-	'subject dialog scrolls on small screens and saves searchable prerequisite tags',
+	'subject dialog scrolls and saves catalog details without global prerequisite controls',
 	{ timeout: 120_000 },
 	async () => {
 		mkdirSync('.tmp', { recursive: true });
@@ -29,10 +29,10 @@ test(
 			import SubjectDialog from '${path.resolve('src/routes/user/subjects/SubjectDialog.svelte').replaceAll('\\', '/')}';
 			let dialog;
 			const subjects=Array.from({length:60},(_,i)=>({id:'s'+i,code:'IS'+String(i+101),name:i===1?'Fundamentals of Programming':i===2?'Database Systems':'Subject with a long name '+i,isActive:true,description:''}));
-			window.openEdit=(ids)=>dialog.open(subjects[0],ids);
+			window.openEdit=()=>dialog.open(subjects[0]);
 		</script>
 		<button onclick={()=>dialog.open()}>New subject</button>
-		<SubjectDialog bind:this={dialog} {subjects}/>`
+		<SubjectDialog bind:this={dialog}/>`
 		};
 		let server, browser;
 		try {
@@ -93,58 +93,29 @@ test(
 			await page.getByRole('button', { name: 'New subject', exact: true }).click();
 			await page.getByLabel('Name', { exact: true }).fill('Advanced Computing');
 			await page.getByLabel('Code', { exact: true }).fill('ADV101');
-			const picker = page.getByRole('button', { name: 'Add prerequisite subject', exact: true });
-			await picker.click();
-			const search = page.getByRole('searchbox', {
-				name: 'Search prerequisite subjects',
-				exact: true
-			});
-			await expect(search).toBeFocused();
-			await search.fill('programming');
-			await search.press('Enter');
-			const tags = page.getByRole('list', { name: 'Selected prerequisite subjects', exact: true });
-			await expect(tags.getByRole('button', { name: 'Remove IS102', exact: true })).toBeVisible();
-			await picker.click();
-			await search.fill('IS103');
-			await page.getByRole('button', { name: /^IS103 / }).click();
-			await expect(tags.getByRole('listitem')).toHaveCount(2);
-			const tagBounds = await tags.boundingBox();
-			const pickerBounds = await picker.boundingBox();
-			assert.ok(tagBounds.y + tagBounds.height <= pickerBounds.y);
-			await picker.click();
-			await search.fill('IS102');
-			await expect(page.getByText('No matches found.', { exact: true })).toBeVisible();
-			await search.press('Escape');
-			await expect(picker).toBeFocused();
-			await expect(page.getByRole('heading', { name: 'New Subject', exact: true })).toBeVisible();
-			await tags.getByRole('button', { name: 'Remove IS102', exact: true }).click();
-			await expect(tags.getByRole('listitem')).toHaveCount(1);
-			await picker.click();
-			await search.fill('IS102');
-			await search.press('Enter');
+			await expect(
+				page.getByRole('button', { name: 'Add prerequisite subject', exact: true })
+			).toHaveCount(0);
 			await page.evaluate(() => (window.deferSave = true));
 			await page.getByRole('button', { name: 'Create Subject', exact: true }).click();
-			await expect(picker).toBeDisabled();
-			await expect(tags.getByRole('button', { name: 'Remove IS102', exact: true })).toBeDisabled();
-			assert.deepEqual(await page.evaluate(() => window.creations[0].prerequisiteIds), [
-				's2',
-				's1'
-			]);
+			await expect(page.getByLabel('Name', { exact: true })).toBeDisabled();
+			assert.equal(
+				await page.evaluate(() => Object.hasOwn(window.creations[0], 'prerequisiteIds')),
+				false
+			);
 			await page.evaluate(() => {
 				window.deferSave = false;
 				window.finishSave();
 			});
 			await expect(page.locator('dialog')).not.toBeVisible();
-			await page.evaluate(() => window.openEdit(['s1', 's2']));
-			await expect(tags.getByRole('listitem')).toHaveCount(2);
-			await picker.click();
-			await search.fill('IS101');
-			await expect(page.getByText('No matches found.', { exact: true })).toBeVisible();
-			await search.press('Escape');
-			await tags.getByRole('button', { name: 'Remove IS102', exact: true }).click();
-			await tags.getByRole('button', { name: 'Remove IS103', exact: true }).click();
+			await page.evaluate(() => window.openEdit());
+			await page.getByLabel('Name', { exact: true }).fill('Edited catalog subject');
 			await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-			assert.deepEqual(await page.evaluate(() => window.updates[0].prerequisiteIds), []);
+			assert.equal(await page.evaluate(() => window.updates[0].name), 'Edited catalog subject');
+			assert.equal(
+				await page.evaluate(() => Object.hasOwn(window.updates[0], 'prerequisiteIds')),
+				false
+			);
 			assert.deepEqual(errors, []);
 			assert.deepEqual(await page.evaluate(() => window.errors), []);
 		} finally {

@@ -1,5 +1,13 @@
 import { Role } from '#lib/Roles.js';
-import { curriculum, curriculumSubject, enrollment, program, subject } from '#lib/schema.js';
+import {
+	curriculum,
+	curriculumSubject,
+	curriculumPrerequisite,
+	enrollment,
+	program,
+	subject
+} from '#lib/schema.js';
+import { getCurriculumPrerequisiteError } from '#lib/subject-prerequisites.js';
 import { validateUser } from '#lib/server/auth.js';
 import { setProgramCurriculum, validateSubjectLimits } from '#lib/server/curriculum.js';
 import { command, getRequestEvent } from '$app/server';
@@ -26,12 +34,14 @@ const curriculumSubjectFieldValidation = {
 const curriculumSubjectInsertSchema = createInsertSchema(
 	curriculumSubject,
 	curriculumSubjectFieldValidation
-).omit({
-	id: true,
-	curriculumId: true,
-	subjectCode: true,
-	subjectName: true
-});
+)
+	.omit({
+		id: true,
+		curriculumId: true,
+		subjectCode: true,
+		subjectName: true
+	})
+	.extend({ prerequisiteIds: z.array(z.string().trim().min(1)).default([]) });
 
 // Explicitly allow editable fields.
 // Publishing and retiring should have their own commands.
@@ -84,7 +94,10 @@ function insertSubjects(
 
 		tx.insert(curriculumSubject)
 			.values({
-				...entry,
+				subjectId: entry.subjectId,
+				yearLevel: entry.yearLevel,
+				semester: entry.semester,
+				units: entry.units,
 				curriculumId,
 
 				// Copy from the catalog, overriding any client-supplied values.
@@ -93,6 +106,26 @@ function insertSubjects(
 			})
 			.run();
 	}
+}
+
+function replacePrerequisites(
+	tx: Transaction,
+	curriculumId: string,
+	subjects: CurriculumInsertSchema['subjects']
+) {
+	const message = getCurriculumPrerequisiteError(subjects);
+	if (message) error(400, message);
+	tx.delete(curriculumPrerequisite)
+		.where(eq(curriculumPrerequisite.curriculumId, curriculumId))
+		.run();
+	const rules = subjects.flatMap((entry) =>
+		entry.prerequisiteIds.map((prerequisiteId) => ({
+			curriculumId,
+			subjectId: entry.subjectId,
+			prerequisiteId
+		}))
+	);
+	if (rules.length) tx.insert(curriculumPrerequisite).values(rules).run();
 }
 
 export const createCurriculum = command(curriculumInsertSchema, (data) => {
@@ -123,6 +156,7 @@ export const createCurriculum = command(curriculumInsertSchema, (data) => {
 			if (subjects.length > 0) {
 				insertSubjects(tx, created.id, subjects);
 			}
+			replacePrerequisites(tx, created.id, subjects);
 
 			return { id: created.id };
 		});
@@ -222,12 +256,13 @@ export const updateCurriculum = command(curriculumUpdateSchema, (data) => {
 					error(400, `Subject not found: ${entry.subjectId}`);
 				}
 
-				const { id: entryId, ...subjectData } = entry;
-
 				return {
-					entryId,
+					entryId: entry.id,
 					values: {
-						...subjectData,
+						subjectId: entry.subjectId,
+						yearLevel: entry.yearLevel,
+						semester: entry.semester,
+						units: entry.units,
 						curriculumId: id,
 						subjectCode: selectedSubject.code,
 						subjectName: selectedSubject.name
@@ -269,6 +304,7 @@ export const updateCurriculum = command(curriculumUpdateSchema, (data) => {
 				}
 			}
 
+			replacePrerequisites(tx, id, subjects);
 			return { id };
 		});
 	} catch (cause) {

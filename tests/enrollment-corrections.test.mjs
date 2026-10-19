@@ -40,7 +40,7 @@ const rejects = (status, message) => (cause) =>
 test('corrections enforce every prerequisite using only this student’s earlier valid attempts', (t) => {
 	const f = fixture(t);
 	f.sqlite.exec(`
-		INSERT INTO subject_prerequisite VALUES ('s3','s1'),('s3','s2');
+		INSERT INTO curriculum_prerequisite VALUES ('c2','s3','s1'),('c2','s3','s2');
 		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,finalized_grades,status)
 		VALUES ('prior','MA-001','c1','A',2025,2,1,1,'completed');
 		INSERT INTO enrollment_subject(id,enrollment_id,subject_id,source,subject_code,subject_name,units,grade,added_by)
@@ -87,7 +87,7 @@ test('corrections enforce every prerequisite using only this student’s earlier
 test('latest earlier attempt controls prerequisites; a passed retake clears a prior failure', (t) => {
 	const f = fixture(t);
 	f.sqlite.exec(`
-		INSERT INTO subject_prerequisite VALUES ('s3','s1');
+		INSERT INTO curriculum_prerequisite VALUES ('c2','s3','s1');
 		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,finalized_grades,status)
 		VALUES ('early','MA-001','c1','A',2024,2,1,1,'completed'), ('retake','MA-001','c1','A',2025,2,1,1,'completed');
 		INSERT INTO enrollment_subject(id,enrollment_id,subject_id,source,subject_code,subject_name,units,grade,added_by)

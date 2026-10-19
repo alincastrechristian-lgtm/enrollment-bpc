@@ -19,7 +19,10 @@ function loadModule(filename, dependencies = {}, override) {
 	return exports;
 }
 const { Role } = loadModule('src/lib/Roles.ts');
-const schema = loadModule('src/lib/schema.ts', { '#lib/Roles.js': { Role } });
+const schema = loadModule('src/lib/schema.ts', {
+	'#lib/Roles.js': { Role },
+	'./email': loadModule('src/lib/email.ts')
+});
 const error = (status, message) => {
 	throw Object.assign(new Error(message), { status });
 };
@@ -61,6 +64,9 @@ function fixture(t) {
 	const locals = { user: { role: Role.ADMIN }, session: {} };
 	const dependencies = {
 		'#lib/Roles.js': { Role },
+		'#lib/subject-prerequisites.js': loadModule('src/lib/subject-prerequisites.ts', {
+			'#lib/enrollment-grades.js': loadModule('src/lib/enrollment-grades.ts')
+		}),
 		'#lib/schema.js': schema,
 		'#lib/server/auth.js': { validateUser },
 		'#lib/server/db/index.js': { db },

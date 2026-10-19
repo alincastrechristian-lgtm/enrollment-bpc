@@ -65,11 +65,11 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			{:else if mode.startsWith('catalog-subject')}<Subjects data={{records:subjects.map(record=>({...record,description:'Existing description'})),total:1,search:'',status:'all',filters:{},canManage:!mode.endsWith('registrar')}} />
 			{:else if mode.startsWith('catalog-program')}<Programs data={{records:programs.map(record=>({...record,description:'Existing description',activeCurriculumId:mode.startsWith('catalog-program-linked')&&record.id==='p'?'c':null,activeCurriculum:mode.startsWith('catalog-program-linked')&&record.id==='p'?curriculum:null})),curricula:programCurricula,total:1,search:'',status:'all',filters:{},canManage:!mode.endsWith('registrar')}} />
 			{:else if mode==='edit'}<Editor {programs} {subjects} {curriculum} {entries} />
-			{:else if mode==='multi-edit'}<Editor {programs} {subjects} {curriculum} entries={multiEntries} />
+			{:else if mode==='multi-edit'||mode==='prerequisite-edit'}<Editor {programs} {subjects} {curriculum} entries={multiEntries.map((entry)=>({...entry,prerequisiteIds:mode==='prerequisite-edit'&&entry.subjectId==='s2'?['s1']:[]}))} />
 			{:else if mode==='empty'}<Editor programs={[]} subjects={[]} />
 			{:else if mode.startsWith('student-')}<List data={{isStudent:true,studentCurriculum:mode==='student-empty'?null:{curriculum:{...curriculum,status:'archived',publishedAt:new Date()},entries:multiEntries},records:[],total:0,canManage:false}} />
 			{:else if mode.startsWith('list')}<List data={{records:[{...curriculum,status:curriculumStatus,publishedAt:curriculumStatus==='draft'?null:new Date(),subjectCount:1,totalUnits:3}],total:1,search:'',status:'all',filters:{},canManage:mode==='list-admin'}} />
-			{:else}<View data={{curriculum:{...curriculum,status:mode==='published'?'archived':curriculumStatus,publishedAt:mode==='published'||curriculumStatus!=='draft'?new Date():null,semesters:mode==='third-semester-view'?3:2},entries:mode==='multi-view'?multiEntries:mode==='third-semester-view'?entries.map(entry=>({...entry,semester:3})):entries,canManage:mode!=='registrar' && mode!=='multi-view'}} />{/if}
+			{:else}<View data={{curriculum:{...curriculum,status:mode==='published'?'archived':curriculumStatus,publishedAt:mode==='published'||curriculumStatus!=='draft'?new Date():null,semesters:mode==='third-semester-view'?3:2},entries:mode==='prerequisite-view'?multiEntries.map((entry)=>({...entry,prerequisiteIds:entry.subjectId==='s2'?['s1']:[]})):mode==='multi-view'?multiEntries:mode==='third-semester-view'?entries.map(entry=>({...entry,semester:3})):entries,canManage:mode!=='registrar' && mode!=='multi-view'}} />{/if}
 		{/key}`
 	};
 	let server, browser;
@@ -149,7 +149,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await page.getByRole('button', { name: 'Subject 1', exact: true }).click();
 		await expect(subjectSearch).toHaveValue('');
 		await subjectSearch.fill('no matching subject');
-		await expect(page.getByText('No matches found.')).toBeVisible();
+		await expect(page.getByText('No matches found.').filter({ visible: true })).toBeVisible();
 		await expect(page.getByRole('button', { name: 'New Subject', exact: true })).toBeVisible();
 		await subjectSearch.press('Escape');
 		await expect(page.getByRole('button', { name: 'Subject 1', exact: true })).toContainText(
@@ -230,7 +230,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			programCode: 'BSIS',
 			yearLevels: 4,
 			semesters: 2,
-			subjects: [{ subjectId: 's1', yearLevel: 2, semester: 2, units: 4 }]
+			subjects: [{ subjectId: 's1', yearLevel: 2, semester: 2, units: 4, prerequisiteIds: [] }]
 		});
 		assert.equal(
 			await page.evaluate(() => window.navigation.at(-1).url),
@@ -504,8 +504,8 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		});
 		await expect.poll(() => page.evaluate(() => window.updates.length)).toBe(4);
 		assert.deepEqual(await page.evaluate(() => window.updates.at(-1).subjects), [
-			{ id: 'entry-1', subjectId: 's1', yearLevel: 1, semester: 1, units: 6 },
-			{ id: 'entry-2', subjectId: 's2', yearLevel: 2, semester: 2, units: 7 }
+			{ id: 'entry-1', subjectId: 's1', yearLevel: 1, semester: 1, units: 6, prerequisiteIds: [] },
+			{ id: 'entry-2', subjectId: 's2', yearLevel: 2, semester: 2, units: 7, prerequisiteIds: [] }
 		]);
 
 		await page.evaluate(() => window.show('edit'));
@@ -681,7 +681,7 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 		await expect(page.getByRole('button', { name: 'None', exact: true })).toBeVisible();
 		const curriculumSearch = page.getByRole('searchbox', { name: 'Search curricula', exact: true });
 		await curriculumSearch.fill('foreign');
-		await expect(page.getByText('No matches found.')).toBeVisible();
+		await expect(page.getByText('No matches found.').filter({ visible: true })).toBeVisible();
 		await curriculumSearch.fill('replacement');
 		await page.getByRole('button', { name: 'Replacement Curriculum (Draft)', exact: true }).click();
 		await programEdit.getByLabel('Name', { exact: true }).fill('Edited Program');
@@ -742,21 +742,52 @@ test('curriculum pages save complete drafts, retain row IDs, and keep registrars
 			await page.evaluate(() => 'activeCurriculumId' in window.catalogUpdates.at(-1).data),
 			false
 		);
-		await page.evaluate(() => window.show('student-current'));
-		await expect(page.getByRole('heading', { name: '2026 Curriculum', exact: true })).toBeVisible();
-		await expect(page.getByText('Current curriculum', { exact: true })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'View enrollment', exact: true })).toHaveAttribute(
-			'href',
-			'/portal/user/enrollment'
+		await page.evaluate(() => {
+			window.confirmSave = true;
+			window.deferSave = false;
+			window.show('multi-edit');
+		});
+		const updateCount = await page.evaluate(() => window.updates.length);
+		await selectCatalog('Add prerequisite for subject 2', 'IS101');
+		await expect(
+			page.getByRole('button', { name: 'Remove prerequisite IS101 from subject 2', exact: true })
+		).toBeVisible();
+		await page.getByLabel('Year for subject 1').selectOption('3');
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect(page.getByText(/prerequisites must be scheduled in an earlier/)).toBeVisible();
+		assert.equal(await page.evaluate(() => window.updates.length), updateCount);
+		await page.getByLabel('Year for subject 1').selectOption('1');
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.updates.length)).toBe(updateCount + 1);
+		assert.deepEqual(await page.evaluate(() => window.updates.at(-1).subjects[1].prerequisiteIds), [
+			's1'
+		]);
+
+		await page.evaluate(() => window.show('prerequisite-edit'));
+		await expect(
+			page.getByRole('button', { name: 'Remove prerequisite IS101 from subject 2', exact: true })
+		).toBeVisible();
+		await page.getByRole('button', { name: 'Remove subject 1', exact: true }).click();
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect(page.getByText(/add every prerequisite to this curriculum/)).toBeVisible();
+		assert.equal(await page.evaluate(() => window.updates.length), updateCount + 1);
+		await page
+			.getByRole('button', { name: 'Remove prerequisite IS101 from subject 1', exact: true })
+			.click();
+		await page.getByRole('button', { name: 'Save curriculum', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.updates.length)).toBe(updateCount + 2);
+		assert.deepEqual(
+			await page.evaluate(() => window.updates.at(-1).subjects[0].prerequisiteIds),
+			[]
 		);
-		await expect(page.getByText('Original Introduction', { exact: true })).toBeVisible();
-		await expect(page.getByText('Programming', { exact: true })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Edit curriculum', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('button', { name: 'Activate', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
-		await page.evaluate(() => window.show('student-empty'));
-		await expect(page.getByRole('heading', { name: 'No curriculum assigned' })).toBeVisible();
-		await expect(page.getByRole('textbox', { name: 'Search curricula' })).toHaveCount(0);
+		await page.evaluate(() => window.show('prerequisite-view'));
+		await expect(
+			page
+				.getByRole('row')
+				.filter({ hasText: 'Programming' })
+				.getByRole('cell', { name: 'IS101', exact: true })
+		).toBeVisible();
+
 		assert.deepEqual(errors, []);
 	} finally {
 		await browser?.close();

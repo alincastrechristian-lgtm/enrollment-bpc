@@ -149,7 +149,12 @@ export function loadEnrollmentEditor({
 			),
 		plan: context
 			? {
-					prerequisites: getEnrollmentPrerequisites(db, record.student.studentId, target?.id),
+					prerequisites: getEnrollmentPrerequisites(
+						db,
+						record.student.studentId,
+						context.curriculum.id,
+						target?.id
+					),
 					restoredSubjects: target
 						? programCode === target.programCode
 							? originalSubjects.map((entry) => ({ id: entry.subjectId, units: entry.units }))

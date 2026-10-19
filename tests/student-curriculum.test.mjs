@@ -57,6 +57,9 @@ function fixture(t) {
 	`);
 	const dependencies = {
 		'#lib/Roles.js': { Role },
+		'#lib/subject-prerequisites.js': loadModule('src/lib/subject-prerequisites.ts', {
+			'#lib/enrollment-grades.js': loadModule('src/lib/enrollment-grades.ts')
+		}),
 		'#lib/schema.js': schema,
 		'#lib/server/db/index.js': { db },
 		'#lib/server/auth.js': { validateUser },

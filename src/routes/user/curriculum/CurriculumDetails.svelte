@@ -274,6 +274,7 @@
 									<tr class="bg-base-200 text-xs text-base-content/55">
 										<th class="py-3 pl-5">Code</th>
 										<th>Subject</th>
+										<th>Prerequisites</th>
 										<th class="pr-5 text-right">Units</th>
 									</tr>
 								</thead>
@@ -282,6 +283,15 @@
 										<tr class="border-b border-base-200 last:border-0">
 											<td class="py-4 pl-5 font-mono text-xs font-semibold">{entry.subjectCode}</td>
 											<td class="text-sm font-semibold">{entry.subjectName}</td>
+											<td class="text-sm">
+												{(entry.prerequisiteIds ?? [])
+													.map(
+														(id) =>
+															data.entries.find((other) => other.subjectId === id)?.subjectCode ??
+															'Missing subject'
+													)
+													.join(', ') || 'None'}
+											</td>
 											<td class="pr-5 text-right font-semibold">{entry.units}</td>
 										</tr>
 									{/each}

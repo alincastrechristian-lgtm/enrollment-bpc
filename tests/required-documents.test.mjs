@@ -42,11 +42,14 @@ const status = (n) => (cause) => kit.isHttpError(cause) && cause.status === n;
 const pdf = () =>
 	new File(['%PDF-1.7\nTest document\n%%EOF'], 'record.pdf', { type: 'application/pdf' });
 
-function fixture(t, through = 38) {
+function fixture(t, through) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
 	const db = drizzle(sqlite, { schema });
-	migrate(db, migrationConfigThrough(t, through));
+	migrate(
+		db,
+		through === undefined ? { migrationsFolder: 'drizzle' } : migrationConfigThrough(t, through)
+	);
 	sqlite.exec(`INSERT INTO user(id,name,first_name,last_name,email,role,setup_complete) VALUES
 	('s','Student','Student','','s@example.invalid','student',1),
 	('other','Other','Other','','other@example.invalid','student',1),

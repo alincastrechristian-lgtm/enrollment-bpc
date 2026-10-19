@@ -285,8 +285,12 @@ export function seedAcademicData(db: BetterSQLite3Database<typeof schema>) {
 				for (const prerequisiteCode of prerequisites[code] ?? []) {
 					const prerequisite = catalogSubjects.get(prerequisiteCode);
 					if (!prerequisite) throw new Error(`Missing seed prerequisite: ${prerequisiteCode}`);
-					tx.insert(schema.subjectPrerequisite)
-						.values({ subjectId: subject.id, prerequisiteId: prerequisite.id })
+					tx.insert(schema.curriculumPrerequisite)
+						.values({
+							curriculumId: curriculum.id,
+							subjectId: subject.id,
+							prerequisiteId: prerequisite.id
+						})
 						.onConflictDoNothing()
 						.run();
 				}

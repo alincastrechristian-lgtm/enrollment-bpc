@@ -3,57 +3,42 @@
 	import { createSubject, updateSubject } from '#lib/actions/subject.remote.js';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import PopupCard from '#lib/components/Popup/PopupCard.svelte';
-	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import type { Subject } from '#lib/schema.js';
 	import { refreshAll } from '$app/navigation';
 	import { Hash, Pencil, Plus, X } from '@lucide/svelte';
 
 	let {
 		busy = $bindable(false),
-		oncreated,
-		subjects = []
+		oncreated
 	}: {
 		busy?: boolean;
 		oncreated?: (subject: Subject) => void;
-		subjects?: Pick<Subject, 'id' | 'code' | 'name'>[];
 	} = $props();
 
 	let dialog: HTMLDialogElement;
 	let selectedSubject = $state<Subject | null>(null);
-	let prerequisiteSelection = $state('');
 	const emptyDraft = () => ({
 		code: '',
 		name: '',
 		description: '',
-		isActive: true,
-		prerequisiteIds: [] as string[]
+		isActive: true
 	});
 	let draft = $state(emptyDraft());
-	export function open(record: Subject | null = null, prerequisiteIds: string[] = []) {
+	export function open(record: Subject | null = null) {
 		if (busy) return;
 		selectedSubject = record;
-		prerequisiteSelection = '';
 		draft = record
 			? {
 					code: record.code,
 					name: record.name,
 					description: record.description ?? '',
-					isActive: record.isActive,
-					prerequisiteIds: [...prerequisiteIds]
+					isActive: record.isActive
 				}
 			: emptyDraft();
 		dialog.showModal();
 	}
 	function close() {
 		if (!busy) dialog.close();
-	}
-	function addPrerequisite(id: string) {
-		if (busy || id === selectedSubject?.id || draft.prerequisiteIds.includes(id)) return;
-		draft.prerequisiteIds.push(id);
-		prerequisiteSelection = '';
-	}
-	function removePrerequisite(id: string) {
-		if (!busy) draft.prerequisiteIds = draft.prerequisiteIds.filter((entry) => entry !== id);
 	}
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
@@ -158,55 +143,6 @@
 							bind:value={draft.description}
 							placeholder="Describe this subject"></textarea>
 					</div>
-
-					<fieldset class="space-y-2">
-						<legend class="text-sm font-semibold">Prerequisite subjects</legend>
-						<p class="text-xs text-base-content/60">
-							Students must pass every selected subject in an earlier term, with finalized grades.
-							Applies across all curricula.
-						</p>
-						{#if draft.prerequisiteIds.length}
-							<ul
-								class="flex max-h-36 flex-wrap gap-2 overflow-y-auto"
-								aria-label="Selected prerequisite subjects"
-							>
-								{#each draft.prerequisiteIds as id (id)}
-									{@const entry = subjects.find((subject) => subject.id === id)}
-									<li
-										class="flex max-w-full items-start gap-1 rounded-lg border border-primary/20 bg-primary/10 py-1 pr-1 pl-3 text-xs text-primary"
-									>
-										<span class="min-w-0 py-1 wrap-break-word">
-											{entry?.code ?? id} — {entry?.name ?? 'Subject unavailable'}
-										</span>
-										<button
-											type="button"
-											class="btn btn-square size-6 min-h-6 shrink-0 btn-ghost"
-											aria-label={`Remove ${entry?.code ?? id}`}
-											onclick={() => removePrerequisite(id)}
-											disabled={busy}
-										>
-											<X class="size-3.5" aria-hidden="true" />
-										</button>
-									</li>
-								{/each}
-							</ul>
-						{/if}
-						<SearchableSelect
-							id="subject-prerequisite"
-							label="Add prerequisite subject"
-							bind:value={prerequisiteSelection}
-							options={subjects
-								.filter(
-									(entry) =>
-										entry.id !== selectedSubject?.id && !draft.prerequisiteIds.includes(entry.id)
-								)
-								.map((entry) => ({ value: entry.id, label: `${entry.code} — ${entry.name}` }))}
-							placeholder="Search and add a prerequisite..."
-							searchLabel="Search prerequisite subjects"
-							onchange={addPrerequisite}
-							disabled={busy}
-						/>
-					</fieldset>
 
 					<label
 						class="flex cursor-pointer items-start gap-3 rounded-xl border border-base-300 bg-base-200 p-4"

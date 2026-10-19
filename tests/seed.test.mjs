@@ -46,7 +46,7 @@ function academicRows(db) {
 		schema.subject,
 		schema.curriculum,
 		schema.curriculumSubject,
-		schema.subjectPrerequisite,
+		schema.curriculumPrerequisite,
 		schema.studentData
 	].map((table) => db.select().from(table).all());
 }
@@ -166,7 +166,7 @@ test('sample prerequisites exist in earlier terms for every curriculum and rerun
 	seedAcademicData(db);
 	const curricula = db.select().from(schema.curriculum).all();
 	const entries = db.select().from(schema.curriculumSubject).all();
-	const rules = db.select().from(schema.subjectPrerequisite).all();
+	const rules = db.select().from(schema.curriculumPrerequisite).all();
 	assert.ok(rules.length >= 30);
 	for (const curriculum of curricula) {
 		const placements = new Map(
@@ -174,7 +174,7 @@ test('sample prerequisites exist in earlier terms for every curriculum and rerun
 				.filter((entry) => entry.curriculumId === curriculum.id)
 				.map((entry) => [entry.subjectId, entry])
 		);
-		for (const rule of rules) {
+		for (const rule of rules.filter((rule) => rule.curriculumId === curriculum.id)) {
 			const dependent = placements.get(rule.subjectId);
 			if (!dependent) continue;
 			const prerequisite = placements.get(rule.prerequisiteId);
@@ -187,9 +187,9 @@ test('sample prerequisites exist in earlier terms for every curriculum and rerun
 			);
 		}
 	}
-	sqlite.exec('DELETE FROM subject_prerequisite');
+	sqlite.exec('DELETE FROM curriculum_prerequisite');
 	seedAcademicData(db);
-	assert.deepEqual(db.select().from(schema.subjectPrerequisite).all(), []);
+	assert.deepEqual(db.select().from(schema.curriculumPrerequisite).all(), []);
 });
 
 test('seed CLI creates the configured admin and skips all changes once seeded', () => {

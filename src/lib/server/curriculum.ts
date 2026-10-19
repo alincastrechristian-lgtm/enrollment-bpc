@@ -1,6 +1,7 @@
 import {
 	curriculum,
 	curriculumSubject,
+	curriculumPrerequisite,
 	enrollment,
 	program,
 	studentData,
@@ -9,6 +10,7 @@ import {
 import { db, type Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
+import { getCurriculumPrerequisiteError } from '#lib/subject-prerequisites.js';
 
 export function getCurrentStudentCurriculumId(userId: string): string | null {
 	// Follow the student's enrollment, not the program's latest curriculum revision.
@@ -52,6 +54,17 @@ export function validateSubjectLimits(
 	}
 }
 
+export function getCurriculumPrerequisites(
+	database: typeof db | Transaction,
+	curriculumId: string
+) {
+	return database
+		.select()
+		.from(curriculumPrerequisite)
+		.where(eq(curriculumPrerequisite.curriculumId, curriculumId))
+		.all();
+}
+
 // Call inside the caller's transaction so metadata edits and selection changes commit together.
 export function setProgramCurriculum(
 	tx: Transaction,
@@ -69,7 +82,6 @@ export function setProgramCurriculum(
 	if (selected.programCode !== owner.code)
 		error(400, 'Select a curriculum belonging to this program.');
 	if (!owner.isActive) error(400, 'The program must be active before activating a curriculum.');
-	if (owner.activeCurriculumId === selected.id && selected.archivedAt === null) return;
 	const entries = tx
 		.select()
 		.from(curriculumSubject)
@@ -77,6 +89,19 @@ export function setProgramCurriculum(
 		.all();
 	if (!entries.length) error(400, 'Add subjects before activating this curriculum.');
 	validateSubjectLimits(entries, selected.yearLevels, selected.semesters);
+	const prerequisites = getCurriculumPrerequisites(tx, selected.id);
+	if (prerequisites.some((rule) => !entries.some((entry) => entry.subjectId === rule.subjectId)))
+		error(400, 'Every prerequisite rule must belong to a subject in this curriculum.');
+	const prerequisiteError = getCurriculumPrerequisiteError(
+		entries.map((entry) => ({
+			...entry,
+			prerequisiteIds: prerequisites
+				.filter((rule) => rule.subjectId === entry.subjectId)
+				.map((rule) => rule.prerequisiteId)
+		}))
+	);
+	if (prerequisiteError) error(400, prerequisiteError);
+	if (owner.activeCurriculumId === selected.id && selected.archivedAt === null) return;
 	for (const entry of entries) {
 		if (
 			![entry.yearLevel, entry.semester, entry.units].every(
@@ -139,7 +164,16 @@ export function getCurriculum(id: string) {
 			asc(curriculumSubject.subjectCode)
 		)
 		.all();
-	return { curriculum: record, entries };
+	const prerequisites = getCurriculumPrerequisites(db, id);
+	return {
+		curriculum: record,
+		entries: entries.map((entry) => ({
+			...entry,
+			prerequisiteIds: prerequisites
+				.filter((rule) => rule.subjectId === entry.subjectId)
+				.map((rule) => rule.prerequisiteId)
+		}))
+	};
 }
 
 export function getCurriculumCatalogs() {

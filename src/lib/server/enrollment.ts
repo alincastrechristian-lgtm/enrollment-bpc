@@ -14,7 +14,7 @@ import {
 	program,
 	studentData,
 	subject,
-	subjectPrerequisite,
+	curriculumPrerequisite,
 	SubjectSource
 } from '#lib/schema.js';
 import type { db, Transaction } from '#lib/server/db/index.js';
@@ -27,18 +27,20 @@ import { getMissingPrerequisites } from '#lib/subject-prerequisites.js';
 export function getEnrollmentPrerequisites(
 	database: typeof db | Transaction,
 	studentId: string,
+	curriculumId: string,
 	excludedEnrollmentId?: string
 ) {
 	return {
 		requirements: database
 			.select({
-				subjectId: subjectPrerequisite.subjectId,
-				prerequisiteId: subjectPrerequisite.prerequisiteId,
+				subjectId: curriculumPrerequisite.subjectId,
+				prerequisiteId: curriculumPrerequisite.prerequisiteId,
 				code: subject.code,
 				name: subject.name
 			})
-			.from(subjectPrerequisite)
-			.innerJoin(subject, eq(subject.id, subjectPrerequisite.prerequisiteId))
+			.from(curriculumPrerequisite)
+			.innerJoin(subject, eq(subject.id, curriculumPrerequisite.prerequisiteId))
+			.where(eq(curriculumPrerequisite.curriculumId, curriculumId))
 			.all(),
 		attempts: database
 			.select({
@@ -143,7 +145,7 @@ export function getEnrollmentContext(
 		.get();
 	if (!record) error(404, 'Student not found.');
 
-	// Enrollment uses the program's selected, published curriculum.
+	// Continuing students retain their assigned version; new students/program transfers use the active one.
 	const owner = database.select().from(program).where(eq(program.code, programCode)).get();
 	if (!owner) error(404, 'Program not found.');
 	const existing = existingCurriculumId
@@ -155,7 +157,7 @@ export function getEnrollmentContext(
 		: undefined;
 	if (!owner.isActive && !existing)
 		error(400, 'The program must be active before enrolling students.');
-	const restoring =
+	const assigned =
 		!existingCurriculumId && record.student.currentEnrollmentId
 			? database
 					.select({ curriculumId: enrollment.curriculumId })
@@ -165,29 +167,29 @@ export function getEnrollmentContext(
 						and(
 							eq(enrollment.id, record.student.currentEnrollmentId),
 							eq(enrollment.studentId, record.student.studentId),
-							eq(enrollment.status, 'dropped'),
+							ne(enrollment.status, 'voided'),
 							eq(curriculum.programCode, owner.code)
 						)
 					)
 					.get()
 			: undefined;
-	if (!existing && !restoring && !owner.activeCurriculumId)
+	if (!existing && !assigned && !owner.activeCurriculumId)
 		error(404, 'Select an active curriculum for this program before enrolling students.');
 
 	const selectedCurriculum = database
 		.select()
 		.from(curriculum)
-		.where(eq(curriculum.id, existing?.id ?? restoring?.curriculumId ?? owner.activeCurriculumId!))
+		.where(eq(curriculum.id, existing?.id ?? assigned?.curriculumId ?? owner.activeCurriculumId!))
 		.get();
 	if (
 		!selectedCurriculum ||
 		selectedCurriculum.programCode !== owner.code ||
 		selectedCurriculum.publishedAt === null ||
 		(!existing &&
-			!restoring &&
+			!assigned &&
 			(selectedCurriculum.archivedAt !== null || !selectedCurriculum.isActive))
 	) {
-		error(409, 'The active curriculum is unavailable. Refresh and try again.');
+		error(409, 'The selected curriculum is unavailable. Refresh and try again.');
 	}
 
 	return { ...record, curriculum: selectedCurriculum, program: owner };
@@ -198,7 +200,7 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 	const context = getEnrollmentContext(database, data.userId, data.programCode);
 	const selectedCurriculum = context.curriculum;
 	if (selectedCurriculum.id !== data.curriculumId)
-		error(409, 'Active curriculum changed. Refresh and try again.');
+		error(409, 'Selected curriculum changed. Refresh and try again.');
 	if (context.student.currentEnrollmentId !== data.currentEnrollmentId)
 		error(409, 'Current enrollment changed. Refresh and try again.');
 	const documentBlock = documentEnrollmentBlock(database, data.userId, data, selectedCurriculum);
@@ -285,7 +287,7 @@ export function getEnrollmentSubjects(
 		data.yearLevel > selectedCurriculum.yearLevels ||
 		data.semester > selectedCurriculum.semesters
 	) {
-		error(400, 'Year level and semester must be within the active curriculum limits.');
+		error(400, 'Year level and semester must be within the selected curriculum limits.');
 	}
 
 	// Validate the complete subject selection before writing enrollment records.
@@ -302,7 +304,12 @@ export function getEnrollmentSubjects(
 			.map((entry) => [entry.id, entry])
 	);
 	if (catalog.size !== ids.length) error(400, 'One or more subjects do not exist in the database.');
-	const prerequisites = getEnrollmentPrerequisites(database, studentId, excludedEnrollmentId);
+	const prerequisites = getEnrollmentPrerequisites(
+		database,
+		studentId,
+		selectedCurriculum.id,
+		excludedEnrollmentId
+	);
 	const missing = getMissingPrerequisites(
 		prerequisites.requirements,
 		prerequisites.attempts,

@@ -274,6 +274,13 @@
       "when": 1792443255177,
       "tag": "0038_subject_prerequisites",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1792448361820,
+      "tag": "0039_curriculum_prerequisites",
+      "breakpoints": true
     }
   ]
 }

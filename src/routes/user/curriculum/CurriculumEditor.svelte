@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getErrorMessage } from '#lib/errors.js';
+	import { getCurriculumPrerequisiteError } from '#lib/subject-prerequisites.js';
 	import {
 		createCurriculum,
 		updateCurriculum,
@@ -10,7 +11,7 @@
 	import type { Curriculum, curriculumSubject, Program, Subject } from '#lib/schema.js';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { BookOpen, GraduationCap, Layers, Plus, Save, Trash2 } from '@lucide/svelte';
+	import { BookOpen, GraduationCap, Layers, Plus, Save, Trash2, X } from '@lucide/svelte';
 	import { tick, untrack } from 'svelte';
 	import SubjectLayout, { levelOptions, semesterLabel } from './SubjectLayout.svelte';
 	import ProgramDialog from '../programs/ProgramDialog.svelte';
@@ -25,6 +26,8 @@
 		yearLevel: number | undefined;
 		semester: number | undefined;
 		units: number | undefined;
+		prerequisiteIds: string[];
+		prerequisiteSelection: string;
 	};
 	let {
 		curriculum = null,
@@ -33,7 +36,7 @@
 		subjects
 	}: {
 		curriculum?: Curriculum | null;
-		entries?: (typeof curriculumSubject.$inferSelect)[];
+		entries?: (typeof curriculumSubject.$inferSelect & { prerequisiteIds?: string[] })[];
 		programs: ProgramOption[];
 		subjects: SubjectOption[];
 	} = $props();
@@ -54,7 +57,9 @@
 				subjectId: entry.subjectId,
 				yearLevel: entry.yearLevel,
 				semester: entry.semester,
-				units: entry.units
+				units: entry.units,
+				prerequisiteIds: [...(entry.prerequisiteIds ?? [])],
+				prerequisiteSelection: ''
 			}))
 		)
 	);
@@ -150,11 +155,18 @@
 			subjectId: '',
 			yearLevel: subjectLayout === 'tabbed' ? selectedYear : 1,
 			semester: subjectLayout === 'tabbed' ? selectedSemester : 1,
-			units: 3
+			units: 3,
+			prerequisiteIds: [],
+			prerequisiteSelection: ''
 		});
 	}
 	function removeSubject(key: string) {
 		if (!busy && !catalogBusy && !saved) rows = rows.filter((entry) => entry.key !== key);
+	}
+	function addPrerequisite(entry: DraftEntry, id: string) {
+		if (busy || catalogBusy || saved || entry.prerequisiteIds.includes(id)) return;
+		entry.prerequisiteIds.push(id);
+		entry.prerequisiteSelection = '';
 	}
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
@@ -182,16 +194,23 @@
 			return;
 		}
 		const payloadSubjects: CurriculumUpdateSchema['subjects'] = rows.map(
-			({ id, subjectId, yearLevel, semester, units }) => ({
+			({ id, subjectId, yearLevel, semester, units, prerequisiteIds }) => ({
 				...(id ? { id } : {}),
 				subjectId,
 				yearLevel: Number(yearLevel),
 				semester: Number(semester),
-				units: Number(units)
+				units: Number(units),
+				prerequisiteIds
 			})
 		);
 		if (new Set(payloadSubjects.map((entry) => entry.subjectId)).size !== rows.length) {
 			error = 'Each subject can only appear once in the curriculum.';
+			return;
+		}
+		const prerequisiteError = getCurriculumPrerequisiteError(payloadSubjects);
+		if (prerequisiteError) {
+			error = prerequisiteError;
+			subjectLayout = 'all';
 			return;
 		}
 		busy = true;
@@ -378,7 +397,8 @@
 							<div>
 								<h2 class="font-bold">Subjects</h2>
 								<p class="mt-0.5 text-xs text-base-content/50">
-									Set the year, semester, and units for each subject.
+									Set placement, units, and prerequisites for this curriculum. Prerequisites freeze
+									on publication.
 								</p>
 							</div>
 						</div>
@@ -402,6 +422,7 @@
 										<th>Year</th>
 										<th>Semester</th>
 										<th>Units</th>
+										<th>Prerequisites</th>
 										<th><span class="sr-only">Remove</span></th>
 									</tr>
 								</thead>
@@ -481,6 +502,53 @@
 													required
 												/>
 											</td>
+											<td class="min-w-64">
+												<div class="space-y-2">
+													{#each entry.prerequisiteIds as id (id)}
+														<span class="badge gap-1 badge-outline">
+															{subjectOptions.find((record) => record.id === id)?.code ??
+																'Missing subject'}
+															<button
+																type="button"
+																class="btn btn-circle btn-ghost btn-xs"
+																aria-label={`Remove prerequisite ${subjectOptions.find((record) => record.id === id)?.code ?? id} from subject ${index + 1}`}
+																onclick={() =>
+																	(entry.prerequisiteIds = entry.prerequisiteIds.filter(
+																		(value) => value !== id
+																	))}
+															>
+																<X class="size-3" aria-hidden="true" />
+															</button>
+														</span>
+													{/each}
+													<SearchableSelect
+														id={`prerequisites-${entry.key}`}
+														label={`Add prerequisite for subject ${index + 1}`}
+														bind:value={entry.prerequisiteSelection}
+														options={rows
+															.filter(
+																(other) =>
+																	other.subjectId &&
+																	other.subjectId !== entry.subjectId &&
+																	!entry.prerequisiteIds.includes(other.subjectId) &&
+																	((other.yearLevel ?? Infinity) < (entry.yearLevel ?? 0) ||
+																		(other.yearLevel === entry.yearLevel &&
+																			(other.semester ?? Infinity) < (entry.semester ?? 0)))
+															)
+															.map((other) => ({
+																value: other.subjectId,
+																label: optionLabel(
+																	subjectOptions.find((record) => record.id === other.subjectId)!
+																)
+															}))}
+														placeholder="Add an earlier subject"
+														searchLabel={`Search prerequisites for subject ${index + 1}`}
+														onchange={(id) => addPrerequisite(entry, id)}
+														disabled={busy || catalogBusy || saved || !entry.subjectId}
+														small
+													/>
+												</div>
+											</td>
 											<td class="pr-5">
 												<button
 													type="button"
@@ -549,9 +617,4 @@
 </form>
 
 <ProgramDialog bind:this={programDialog} bind:busy={catalogBusy} oncreated={programCreated} />
-<SubjectDialog
-	bind:this={subjectDialog}
-	bind:busy={catalogBusy}
-	oncreated={subjectCreated}
-	subjects={subjectOptions}
-/>
+<SubjectDialog bind:this={subjectDialog} bind:busy={catalogBusy} oncreated={subjectCreated} />

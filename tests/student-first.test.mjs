@@ -368,7 +368,10 @@ test('staff create a student without enrollment or academic columns, then enroll
 
 test('prerequisites block both staff roles, concurrent selection, failed and incomplete results; passing unlocks enrollment', async (t) => {
 	const f = fixture(t);
-	f.db.insert(schema.subjectPrerequisite).values({ subjectId: 's2', prerequisiteId: 's1' }).run();
+	f.db
+		.insert(schema.curriculumPrerequisite)
+		.values({ curriculumId: 'c', subjectId: 's2', prerequisiteId: 's1' })
+		.run();
 	const created = await f.createStudent(personal);
 	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
 		f.state.role = role;
@@ -420,6 +423,56 @@ test('prerequisites block both staff roles, concurrent selection, failed and inc
 		.run(first.enrollmentId);
 	assert.equal((await f.enrollStudent(next)).success, true);
 });
+test('continuing students keep assigned curriculum rules while new students use the active revision', async (t) => {
+	const f = fixture(t);
+	f.db
+		.insert(schema.curriculumPrerequisite)
+		.values({ curriculumId: 'c', subjectId: 's2', prerequisiteId: 's1' })
+		.run();
+	const continuing = await f.createStudent(personal);
+	const first = await f.enrollStudent(f.input(continuing, { subjects: [{ id: 's1', units: 3 }] }));
+	f.sqlite
+		.prepare(
+			"UPDATE enrollment SET finalized_grades=1,submitted_clearance=1,status='completed' WHERE id=?"
+		)
+		.run(first.enrollmentId);
+	f.sqlite
+		.prepare('UPDATE enrollment_subject SET grade=2 WHERE enrollment_id=?')
+		.run(first.enrollmentId);
+	f.sqlite.exec(`
+		INSERT INTO subject(id,code,name) VALUES('s3','LOGIC','Logic');
+		INSERT INTO curriculum(id,program_code,name,published_at) VALUES('revision','BSIS','New revision',1000);
+		UPDATE program SET active_curriculum_id='revision';
+		UPDATE curriculum SET archived_at=1000 WHERE id='c';
+		INSERT INTO curriculum_prerequisite VALUES('revision','s2','s3');
+	`);
+	const editor = f.enrollmentPage(continuing.userId);
+	assert.equal(editor.plan.curriculum.id, 'c');
+	assert.deepEqual(
+		editor.plan.prerequisites.requirements.map((rule) => rule.prerequisiteId),
+		['s1']
+	);
+	const next = await f.enrollStudent(
+		f.input(continuing, {
+			currentEnrollmentId: first.enrollmentId,
+			semester: 2,
+			subjects: [{ id: 's2', units: 3 }]
+		})
+	);
+	assert.equal(
+		f.sqlite.prepare('SELECT curriculum_id FROM enrollment WHERE id=?').get(next.enrollmentId)
+			.curriculum_id,
+		'c'
+	);
+	const newcomer = await f.createStudent({ ...personal, email: 'newcomer@example.com' });
+	await assert.rejects(
+		f.enrollStudent(
+			f.input(newcomer, { curriculumId: 'revision', subjects: [{ id: 's2', units: 3 }] })
+		),
+		status(409)
+	);
+});
+
 test('enrollment confirmation sends after commit and email failure preserves enrollment', async (t) => {
 	const f = fixture(t);
 	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
