@@ -45,7 +45,7 @@ export const getStudentClearance = query(() => {
 			? {
 					revision: template.revision,
 					filename: template.filename,
-					definition: template.definition
+					definition: definitionSchema.safeParse(template.definition).data ?? null
 				}
 			: null,
 		submission: current ? submissionInfo(getSubmission(db, current.id)) : null

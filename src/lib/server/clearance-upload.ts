@@ -4,7 +4,7 @@ import { error, isHttpError } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { clearanceSubmission, clearanceTemplate } from '#lib/schema.js';
-import { definitionSchema, templateTermIssue } from '#lib/clearance/definition.js';
+import { definitionSchema, clearanceTermFromEnrollment } from '#lib/clearance/definition.js';
 import { clearancePassed, hasCurrentOfficeChecks } from '#lib/clearance/report.js';
 import type { Corners } from '#lib/clearance/clearance.js';
 import { checkClearance, decodeClearance } from './clearance-checker';
@@ -50,8 +50,6 @@ export async function uploadStudentClearance(
 	)
 		error(503, 'The Registrar must finish configuring the clearance template and office boxes.');
 	const definition = parsed.data;
-	const termIssue = templateTermIssue(definition, record.enrollment);
-	if (termIssue) error(409, termIssue);
 	const file = input.file;
 	if (!file.size || file.size > MAX_FILE_BYTES)
 		error(400, 'Choose a clearance image up to 10 MiB.');
@@ -68,7 +66,8 @@ export async function uploadStudentClearance(
 		Buffer.from(await reference.arrayBuffer()),
 		image,
 		input.corners,
-		definition
+		definition,
+		clearanceTermFromEnrollment(record.enrollment)
 	);
 	if (!clearancePassed(report)) return { success: false, report, submission: null };
 	const id = randomUUID(),

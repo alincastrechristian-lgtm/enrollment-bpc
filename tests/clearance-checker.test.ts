@@ -6,7 +6,9 @@ import { isHttpError } from '@sveltejs/kit';
 import { checkClearance, decodeClearance } from '../src/lib/server/clearance-checker';
 import { homography, project, UNIT_CORNERS, overall } from '../src/lib/clearance/clearance';
 import { clearancePassed } from '../src/lib/clearance/report';
-import type { TemplateDefinition } from '../src/lib/clearance/definition';
+import { definitionSchema, type TemplateDefinition } from '../src/lib/clearance/definition';
+
+const term = { semester: '2', schoolYear: '2025-2026' };
 
 const definition: TemplateDefinition = {
 	corners: [
@@ -15,8 +17,6 @@ const definition: TemplateDefinition = {
 		{ x: 0.971214017522, y: 0.864820846906 },
 		{ x: 0.073842302879, y: 0.964169381107 }
 	],
-	semester: '2',
-	schoolYear: '2025-2026',
 	areas: [
 		{
 			id: crypto.randomUUID(),
@@ -67,7 +67,7 @@ const definition: TemplateDefinition = {
 test('offline server OCR validates real template before checking marks; blank, missing and wrong evidence cannot pass', async () => {
 	const bytes = readFileSync('static/clearance-reference.jpg');
 	const blank = await decodeClearance(bytes, 'image/jpeg');
-	const report = await checkClearance(bytes, blank, definition.corners, definition);
+	const report = await checkClearance(bytes, blank, definition.corners, definition, term);
 	assert.equal(overall(report.template), 'pass');
 	assert.equal(overall(report.offices), 'fail');
 	assert(!clearancePassed(report));
@@ -88,11 +88,36 @@ test('offline server OCR validates real template before checking marks; blank, m
 		bytes,
 		await decodeClearance(markedBytes, 'image/png'),
 		definition.corners,
-		definition
+		definition,
+		term
 	);
 	assert(clearancePassed(accepted));
-	const wrong = await checkClearance(bytes, blank, definition.corners, {
-		...definition,
+	const differentReferenceTerm = Buffer.from(
+		`<svg xmlns="http://www.w3.org/2000/svg" width="${blank.width}" height="${blank.height}"><polygon fill="white" points="${point(0.315, 0.158)} ${point(0.67, 0.158)} ${point(0.67, 0.205)} ${point(0.315, 0.205)}"/><text x="${project(matrix, { x: 0.34, y: 0.19 }).x * blank.width}" y="${project(matrix, { x: 0.34, y: 0.19 }).y * blank.height}" font-size="18">1st Semester 2026-2027</text></svg>`
+	);
+	const olderReference = await sharp(blank.data, {
+		raw: { width: blank.width, height: blank.height, channels: 1 }
+	})
+		.composite([{ input: differentReferenceTerm }])
+		.png()
+		.toBuffer();
+	const reused = await checkClearance(olderReference, blank, definition.corners, definition, term);
+	assert.equal(overall(reused.template), 'pass', JSON.stringify(reused.template));
+	for (const label of ['Semester', 'Year']) {
+		assert(!reused.template.some((check) => check.label === `Reference: ${label}`));
+		assert.equal(
+			reused.template.find((check) => check.label === `Upload: ${label}`)?.verdict,
+			'pass'
+		);
+	}
+	const wrongSemester = await checkClearance(bytes, blank, definition.corners, definition, {
+		...term,
+		semester: '1'
+	});
+	assert.equal(overall(wrongSemester.template), 'fail');
+	assert.deepEqual(wrongSemester.offices, []);
+	const wrong = await checkClearance(bytes, blank, definition.corners, definition, {
+		...term,
 		schoolYear: '2026-2027'
 	});
 	assert.equal(overall(wrong.template), 'fail');
@@ -140,7 +165,8 @@ test('real written photo rejects four empty checkboxes while accepting the Advis
 			{ x: 0.90112640801, y: 0.911578947368 },
 			{ x: 0.170212765957, y: 1 }
 		],
-		configured
+		configured,
+		term
 	);
 	assert.equal(overall(report.template), 'pass');
 	assert.deepEqual(
@@ -154,13 +180,15 @@ test('real written photo rejects four empty checkboxes while accepting the Advis
 
 test('photocopied printed areas and italic year match without accepting empty offices, wrong years or a replaced logo', async () => {
 	const folder = 'tests/fixtures/clearance-photocopy/';
-	const { definition: configured, uploadCorners } = JSON.parse(
+	const { definition: legacy, uploadCorners } = JSON.parse(
 		readFileSync(folder + 'definition.json', 'utf8')
 	) as { definition: TemplateDefinition; uploadCorners: typeof UNIT_CORNERS };
+	const configured = definitionSchema.parse(legacy);
+	const enrollmentTerm = { semester: '1', schoolYear: '2026-2027' };
 	const reference = readFileSync(folder + 'reference.jpg'),
 		bytes = readFileSync(folder + 'upload.jpg');
 	const image = await decodeClearance(bytes);
-	const report = await checkClearance(reference, image, uploadCorners, configured);
+	const report = await checkClearance(reference, image, uploadCorners, configured, enrollmentTerm);
 	assert.equal(overall(report.template), 'pass', JSON.stringify(report.template));
 	assert.equal(
 		clearancePassed(report),
@@ -172,8 +200,8 @@ test('photocopied printed areas and italic year match without accepting empty of
 			.filter((check) => check.label.endsWith('cleared checkbox'))
 			.every((check) => check.verdict === 'fail')
 	);
-	const wrongYear = await checkClearance(reference, image, uploadCorners, {
-		...configured,
+	const wrongYear = await checkClearance(reference, image, uploadCorners, configured, {
+		...enrollmentTerm,
 		schoolYear: '2027-2028'
 	});
 	assert.equal(overall(wrongYear.template), 'fail');
@@ -195,7 +223,8 @@ test('photocopied printed areas and italic year match without accepting empty of
 		reference,
 		await decodeClearance(replaced),
 		uploadCorners,
-		configured
+		configured,
+		enrollmentTerm
 	);
 	assert.notEqual(
 		wrongLogo.template.find(

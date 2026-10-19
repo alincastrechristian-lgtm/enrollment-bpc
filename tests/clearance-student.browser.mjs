@@ -81,16 +81,13 @@ test(
 			await expect(reminder).toHaveCount(0);
 			await page.evaluate(() => window.finalize());
 			await page.evaluate(() => window.setTemplateTerm('1', '2026-2027'));
-			await expect(page.getByLabel('Upload clearance', { exact: true })).toHaveCount(0);
+			await expect(page.getByLabel('Upload clearance', { exact: true })).toBeVisible();
 			await expect(
-				reminder.getByRole('heading', { name: 'Clearance template needs updating', exact: true })
+				page.getByText('Use the clearance form for Semester 2, SY 2025-2026.', { exact: false })
 			).toBeVisible();
 			await expect(
-				page
-					.getByRole('alert')
-					.getByText('Your enrollment requires Semester 2, SY 2025-2026.', { exact: false })
-			).toBeVisible();
-			await expect(page.getByText('Office checks are outdated.', { exact: false })).toHaveCount(0);
+				page.getByText('Clearance template needs updating', { exact: true })
+			).toHaveCount(0);
 			await page.evaluate(() => window.setTemplateTerm('2', '2025-2026'));
 			await expect(
 				reminder.getByRole('link', { name: 'Upload clearance', exact: true })

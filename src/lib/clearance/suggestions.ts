@@ -132,9 +132,11 @@ export function suggestPrintedAreas(
 	if (!foundSemester) hints.push('Semester area was not found. Add it manually.');
 	if (!foundYear) hints.push('Academic year area was not found. Add it manually.');
 	if (foundSemester && !semester)
-		hints.push('Semester reading is uncertain. Confirm the required semester below.');
+		hints.push('Semester reading is uncertain. Confirm the marked semester location.');
 	if (foundYear && !schoolYear)
-		hints.push('Academic year reading is uncertain or invalid. Confirm the required year below.');
+		hints.push(
+			'Academic year reading is uncertain or invalid. Confirm the marked academic year location.'
+		);
 	return { areas, semester, schoolYear, hints };
 }
 

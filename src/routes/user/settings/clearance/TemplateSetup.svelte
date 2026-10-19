@@ -31,7 +31,7 @@
 	} = $props();
 	const steps = [
 		{ id: 'outline', title: 'Form outline', hint: 'Align the reference' },
-		{ id: 'printed', title: 'Printed areas & term', hint: 'School, logo and semester' },
+		{ id: 'printed', title: 'Printed areas', hint: 'School, logo and semester' },
 		{ id: 'offices', title: 'Offices & signatures', hint: 'Checkboxes and signing areas' },
 		{ id: 'personal', title: 'Personal inputs', hint: 'Optional · for later use' }
 	] as const;
@@ -49,8 +49,6 @@
 		untrack(() => structuredClone(template.definition?.officeRows ?? []))
 	);
 	let officeBusy = $state(false);
-	let semester = $state(untrack(() => template.definition?.semester ?? '2'));
-	let schoolYear = $state(untrack(() => template.definition?.schoolYear ?? ''));
 	let selected = $state(0);
 	let source = $state<HTMLCanvasElement>();
 	let sourceUrl = $state('');
@@ -70,7 +68,7 @@
 	const previewSuggestion = $derived(
 		suggestions?.areas.find((area) => area.id === selectedSuggestionId) ?? suggestions?.areas[0]
 	);
-	const draft = $derived({ corners, areas, semester, schoolYear, personalFields, officeRows });
+	const draft = $derived({ corners, areas, personalFields, officeRows });
 	const valid = $derived(definitionSchema.safeParse(draft));
 	const locked = $derived(disabled || busy || saving || detecting || personalBusy || officeBusy);
 	$effect(() => onbusychange(busy || saving || detecting || personalBusy || officeBusy));
@@ -143,8 +141,6 @@
 	function applySuggestions() {
 		if (!suggestions || locked || !suggestions.areas.length) return;
 		areas = structuredClone($state.snapshot(suggestions.areas));
-		if (suggestions.semester) semester = suggestions.semester;
-		if (suggestions.schoolYear) schoolYear = suggestions.schoolYear;
 		selected = 0;
 		suggestions = undefined;
 	}
@@ -286,7 +282,7 @@
 	{/if}
 	{#if aligned}
 		<div hidden={step !== 'printed'} class="space-y-4">
-			<h3 class="text-sm font-bold">Printed areas &amp; required term</h3>
+			<h3 class="text-sm font-bold">Printed areas</h3>
 			<p class="text-xs text-base-content/65">
 				Add school name and form title as text, a logo or table structure as an image, and the
 				semester and academic year. Include whole lines with a little margin. Exclude handwriting,
@@ -556,25 +552,10 @@
 					</div>
 				{/if}
 			{/if}
-			<fieldset disabled={locked} class="grid gap-3 sm:grid-cols-2">
-				<legend class="mb-2 text-sm font-bold">Required term</legend>
-				<label class="text-sm">
-					Semester
-					<select class="select mt-1 w-full" bind:value={semester}>
-						<option value="1">1st Semester</option>
-						<option value="2">2nd Semester</option>
-					</select>
-				</label>
-				<label class="text-sm">
-					Academic year
-					<input
-						class="input mt-1 w-full"
-						bind:value={schoolYear}
-						placeholder="2025-2026"
-						maxlength="9"
-					/>
-				</label>
-			</fieldset>
+			<p class="text-sm text-base-content/65">
+				Mark where semester and academic year appear. Required values come from the student's
+				enrollment, so this layout can be reused across terms.
+			</p>
 		</div>
 		<div hidden={step !== 'personal'}>
 			<PersonalFieldsSetup

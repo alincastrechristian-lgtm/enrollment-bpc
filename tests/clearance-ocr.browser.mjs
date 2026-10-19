@@ -262,6 +262,7 @@ test(
 						form(variant),
 						c.UNIT_CORNERS,
 						def,
+						{ semester: def.semester, schoolYear: def.schoolYear },
 						() => {},
 						new AbortController().signal
 					);
@@ -286,6 +287,7 @@ test(
 					written,
 					p.detectBorder(written),
 					real,
+					{ semester: real.semester, schoolYear: real.schoolYear },
 					() => {},
 					new AbortController().signal
 				);

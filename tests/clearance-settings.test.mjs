@@ -152,8 +152,6 @@ test('upload stores private image in Garage, saves safe metadata and serves auth
 function definition() {
 	return {
 		corners: structuredClone(core.UNIT_CORNERS),
-		semester: '2',
-		schoolYear: '2025-2026',
 		areas: ['text', 'text', 'image', 'semester', 'academicYear'].map((kind, i) => ({
 			id: crypto.randomUUID(),
 			kind,
@@ -440,4 +438,24 @@ test('additive migration preserves existing accounts and singleton constraint', 
 	);
 	f.sqlite.exec('DROP TABLE clearance_template');
 	assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM user').get().n, 2);
+});
+
+test('legacy saved term values are ignored without rewriting existing data; next save stores layout only', async (t) => {
+	const f = fixture(t);
+	await f.remote.uploadClearanceTemplate({ file: file(), revision: '' });
+	const layout = definition();
+	const legacy = { ...layout, semester: '1', schoolYear: '2023-2024' };
+	f.db.update(schema.clearanceTemplate).set({ definition: legacy }).run();
+	const before = f.service.getClearanceTemplate();
+	assert.deepEqual(f.service.getClearanceTemplateInfo().definition, layout);
+	assert.deepEqual(f.service.getClearanceTemplate().definition, legacy);
+	const saved = await f.remote.saveClearanceAreas({
+		revision: before.revision,
+		definition: legacy
+	});
+	assert.deepEqual(f.service.getClearanceTemplateInfo().definition, layout);
+	assert(!('semester' in f.service.getClearanceTemplate().definition));
+	assert(!('schoolYear' in f.service.getClearanceTemplate().definition));
+	assert.equal(f.service.getClearanceTemplate().objectKey, before.objectKey);
+	assert.notEqual(saved.revision, before.revision);
 });

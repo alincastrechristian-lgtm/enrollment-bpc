@@ -25,7 +25,7 @@ export function getClearanceTemplateInfo() {
 		revision: saved.revision,
 		filename: saved.filename,
 		contentType: saved.contentType,
-		definition: saved.definition ?? null,
+		definition: definitionSchema.safeParse(saved.definition).data ?? null,
 		size: saved.size,
 		uploadedAt: saved.uploadedAt.toISOString()
 	};

@@ -12,7 +12,7 @@
 		type ClearanceReport
 	} from '#lib/clearance/report.js';
 	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
-	import { templateTermIssue } from '#lib/clearance/definition.js';
+	import { clearanceTermFromEnrollment } from '#lib/clearance/definition.js';
 	import { resolve } from '$app/paths';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { ArrowRight, ClipboardCheck, FileImage, Upload } from '@lucide/svelte';
@@ -30,9 +30,7 @@
 	const current = $derived(progress.current?.current);
 	const submission = $derived(progress.current?.submission);
 	const template = $derived(progress.current?.template);
-	const termIssue = $derived(
-		current && template?.definition ? templateTermIssue(template.definition, current) : null
-	);
+	const term = $derived(current ? clearanceTermFromEnrollment(current) : null);
 	const currentChecks = $derived(!submission || hasCurrentOfficeChecks(submission.report));
 	const allowed = $derived(
 		!!current?.finalizedGrades &&
@@ -41,7 +39,7 @@
 			(!['requested', 'verified'].includes(submission?.status ?? '') ||
 				(submission?.status === 'requested' && !currentChecks))
 	);
-	const ready = $derived(submission?.status === 'ready' && currentChecks && !termIssue);
+	const ready = $derived(submission?.status === 'ready' && currentChecks);
 	const statusLabel = $derived(
 		current?.submittedClearance || submission?.status === 'verified'
 			? 'Verified by staff'
@@ -49,13 +47,11 @@
 				? 'Awaiting review'
 				: !current?.finalizedGrades
 					? 'Awaiting grades'
-					: termIssue
-						? 'Template unavailable'
-						: ready
-							? 'Ready to request'
-							: submission
-								? 'Upload needed'
-								: 'Not uploaded'
+					: ready
+						? 'Ready to request'
+						: submission
+							? 'Upload needed'
+							: 'Not uploaded'
 	);
 	function cancelReplacement() {
 		replacing = false;
@@ -155,15 +151,7 @@
 					Wait for staff to finalize your grades before uploading clearance.
 				</p>
 			{/if}
-			{#if allowed && termIssue}
-				<div role="alert" class="space-y-1 rounded-xl border border-warning/30 bg-warning/10 p-4">
-					<p class="text-sm font-semibold">Clearance template needs updating</p>
-					<p class="text-sm text-base-content/75">{termIssue}</p>
-					<p class="text-xs text-base-content/65">
-						New uploads cannot be checked or saved until a template matches your enrollment term.
-					</p>
-				</div>
-			{/if}
+
 			{#if submission}
 				<div class="space-y-2 rounded-xl border border-base-300 p-4">
 					<p class="flex items-center gap-2 text-xs font-semibold text-base-content/60">
@@ -211,19 +199,10 @@
 					{/if}
 				</div>
 			{/if}
-			{#if allowed && template?.definition && !termIssue && (!ready || replacing)}
+			{#if allowed && template?.definition && (!ready || replacing)}
 				<form
 					{...uploadClearance.enhance(async (form) => {
-						if (
-							busy ||
-							loading ||
-							drawing ||
-							dragging ||
-							termIssue ||
-							!image ||
-							!validCorners(corners)
-						)
-							return;
+						if (busy || loading || drawing || dragging || !image || !validCorners(corners)) return;
 						busy = true;
 						message = '';
 						report = undefined;
@@ -260,8 +239,8 @@
 								{replacing ? 'Replace your clearance' : 'Upload your completed clearance'}
 							</h3>
 							<p class="mt-1 text-xs leading-relaxed text-base-content/65">
-								Use the clearance form for your current semester and school year. Make sure every
-								required office has checked Cleared and signed or stamped your form.
+								Use the clearance form for Semester {term?.semester}, SY {term?.schoolYear}. Make
+								sure every required office has checked Cleared and signed or stamped your form.
 							</p>
 						</div>
 					</div>
@@ -363,10 +342,10 @@
 					enrollment.
 				</p>
 			{/if}
-			{#if report && !termIssue}
+			{#if report}
 				<ClearanceFindings {report} />
 			{:else if submission && !image && !loading}
-				<details class="rounded-xl border border-base-300 p-4" open={!termIssue}>
+				<details class="rounded-xl border border-base-300 p-4" open>
 					<summary class="cursor-pointer text-sm font-semibold">
 						Saved clearance check results
 					</summary>

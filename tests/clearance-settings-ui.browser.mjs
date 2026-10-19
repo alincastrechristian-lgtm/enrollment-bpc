@@ -36,7 +36,7 @@ test(
 				export async function detectOfficeRows(_image,_corners,onProgress,signal){onProgress('Detecting offices');if(window.deferDetection)await new Promise((resolve,reject)=>{window.finishDetection=resolve;signal.addEventListener('abort',()=>reject(Error('Cancelled')),{once:true});});return{rows:structuredClone(definition.officeRows),hints:[]};}
 				export async function detectPersonalFields(){return{fields:structuredClone(definition.personalFields),hints:[]};}
 				export async function detectTemplateAreas(){return{areas:structuredClone(definition.areas),semester:'2',schoolYear:'2025-2026',hints:[]};}
-				export async function compareDefinedTemplate(){return[{label:'Upload: School name',verdict:'pass',detail:'Printed school matches'}];}`
+				export async function compareDefinedTemplate(_reference,_source,_corners,_definition,term){window.testTerm=structuredClone(term);return[{label:'Upload: School name',verdict:'pass',detail:'Printed school matches'}];}`
 			};
 			for (const [name, content] of Object.entries(files))
 				writeFileSync(path.join(root, name), content);
@@ -101,9 +101,7 @@ test(
 				assert(Math.abs(geometry.height - geometry.imageHeight - 2) < 1, JSON.stringify(geometry));
 				assert(Math.abs(geometry.imageWidth / geometry.imageHeight - geometry.ratio) < 0.01);
 			};
-			await expect(
-				steps.getByRole('button', { name: 'Printed areas & term', exact: true })
-			).toBeEnabled();
+			await expect(steps.getByRole('button', { name: 'Printed areas', exact: true })).toBeEnabled();
 			await expect(page.getByLabel('Choose template image', { exact: true })).toHaveCount(0);
 			await expect(
 				page.getByRole('group', { name: 'Marked area editor', exact: true })
@@ -113,7 +111,7 @@ test(
 			await assertPreviewFits(page.getByRole('group', { name: 'Marked area editor', exact: true }));
 			await steps.getByRole('button', { name: 'Form outline', exact: true }).click();
 			await assertPreviewFits(page.getByRole('group', { name: 'Form border editor', exact: true }));
-			await steps.getByRole('button', { name: 'Printed areas & term', exact: true }).click();
+			await steps.getByRole('button', { name: 'Printed areas', exact: true }).click();
 			await page.setViewportSize({ width: 1360, height: 1000 });
 			await page.locator('#app').evaluate((element) => (element.style.maxWidth = '1280px'));
 			await page.getByLabel('Area label', { exact: true }).fill('Institution heading');
@@ -153,13 +151,36 @@ test(
 			await expect(
 				page.getByRole('region', { name: 'Personal information input areas', exact: true })
 			).toBeVisible();
-			await steps.getByRole('button', { name: 'Printed areas & term', exact: true }).click();
+			await steps.getByRole('button', { name: 'Printed areas', exact: true }).click();
 			await expect(page.getByLabel('Area label', { exact: true })).toHaveValue(
 				'Institution heading'
 			);
 			await workspace.getByRole('button', { name: 'Test clearance', exact: true }).click();
 			await expect(page.getByLabel('Upload test clearance', { exact: true })).toBeVisible();
 			await expect(steps).not.toBeVisible();
+			await page.getByLabel('Test enrollment semester', { exact: true }).fill('2');
+			await page.getByLabel('Test enrollment school year', { exact: true }).fill('2027-2028');
+			await page
+				.getByLabel('Upload test clearance', { exact: true })
+				.setInputFiles('static/clearance-written-example.jpg');
+			await page.getByRole('button', { name: 'Compare template', exact: true }).click();
+			await expect(page.getByText('Matches saved template', { exact: true })).toBeVisible();
+			assert.deepEqual(await page.evaluate(() => window.testTerm), {
+				semester: '2',
+				schoolYear: '2027-2028'
+			});
+			await page.getByLabel('Test enrollment school year', { exact: true }).fill('2028-2029');
+			await expect(page.getByText('Matches saved template', { exact: true })).toHaveCount(0);
+			await page.getByLabel('Test enrollment school year', { exact: true }).fill('2028-2030');
+			await expect(
+				page.getByRole('button', { name: 'Compare template', exact: true })
+			).toBeDisabled();
+			await expect(
+				page.getByText(
+					'Enter a valid semester and consecutive school years, for example 2026-2027.'
+				)
+			).toBeVisible();
+
 			await workspace.getByRole('button', { name: 'Template setup', exact: true }).click();
 			await expect(page.getByLabel('Area label', { exact: true })).toHaveValue(
 				'Institution heading'
@@ -182,6 +203,8 @@ test(
 			assert.equal(saved.officeRows[0].label, 'Library services');
 			assert.equal(saved.officeRows[0].office.x, 0.09);
 			assert.equal(saved.personalFields.length, 1);
+			assert(!('semester' in saved));
+			assert(!('schoolYear' in saved));
 			await page.evaluate(() => (window.deferDetection = true));
 			await office.getByRole('button', { name: 'Auto-detect office rows', exact: true }).click();
 			await expect(
@@ -237,7 +260,7 @@ test(
 			).toBeDisabled();
 			await page.getByRole('button', { name: 'Use this outline', exact: true }).click();
 			await expect(
-				steps.getByRole('button', { name: 'Printed areas & term', exact: true })
+				steps.getByRole('button', { name: 'Printed areas', exact: true })
 			).toHaveAttribute('aria-pressed', 'true');
 			await expect(page.getByRole('list', { name: 'Marked areas', exact: true })).toHaveCount(0);
 			await page.getByRole('button', { name: 'Auto-detect areas', exact: true }).click();

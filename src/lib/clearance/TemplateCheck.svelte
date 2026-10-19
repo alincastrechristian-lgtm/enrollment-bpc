@@ -183,11 +183,31 @@
 
 {#if savedTemplate}
 	{#if savedTemplate.definition}
+		<fieldset {disabled} class="grid gap-3 sm:grid-cols-2">
+			<legend class="mb-2 text-sm font-bold">Test enrollment term</legend>
+			<label class="text-sm">
+				Semester
+				<select class="select mt-1 w-full" bind:value={semester}>
+					<option value="1">1st Semester</option>
+					<option value="2">2nd Semester</option>
+				</select>
+			</label>
+			<label class="text-sm">
+				School year
+				<input
+					class="input mt-1 w-full"
+					bind:value={schoolYear}
+					placeholder="2026-2027"
+					maxlength="9"
+				/>
+			</label>
+		</fieldset>
 		<DefinedTemplateCheck
 			{source}
 			{corners}
 			template={savedTemplate}
 			definition={savedTemplate.definition}
+			term={{ semester, schoolYear }}
 			{disabled}
 			{onbusychange}
 		/>

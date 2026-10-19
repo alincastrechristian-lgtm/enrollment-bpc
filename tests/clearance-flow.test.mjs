@@ -165,7 +165,8 @@ function fixture(t) {
 				if (type !== 'image/jpeg' || data[0] !== 255) kit.error(400, 'Bad image');
 				return {};
 			},
-			checkClearance: async () => {
+			checkClearance: async (_reference, _image, _corners, definition, term) => {
+				state.checked = { definition, term };
 				await state.onCheck?.();
 				return state.report;
 			}
@@ -359,7 +360,7 @@ test('older checkbox reports cannot request or verify; unreviewed submissions ca
 	await assert.rejects(f.upload(), status(409));
 });
 
-test('ownership, roles, stale template, missing office setup, malformed outlines and mismatched terms fail closed', async (t) => {
+test('ownership, roles, stale template, missing office setup, and malformed outlines fail closed', async (t) => {
 	const f = fixture(t);
 	for (const role of ['registrar', 'admin', null]) {
 		f.state.role = role;
@@ -383,22 +384,6 @@ test('ownership, roles, stale template, missing office setup, malformed outlines
 		.set({ definition: { ...f.config, officeRows: [] } })
 		.run();
 	await assert.rejects(f.upload(), status(503));
-	f.db
-		.update(schema.clearanceTemplate)
-		.set({ definition: { ...f.config, schoolYear: '2026-2027' } })
-		.run();
-	await assert.rejects(
-		f.upload(),
-		(cause) =>
-			status(409)(cause) &&
-			cause.body.message.includes('requires Semester 2, SY 2025-2026') &&
-			cause.body.message.includes('template is Semester 2, SY 2026-2027')
-	);
-	assert.equal(
-		f.state.reads,
-		0,
-		'Term mismatch must stop before downloading the reference or running OCR.'
-	);
 	f.db
 		.update(schema.clearanceTemplate)
 		.set({ definition: f.config, revision: crypto.randomUUID() })
@@ -480,4 +465,40 @@ test('storage failure and template changes during OCR preserve the previous reco
 	assert.equal(f.row().id, first.submission.id);
 	assert(f.objects.has(key));
 	assert.equal(f.objects.size, 2);
+});
+
+test('uploads use the trusted enrollment term and reuse templates from other terms', async (t) => {
+	const f = fixture(t);
+	f.db
+		.update(schema.clearanceTemplate)
+		.set({ definition: { ...f.config, semester: '1', schoolYear: '2026-2027' } })
+		.run();
+	const result = await f.upload();
+	assert.equal(result.success, true);
+	assert.deepEqual(f.state.checked.term, { semester: '2', schoolYear: '2025-2026' });
+	assert(!('semester' in f.state.checked.definition));
+	assert(!('schoolYear' in f.state.checked.definition));
+	assert.equal(f.state.puts, 1);
+});
+test('incorrect uploaded term blocks persistence; client cannot supply its own expected term', async (t) => {
+	const f = fixture(t);
+	f.state.report = {
+		...f.state.report,
+		template: [{ label: 'Upload: Academic year', verdict: 'fail', detail: 'Wrong enrollment year' }]
+	};
+	const result = await f.upload();
+	assert.equal(result.success, false);
+	assert.equal(f.state.puts, 0);
+	assert.equal(f.row(), undefined);
+	await assert.rejects(
+		f.remote.uploadClearance({
+			file: image(),
+			enrollmentId: 'e',
+			revision: '0',
+			templateRevision: f.revision,
+			corners: JSON.stringify(core.UNIT_CORNERS),
+			semester: '1',
+			schoolYear: '2026-2027'
+		})
+	);
 });

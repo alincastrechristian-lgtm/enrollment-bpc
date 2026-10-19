@@ -2,13 +2,14 @@
 	import { onDestroy } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { overall, validCorners, type Check, type Corners } from './clearance';
-	import type { TemplateDefinition } from './definition';
+	import { clearanceTermSchema, type ClearanceTerm, type TemplateDefinition } from './definition';
 	import TemplateFindings from './TemplateFindings.svelte';
 	let {
 		source,
 		corners,
 		template,
 		definition,
+		term,
 		disabled,
 		onbusychange,
 		showReference = false
@@ -17,6 +18,7 @@
 		corners: Corners;
 		template: { revision: string; filename: string };
 		definition: TemplateDefinition;
+		term: ClearanceTerm;
 		disabled: boolean;
 		onbusychange: (busy: boolean) => void;
 		showReference?: boolean;
@@ -28,6 +30,7 @@
 	let controller: AbortController | undefined;
 	let destroyed = false;
 	const verdict = $derived(checks ? overall(checks) : undefined);
+	const termValid = $derived(clearanceTermSchema.safeParse(term).success);
 	const badges = { pass: 'badge-success', review: 'badge-warning', fail: 'badge-error' };
 	const labels = {
 		pass: 'Matches saved template',
@@ -38,6 +41,8 @@
 		void source;
 		JSON.stringify(corners);
 		JSON.stringify(definition);
+		JSON.stringify(term);
+		controller?.abort();
 		checks = undefined;
 		error = '';
 	});
@@ -47,7 +52,7 @@
 		onbusychange(false);
 	});
 	async function compare() {
-		if (!source || !validCorners(corners) || disabled || running) return;
+		if (!source || !validCorners(corners) || disabled || running || !termValid) return;
 		running = true;
 		checks = undefined;
 		error = '';
@@ -66,6 +71,7 @@
 				source,
 				corners,
 				definition,
+				term,
 				(message) => {
 					progress = message;
 				},
@@ -100,8 +106,13 @@
 	</div>
 	<p class="text-sm font-semibold break-all">{template.filename}</p>
 	<p class="text-sm">
-		Required: {definition.semester === '1' ? '1st' : '2nd'} Semester, {definition.schoolYear}
+		Enrollment term: Semester {term.semester}, SY {term.schoolYear}
 	</p>
+	{#if !termValid}
+		<p class="text-sm text-warning">
+			Enter a valid semester and consecutive school years, for example 2026-2027.
+		</p>
+	{/if}
 	<details class="rounded-lg border border-base-300 p-3">
 		<summary class="cursor-pointer text-sm">
 			Saved comparison areas ({definition.areas.length})
@@ -122,7 +133,7 @@
 	<button
 		type="button"
 		class="btn w-full btn-primary"
-		disabled={disabled || running || !source || !validCorners(corners)}
+		disabled={disabled || running || !source || !validCorners(corners) || !termValid}
 		onclick={compare}
 	>
 		{#if running}

@@ -105,9 +105,8 @@
 					</p>
 					{#if current.template.definition}
 						<p class="text-xs text-base-content/70">
-							Semester {current.template.definition.semester} · {current.template.definition
-								.schoolYear} · {current.template.definition.areas.length} printed areas · {current
-								.template.definition.officeRows?.length ?? 0} offices
+							{current.template.definition.areas.length} printed areas · {current.template
+								.definition.officeRows?.length ?? 0} offices
 						</p>
 					{:else}
 						<p class="text-xs text-warning">

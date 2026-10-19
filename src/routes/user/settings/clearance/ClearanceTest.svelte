@@ -26,6 +26,9 @@
 	let checking = $state(false);
 	let error = $state('');
 	let destroyed = false;
+	// Simulation only. Student uploads use the enrollment stored on the server.
+	let semester = $state('1');
+	let schoolYear = $state(`${new Date().getFullYear()}-${new Date().getFullYear() + 1}`);
 	const locked = $derived(disabled || loading || checking);
 	$effect(() => onbusychange(loading || checking));
 	onDestroy(() => {
@@ -78,6 +81,35 @@
 	</div>
 	<div class="grid items-start gap-6 xl:grid-cols-2">
 		<div class="portal-panel min-w-0 space-y-4 p-5 sm:p-6" aria-busy={loading}>
+			<fieldset disabled={locked} class="grid gap-3 sm:grid-cols-2">
+				<legend class="mb-2 text-sm font-bold">Test enrollment term</legend>
+				<label class="text-sm">
+					Semester
+					<input
+						class="input mt-1 w-full"
+						aria-label="Test enrollment semester"
+						type="number"
+						min="1"
+						step="1"
+						value={semester}
+						oninput={(event) => (semester = event.currentTarget.value)}
+					/>
+				</label>
+				<label class="text-sm">
+					School year
+					<input
+						class="input mt-1 w-full"
+						aria-label="Test enrollment school year"
+						bind:value={schoolYear}
+						placeholder="2026-2027"
+						maxlength="9"
+					/>
+				</label>
+			</fieldset>
+			<p class="text-xs text-base-content/60">
+				Used for this test only. Student uploads are checked against their enrollment semester and
+				school year. These values are not saved in the template.
+			</p>
 			<label class="block space-y-2">
 				<span class="text-sm font-semibold">Upload test clearance</span>
 				<input
@@ -128,6 +160,7 @@
 				{source}
 				{template}
 				definition={template.definition}
+				term={{ semester, schoolYear }}
 				{corners}
 				disabled={disabled || loading || drawing || dragging}
 				onbusychange={(value) => {

@@ -11,7 +11,8 @@ import {
 	printedAreaBox,
 	compareVisual,
 	type TemplateArea,
-	type TemplateDefinition
+	type TemplateDefinition,
+	type ClearanceTerm
 } from './definition';
 import {
 	addedInk,
@@ -486,6 +487,7 @@ export async function compareDefinedTemplate(
 	source: HTMLCanvasElement,
 	corners: Corners,
 	definition: TemplateDefinition,
+	term: ClearanceTerm,
 	onProgress: (text: string) => void,
 	signal: AbortSignal
 ): Promise<Check[]> {
@@ -504,27 +506,31 @@ export async function compareDefinedTemplate(
 	const textAreas = definition.areas.filter((a) => a.kind !== 'image');
 	const read = (image: HTMLCanvasElement, points: Corners, prefix: string) =>
 		recognizeJobs(
-			textAreas.map((area) => ({
-				key: area.id,
-				label: area.label,
-				multiline: area.kind === 'text' && /\n/.test(area.expected),
-				academicYear: area.kind === 'academicYear',
-				image: () =>
-					preparePrinted(
-						// Keep OCR sampling independent of display preview dimensions.
-						rectifiedRegion(image, points, areaRegion(area, { width: WIDTH, height: HEIGHT }), 3),
-						area.kind === 'academicYear'
-					)
-			})),
+			textAreas
+				.filter((area) => prefix !== 'Reference' || area.kind === 'text')
+				.map((area) => ({
+					key: area.id,
+					label: area.label,
+					multiline: area.kind === 'text' && /\n/.test(area.expected),
+					academicYear: area.kind === 'academicYear',
+					image: () =>
+						preparePrinted(
+							// Keep OCR sampling independent of display preview dimensions.
+							rectifiedRegion(image, points, areaRegion(area, { width: WIDTH, height: HEIGHT }), 3),
+							area.kind === 'academicYear'
+						)
+				})),
 			(message) => onProgress(`${prefix}: ${message}`),
 			signal
 		);
 	const referenceText = await read(reference, definition.corners, 'Reference');
 	const sourceText = await read(source, corners, 'Upload');
 	for (const area of textAreas) {
-		const refCheck = checkAreaText(area, referenceText[area.id], definition);
-		checks.push({ ...refCheck, label: `Reference: ${area.label}` });
-		const check = checkAreaText(area, sourceText[area.id], definition);
+		if (area.kind === 'text') {
+			const refCheck = checkAreaText(area, referenceText[area.id], term);
+			checks.push({ ...refCheck, label: `Reference: ${area.label}` });
+		}
+		const check = checkAreaText(area, sourceText[area.id], term);
 		checks.push({ ...check, label: `Upload: ${area.label}` });
 	}
 	return checks;

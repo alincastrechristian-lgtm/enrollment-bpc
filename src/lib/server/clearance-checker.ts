@@ -17,6 +17,7 @@ import {
 	printedAreaBox,
 	compareVisual,
 	type TemplateDefinition,
+	type ClearanceTerm,
 	type Box
 } from '#lib/clearance/definition.js';
 import { checkOfficeMarks, type ClearanceReport } from '#lib/clearance/report.js';
@@ -72,7 +73,8 @@ export async function checkClearance(
 	referenceBytes: Buffer,
 	upload: Image,
 	corners: Corners,
-	definition: TemplateDefinition
+	definition: TemplateDefinition,
+	term: ClearanceTerm
 ): Promise<ClearanceReport> {
 	if (running) error(429, 'Another clearance is being checked. Try again shortly.');
 	running = true;
@@ -151,6 +153,8 @@ export async function checkClearance(
 				[reference, definition.corners, 'Reference'],
 				[upload, corners, 'Upload']
 			] as const) {
+				// Reference term values may differ; only the enrollment determines the required term.
+				if (prefix === 'Reference' && area.kind !== 'text') continue;
 				const box = printedAreaBox(area);
 				const patch = sample(
 					image,
@@ -176,7 +180,7 @@ export async function checkClearance(
 						area.kind === 'academicYear'
 							? academicYearReading(data)
 							: { text: data.text, confidence: data.confidence },
-						definition
+						term
 					),
 					label: `${prefix}: ${area.label}`
 				});

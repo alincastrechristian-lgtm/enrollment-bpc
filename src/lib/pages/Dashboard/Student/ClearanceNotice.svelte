@@ -3,7 +3,6 @@
 	import { resolve } from '$app/paths';
 	import { getStudentClearance } from '#lib/actions/clearance.remote.js';
 	import { clearancePassed, hasCurrentOfficeChecks } from '#lib/clearance/report.js';
-	import { templateTermIssue } from '#lib/clearance/definition.js';
 
 	const progress = getStudentClearance();
 	const current = $derived(progress.current?.current);
@@ -30,14 +29,6 @@
 				title: 'Clearance upload is not available yet',
 				detail:
 					'Your grades are finalized. Contact the Registrar about the clearance form before requesting your next enrollment.',
-				action: 'View clearance status',
-				waiting: true
-			};
-		const termIssue = templateTermIssue(progress.current.template.definition, current);
-		if (termIssue)
-			return {
-				title: 'Clearance template needs updating',
-				detail: termIssue,
 				action: 'View clearance status',
 				waiting: true
 			};

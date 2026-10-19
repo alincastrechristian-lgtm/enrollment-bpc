@@ -93,19 +93,34 @@ export const areaSchema = z
 	.strict()
 	.refine((a) => a.kind !== 'text' || a.expected.length > 0, 'Enter expected printed text.');
 export type TemplateArea = z.infer<typeof areaSchema>;
+export const clearanceTermSchema = z.object({
+	semester: z.string().regex(/^[1-9]\d*$/, 'Enter a valid semester.'),
+	schoolYear: z
+		.string()
+		.regex(/^20\d{2}-20\d{2}$/, 'Enter an academic year such as 2025-2026.')
+		.refine(
+			(v) => Number(v.slice(5)) === Number(v.slice(0, 4)) + 1,
+			'Use consecutive academic years.'
+		)
+});
+export type ClearanceTerm = z.infer<typeof clearanceTermSchema>;
+export function clearanceTermFromEnrollment(enrollment: {
+	semester: number;
+	schoolYearStart: number;
+}): ClearanceTerm {
+	return {
+		semester: String(enrollment.semester),
+		schoolYear: `${enrollment.schoolYearStart}-${enrollment.schoolYearStart + 1}`
+	};
+}
 export const definitionSchema = z
 	.object({
 		corners: z
 			.tuple([point, point, point, point])
 			.refine(validCorners, 'Confirm four valid form corners.'),
-		semester: z.enum(['1', '2']),
-		schoolYear: z
-			.string()
-			.regex(/^20\d{2}-20\d{2}$/, 'Enter an academic year such as 2025-2026.')
-			.refine(
-				(v) => Number(v.slice(5)) === Number(v.slice(0, 4)) + 1,
-				'Use consecutive academic years.'
-			),
+		// Accept existing stored definitions and older clients; discard their fixed term values.
+		semester: z.enum(['1', '2']).optional(),
+		schoolYear: clearanceTermSchema.shape.schoolYear.optional(),
 		areas: z
 			.array(areaSchema)
 			.min(5, 'Add school name, form title, logo or structure, semester and academic year areas.')
@@ -132,17 +147,16 @@ export const definitionSchema = z
 			new Set(areas.map((a) => a.label.toLowerCase())).size !== areas.length
 		)
 			ctx.addIssue({ code: 'custom', message: 'Use unique area labels.' });
-	});
+	})
+	.transform(({ corners, areas, personalFields, officeRows }) => ({
+		corners,
+		areas: areas.map((area) =>
+			area.kind === 'semester' || area.kind === 'academicYear' ? { ...area, expected: '' } : area
+		),
+		...(personalFields ? { personalFields } : {}),
+		...(officeRows ? { officeRows } : {})
+	}));
 export type TemplateDefinition = z.infer<typeof definitionSchema>;
-export function templateTermIssue(
-	definition: Pick<TemplateDefinition, 'semester' | 'schoolYear'>,
-	enrollment: { semester: number; schoolYearStart: number }
-) {
-	const schoolYear = `${enrollment.schoolYearStart}-${enrollment.schoolYearStart + 1}`;
-	if (Number(definition.semester) === enrollment.semester && definition.schoolYear === schoolYear)
-		return null;
-	return `Your enrollment requires Semester ${enrollment.semester}, SY ${schoolYear}. The available clearance template is Semester ${definition.semester}, SY ${definition.schoolYear}. Contact the Registrar to provide a matching template.`;
-}
 export type TemplateInfo = {
 	revision: string;
 	filename: string;
@@ -170,15 +184,11 @@ const normalize = (text: string) =>
 		.replace(/[\u0300-\u036f]/g, '')
 		.toUpperCase()
 		.replace(/[^A-Z0-9]/g, '');
-export function checkAreaText(
-	area: TemplateArea,
-	reading: Reading,
-	term: Pick<TemplateDefinition, 'semester' | 'schoolYear'>
-): Check {
+export function checkAreaText(area: TemplateArea, reading: Reading, term: ClearanceTerm): Check {
 	let actual = reading.text;
 	let expected = area.expected;
 	if (area.kind === 'semester') {
-		actual = reading.text.match(/^\s*([12])\s*(?:st|nd)?\s*Semester\b/i)?.[1] ?? '';
+		actual = reading.text.match(/^\s*([1-9]\d*)\s*(?:st|nd|rd|th)?\s*Semester\b/i)?.[1] ?? '';
 		expected = term.semester;
 	} else if (area.kind === 'academicYear') {
 		const year = reading.text.match(/\b(20\d{2})\s*[-–—]\s*(20\d{2})\b/);
