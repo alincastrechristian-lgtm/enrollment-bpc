@@ -14,7 +14,11 @@
 		verifyEnrollmentClearance
 	} from '#lib/actions/grades.remote.js';
 	import { showYesNo, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
-	import { getEnrollmentLockReason, getGradeConcerns } from '#lib/enrollment-grades.js';
+	import {
+		formatGrade,
+		getEnrollmentLockReason,
+		getGradeConcerns
+	} from '#lib/enrollment-grades.js';
 	import { beforeNavigate, goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
@@ -821,7 +825,7 @@
 											bind:value={subject.grade}
 										/>
 									{:else}
-										{subject.savedGrade ?? (finalized ? 'INC (Incomplete)' : 'No grade')}
+										{formatGrade(subject.savedGrade, finalized ? 'INC (Incomplete)' : 'No grade')}
 									{/if}
 								</td>
 							</tr>

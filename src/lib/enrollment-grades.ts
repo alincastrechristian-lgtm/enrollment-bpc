@@ -1,5 +1,9 @@
 import type { enrollment } from '#lib/schema.js';
 
+export function formatGrade(grade: number | null | undefined, fallback = '—'): string {
+	return grade == null ? fallback : grade.toFixed(2);
+}
+
 // Shared by enrollment writes, page loads, and reactive staff views.
 export function getEnrollmentLockReason(
 	current: Pick<

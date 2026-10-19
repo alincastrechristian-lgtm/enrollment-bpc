@@ -1,5 +1,5 @@
 import type { getStudentEnrollmentHistory } from './student-enrollment';
-import { getGradeStatus, getGradeConcerns } from '#lib/enrollment-grades.js';
+import { formatGrade, getGradeStatus, getGradeConcerns } from '#lib/enrollment-grades.js';
 
 type EnrollmentHistory = Awaited<ReturnType<typeof getStudentEnrollmentHistory>>;
 
@@ -18,7 +18,7 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 			code: subject.subjectCode,
 			name: subject.subjectName,
 			units: subject.units,
-			grade: grade === null ? (finalized ? 'INC' : '—') : grade.toFixed(2),
+			grade: formatGrade(grade, finalized ? 'INC' : '—'),
 			status
 		};
 	});

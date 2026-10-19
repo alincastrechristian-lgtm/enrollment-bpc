@@ -148,6 +148,21 @@ test('reports use finalized grade boundaries and the actual reenrollment rule', 
 	seed(f.sqlite);
 	const grades = f.get('report=grades');
 	assert.equal(grades.rows.length, 8);
+	for (const [id, grade] of [
+		['e1-0', '1.00'],
+		['e1-1', '3.00'],
+		['e2-0', '5.00'],
+		['e1-3', 'INC']
+	])
+		assert.equal(grades.rows.find((row) => row.id === id).cells.at(-3), grade);
+	f.sqlite.prepare("UPDATE enrollment_subject SET grade = 1.5 WHERE id = 'e1-0'").run();
+	assert.equal(
+		f
+			.get('report=grades')
+			.rows.find((row) => row.id === 'e1-0')
+			.cells.at(-3),
+		'1.50'
+	);
 	for (const [id, outcome] of [
 		['e1-0', 'Passed'],
 		['e1-1', 'Passed'],

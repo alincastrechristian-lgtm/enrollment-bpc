@@ -1,3 +1,8 @@
+import {
+	currentEnrollmentWorklist,
+	hasFailedGrades,
+	needsEnrollmentFollowUp
+} from '#lib/server/enrollment-worklist.js';
 import { Role } from '#lib/Roles.js';
 import {
 	curriculum,
@@ -15,7 +20,6 @@ import {
 	count,
 	desc,
 	eq,
-	exists,
 	gt,
 	gte,
 	isNotNull,
@@ -40,16 +44,7 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 			finalized: enrollment.finalizedGrades,
 			clearance: enrollment.submittedClearance,
 			followUpCompletedAt: enrollment.followUpCompletedAt,
-			hasFailedGrades: exists(
-				db
-					.select({ id: enrollmentSubject.id })
-					.from(enrollmentSubject)
-					.where(
-						and(eq(enrollmentSubject.enrollmentId, enrollment.id), gt(enrollmentSubject.grade, 3))
-					)
-			)
-				.mapWith(Number)
-				.as('dashboard_has_failed_grades'),
+			hasFailedGrades: hasFailedGrades.mapWith(Number).as('dashboard_has_failed_grades'),
 			programCode: curriculum.programCode,
 			schoolYearStart: enrollment.schoolYearStart,
 			semester: enrollment.semester,
@@ -72,23 +67,12 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 		.as('dashboard_students');
 	const tally = (condition: SQL) =>
 		sql<number>`coalesce(sum(case when ${condition} then 1 else 0 end), 0)`.mapWith(Number);
-	const gradesDue = and(
-		eq(students.status, 'enrolled'),
-		eq(students.finalized, false),
-		eq(students.setupComplete, true)
-	)!;
-	const clearanceDue = and(
-		eq(students.status, 'enrolled'),
-		eq(students.finalized, true),
-		eq(students.clearance, false)
-	)!;
-	const ready = and(
-		eq(students.status, 'completed'),
-		eq(students.finalized, true),
-		eq(students.clearance, true),
-		or(eq(students.hasFailedGrades, 0), isNotNull(students.followUpCompletedAt))
-	)!;
-	const setupDue = eq(students.setupComplete, false);
+	const {
+		Grades: gradesDue,
+		Clearance: clearanceDue,
+		'Next term': ready,
+		'Account setup': setupDue
+	} = currentEnrollmentWorklist(students);
 	const overview = db
 		.select({
 			totalStudents: count(),
@@ -129,26 +113,7 @@ export function getStaffDashboard(role: Role.ADMIN | Role.REGISTRAR, now = new D
 			.limit(6)
 			.all();
 
-	// Historical concerns exclude closed requests and dropped or voided enrollments.
-	const hasConcerns = exists(
-		db
-			.select({ id: enrollmentSubject.id })
-			.from(enrollmentSubject)
-			.where(
-				and(
-					eq(enrollmentSubject.enrollmentId, enrollment.id),
-					or(gt(enrollmentSubject.grade, 3), isNull(enrollmentSubject.grade))
-				)
-			)
-	);
-	const needsFollowUp = and(
-		eq(user.role, Role.STUDENT),
-		ne(enrollment.status, 'dropped'),
-		ne(enrollment.status, 'voided'),
-		eq(enrollment.finalizedGrades, true),
-		isNull(enrollment.followUpCompletedAt),
-		hasConcerns
-	)!;
+	const needsFollowUp = needsEnrollmentFollowUp;
 	const followUpCount = db
 		.select({ total: count(), sent: tally(isNotNull(enrollment.meetingRequestSentAt)) })
 		.from(enrollment)

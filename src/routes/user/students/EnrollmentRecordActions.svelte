@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatGrade } from '#lib/enrollment-grades.js';
 	import { reopenEnrollment, voidEnrollment } from '#lib/actions/enrollment.remote.js';
 	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
 	import { getErrorMessage } from '#lib/errors.js';
@@ -166,7 +167,7 @@
 												<tr>
 													<td>{subject.subjectCode} — {subject.subjectName}</td>
 													<td>{subject.units}</td>
-													<td>{subject.grade ?? 'No grade'}</td>
+													<td>{formatGrade(subject.grade, 'No grade')}</td>
 												</tr>
 											{/each}
 										</tbody>

@@ -17,6 +17,11 @@ import { error, redirect } from '@sveltejs/kit';
 import { and, asc, count, eq, inArray, isNull, isNotNull, like, or } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { canDeleteStudentAccount } from '#lib/students.js';
+import {
+	currentEnrollmentWorklist,
+	hasFailedGrades,
+	needsEnrollmentFollowUp
+} from '#lib/server/enrollment-worklist.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
@@ -35,8 +40,21 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		parameters.get('filter.hasCurrentEnrollment')?.trim() || undefined
 	);
 	if (!presence.success) error(400, 'Enter a valid value for Has current enrollment.');
+	const worklist = filterStudentSchema.shape.worklistStep.safeParse(
+		parameters.get('filter.worklistStep')?.trim() || undefined
+	);
+	if (!worklist.success) error(400, 'Choose a valid enrollment worklist step.');
+	const currentWorklist = currentEnrollmentWorklist({
+		setupComplete: user.setupComplete,
+		status: enrollment.status,
+		finalized: enrollment.finalizedGrades,
+		clearance: enrollment.submittedClearance,
+		followUpCompletedAt: enrollment.followUpCompletedAt,
+		hasFailedGrades
+	});
 	const enrollmentWhere = and(
 		academic.where,
+		worklist.data && worklist.data !== 'Follow-ups' ? currentWorklist[worklist.data] : undefined,
 		presence.data === 'Yes'
 			? isNotNull(enrollment.id)
 			: presence.data === 'No'
@@ -60,7 +78,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				)
 			: undefined,
 		filterWhere,
-		Object.keys(academic.filters).length || presence.data
+		worklist.data === 'Follow-ups'
+			? inArray(
+					user.id,
+					db
+						.select({ id: studentData.userId })
+						.from(enrollment)
+						.innerJoin(studentData, eq(studentData.studentId, enrollment.studentId))
+						.innerJoin(user, eq(user.id, studentData.userId))
+						.where(needsEnrollmentFollowUp)
+				)
+			: undefined,
+		Object.keys(academic.filters).length ||
+			presence.data ||
+			(worklist.data && worklist.data !== 'Follow-ups')
 			? inArray(
 					user.id,
 					db
@@ -142,6 +173,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		filters: {
 			...filters,
 			...academic.filters,
+			...(worklist.data ? { worklistStep: worklist.data } : {}),
 			...(presence.data ? { hasCurrentEnrollment: presence.data } : {})
 		}
 	};

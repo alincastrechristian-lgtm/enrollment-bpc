@@ -606,6 +606,13 @@ export const studentEnrollmentFilterSchema = z.object({
 export const filterStudentSchema = filterUserSchema
 	.extend(studentEnrollmentFilterSchema.shape)
 	.extend({
+		worklistStep: z
+			.enum(['Grades', 'Clearance', 'Follow-ups', 'Account setup', 'Next term'])
+			.optional()
+			.meta({
+				title: 'Enrollment worklist step',
+				filterGroup: 'Account status'
+			}),
 		name: filterUserSchema.shape.name.meta({ filterGroup: 'Student details' }),
 		email: filterUserSchema.shape.email.meta({ filterGroup: 'Student details' }),
 		setupComplete: filterUserSchema.shape.setupComplete.meta({

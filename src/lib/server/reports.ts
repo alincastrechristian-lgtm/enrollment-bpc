@@ -1,6 +1,7 @@
 import { Role } from '#lib/Roles.js';
 import { createCsv } from './csv';
 import {
+	formatGrade,
 	getEnrollmentLockReason,
 	getGradeConcerns,
 	getGradeStatus
@@ -257,7 +258,7 @@ export function getReports(
 							subject.code,
 							subject.name,
 							subject.units,
-							subject.grade ?? (record.finalizedGrades ? 'INC' : 'Not entered'),
+							formatGrade(subject.grade, record.finalizedGrades ? 'INC' : 'Not entered'),
 							getGradeStatus(subject.grade, record.finalizedGrades),
 							record.finalizedGrades ? 'Finalized' : 'Draft'
 						]

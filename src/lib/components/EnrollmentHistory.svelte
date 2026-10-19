@@ -23,6 +23,7 @@
 </script>
 
 <script lang="ts">
+	import { formatGrade } from '#lib/enrollment-grades.js';
 	import { resolve } from '$app/paths';
 	import { BookOpen, Eye, RotateCcw } from '@lucide/svelte';
 	import CORDownload from './CORDownload.svelte';
@@ -239,7 +240,7 @@
 									</td>
 									<td class="py-4 text-center tabular-nums">{subject.units}</td>
 									<td class="py-4 pr-5 text-center font-semibold tabular-nums sm:pr-6">
-										{subject.grade ?? (entry.finalizedGrades ? 'INC (Incomplete)' : '-')}
+										{formatGrade(subject.grade, entry.finalizedGrades ? 'INC (Incomplete)' : '-')}
 									</td>
 								</tr>
 							{/each}

@@ -1198,6 +1198,10 @@ test('student filters combine current enrollment fields without matching enrollm
 		'@sveltejs/kit': { error }
 	});
 	const { load: page } = load('src/routes/user/students/+page.server.ts', {
+		'#lib/server/enrollment-worklist.js': load('src/lib/server/enrollment-worklist.ts', {
+			'#lib/Roles.js': { Role },
+			'#lib/schema.js': schema
+		}),
 		'#lib/Roles.js': { Role },
 		'#lib/students.js': load('src/lib/students.ts', {
 			'./person-name': load('src/lib/person-name.ts'),

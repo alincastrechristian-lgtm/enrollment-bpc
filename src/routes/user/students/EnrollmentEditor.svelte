@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatGrade } from '#lib/enrollment-grades.js';
 	import { enrollStudent } from '#lib/actions/user.remote.js';
 	import { correctEnrollment } from '#lib/actions/enrollment.remote.js';
 	import { getErrorMessage } from '#lib/errors.js';
@@ -180,7 +181,7 @@
 				removedGradedSubjects.length &&
 				!(await showYesNo({
 					title: 'Remove subjects with saved grades?',
-					message: `These subjects will be removed: ${removedGradedSubjects.map((subject) => `${subject.subjectCode} (grade ${subject.grade})`).join(', ')}. Their grades will remain in the audit history. Matching selected subjects keep their grades.`,
+					message: `These subjects will be removed: ${removedGradedSubjects.map((subject) => `${subject.subjectCode} (grade ${formatGrade(subject.grade)})`).join(', ')}. Their grades will remain in the audit history. Matching selected subjects keep their grades.`,
 					warning: true,
 					yesText: 'Confirm removal',
 					noText: 'Cancel'
@@ -509,9 +510,12 @@
 										</td>
 										{#if correcting}
 											<td class="whitespace-nowrap">
-												{data.editing?.originalSubjects.find(
-													(subject) => subject.subjectId === entry.subjectId
-												)?.grade ?? 'No grade'}
+												{formatGrade(
+													data.editing?.originalSubjects.find(
+														(subject) => subject.subjectId === entry.subjectId
+													)?.grade,
+													'No grade'
+												)}
 											</td>
 										{/if}
 										<td>
@@ -643,7 +647,9 @@
 						<span
 							class={`mt-2 badge border-0 badge-sm ${subject.grade === null ? 'bg-warning/15 text-base-content' : 'bg-error/10 text-base-content'}`}
 						>
-							{subject.grade === null ? 'INC (Incomplete)' : `Failed (${subject.grade.toFixed(2)})`}
+							{subject.grade === null
+								? 'INC (Incomplete)'
+								: `Failed (${formatGrade(subject.grade)})`}
 						</span>
 					</div>
 					<button

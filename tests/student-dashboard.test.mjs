@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 import ts from 'typescript';
+import { redirect } from '@sveltejs/kit';
 
 const require = createRequire(import.meta.url);
 function loadModule(filename, dependencies = {}, sourceOverride) {
@@ -74,6 +75,15 @@ function fixture(t, finalized = true) {
 		)
 		.run();
 	const dependencies = {
+		'#lib/components/Table/TableValues.js': { MAX_ITEMS_PER_PAGE: 10 },
+		'#lib/students.js': loadModule('src/lib/students.ts', {
+			'./person-name': loadModule('src/lib/person-name.ts'),
+			'./student-demographics': loadModule('src/lib/student-demographics.ts')
+		}),
+		'#lib/server/filters.js': loadModule('src/lib/server/filters.ts', {
+			'#lib/components/Filter/fields.js': loadModule('src/lib/components/Filter/fields.ts'),
+			'@sveltejs/kit': { error }
+		}),
 		'#lib/enrollment-grades.js': loadModule('src/lib/enrollment-grades.ts'),
 		'#lib/Roles.js': { Role },
 		'#lib/schema.js': schema,
@@ -81,6 +91,10 @@ function fixture(t, finalized = true) {
 		'#lib/server/auth.js': { validateUser },
 		'@sveltejs/kit': { error }
 	};
+	dependencies['#lib/server/enrollment-worklist.js'] = loadModule(
+		'src/lib/server/enrollment-worklist.ts',
+		dependencies
+	);
 	dependencies['#lib/server/student-enrollment.js'] = loadModule(
 		'src/lib/server/student-enrollment.ts',
 		dependencies
@@ -99,6 +113,10 @@ function fixture(t, finalized = true) {
 	);
 	const { load } = loadModule('src/routes/user/dashboard/+page.server.ts', dependencies);
 	const historyLoad = loadModule('src/routes/user/enrollment/+page.server.ts', dependencies).load;
+	const studentsLoad = loadModule('src/routes/user/students/+page.server.ts', {
+		...dependencies,
+		'@sveltejs/kit': { error, redirect }
+	}).load;
 	const event = (id = 'u', role = Role.STUDENT) => ({
 		locals: {
 			user: role ? { id, role, name: id === 'u' ? 'Maria Cruz' : 'Other Student' } : null,
@@ -112,6 +130,11 @@ function fixture(t, finalized = true) {
 		staff: (role, now) =>
 			dependencies['#lib/server/staff-dashboard.js'].getStaffDashboard(role, now),
 		load: (id, role) => load(event(id, role)),
+		students: (query = '', role = Role.ADMIN) =>
+			studentsLoad({
+				...event('staff', role),
+				url: new URL('https://example.com/user/students' + query)
+			}),
 		history: (id) => historyLoad(event(id))
 	};
 }
@@ -312,6 +335,96 @@ test('staff totals follow current links and separate setup, completion, dropped 
 	assert.equal(data.queues.grades[0].enrollmentId, 'current');
 	f.sqlite.exec("UPDATE user SET setup_complete=0 WHERE id='u'");
 	assert.equal(f.staff(Role.REGISTRAR).overview.awaitingGrades, 0);
+});
+
+test('student worklist filters match dashboard steps and retain historical follow-ups', async (t) => {
+	const f = fixture(t);
+	f.sqlite.exec("UPDATE user SET setup_complete=1 WHERE id IN ('u','other')");
+	async function compare() {
+		const dashboard = f.staff(Role.REGISTRAR);
+		for (const [step, key] of [
+			['Grades', 'grades'],
+			['Clearance', 'clearance'],
+			['Follow-ups', 'followUp'],
+			['Account setup', 'setup'],
+			['Next term', 'ready']
+		]) {
+			const result = await f.students(
+				'?' + new URLSearchParams({ 'filter.worklistStep': step }),
+				Role.REGISTRAR
+			);
+			assert.equal(result.filters.worklistStep, step);
+			assert.deepEqual(
+				new Set(result.users.map((user) => user.id)),
+				new Set(dashboard.queues[key].map((row) => row.userId)),
+				step
+			);
+		}
+	}
+	await compare();
+	f.sqlite.exec("UPDATE enrollment SET finalized_grades=0 WHERE id='current'");
+	await compare();
+	assert.equal((await f.students('?filter.worklistStep=Grades')).total, 1);
+	f.sqlite.exec("UPDATE user SET setup_complete=0 WHERE id='u'");
+	await compare();
+	assert.equal((await f.students('?filter.worklistStep=Grades')).total, 0);
+	f.sqlite.exec(
+		"UPDATE user SET setup_complete=1 WHERE id='u'; UPDATE enrollment SET status='completed',finalized_grades=1,submitted_clearance=1,follow_up_completed_at=1000 WHERE id='current'; UPDATE enrollment SET status='dropped' WHERE id='private'"
+	);
+	await compare();
+	assert.equal((await f.students('?filter.worklistStep=Next%20term')).users[0].id, 'u');
+	f.sqlite.exec(
+		"UPDATE enrollment SET status='completed',finalized_grades=1 WHERE id='newer'; INSERT INTO enrollment_subject(id,enrollment_id,subject_id,source,subject_code,subject_name,units,grade) VALUES ('historical','newer','s0','extra','HIST','Historical concern',3,NULL)"
+	);
+	await compare();
+	assert.equal((await f.students('?filter.worklistStep=Follow-ups')).users[0].id, 'u');
+	for (const excluded of ['dropped', 'voided']) {
+		f.sqlite.prepare("UPDATE enrollment SET status=? WHERE id='newer'").run(excluded);
+		await compare();
+		assert.equal((await f.students('?filter.worklistStep=Follow-ups')).total, 0);
+	}
+	f.sqlite.exec(
+		"UPDATE enrollment SET status='completed' WHERE id='newer'; UPDATE student SET enrollment_id=NULL WHERE user_id='u'"
+	);
+	await compare();
+	assert.equal((await f.students('?filter.worklistStep=Follow-ups&q=Maria')).total, 1);
+	assert.equal((await f.students('?filter.worklistStep=Follow-ups&q=Other')).total, 0);
+	assert.equal(
+		(await f.students('?filter.worklistStep=Follow-ups&filter.hasCurrentEnrollment=No')).total,
+		1
+	);
+	assert.equal(
+		(await f.students('?filter.worklistStep=Follow-ups&filter.programCode=BSIS')).total,
+		0
+	);
+	await assert.rejects(f.students('?filter.worklistStep=invalid'), { status: 400 });
+	await assert.rejects(f.students('?filter.worklistStep=Grades', Role.STUDENT), { status: 403 });
+	await assert.rejects(f.students('?filter.worklistStep=Grades', null), { status: 401 });
+});
+
+test('worklist filtering applies before pagination and preserves filters on page correction', async (t) => {
+	const f = fixture(t);
+	f.sqlite.exec('UPDATE user SET setup_complete=1');
+	for (let i = 0; i < 12; i++)
+		f.sqlite
+			.prepare(
+				"INSERT INTO user(id,name,first_name,last_name,email,role,setup_complete) VALUES(?,?, 'Pending','Student',?,'student',0)"
+			)
+			.run(`pending-${i}`, `Pending ${i}`, `pending-${i}@example.com`);
+	const query = '?filter.worklistStep=Account%20setup&q=Pending';
+	const first = await f.students(query);
+	const second = await f.students(query + '&page=2');
+	assert.equal(first.total, 12);
+	assert.equal(first.users.length, 10);
+	assert.equal(second.users.length, 2);
+	assert.equal(new Set([...first.users, ...second.users].map((user) => user.id)).size, 12);
+	await assert.rejects(
+		f.students(query + '&page=99'),
+		(cause) =>
+			cause.status === 302 &&
+			new URL(cause.location, 'https://example.com').searchParams.get('filter.worklistStep') ===
+				'Account setup'
+	);
 });
 
 test('staff activity groups six Manila calendar months, including dropped events, and handles empty data', (t) => {
