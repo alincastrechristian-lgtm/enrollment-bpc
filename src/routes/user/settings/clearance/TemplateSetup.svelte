@@ -21,9 +21,20 @@
 	let {
 		template,
 		disabled,
-		onbusychange
-	}: { template: TemplateInfo; disabled: boolean; onbusychange: (busy: boolean) => void } =
-		$props();
+		onbusychange,
+		step = $bindable('printed')
+	}: {
+		template: TemplateInfo;
+		disabled: boolean;
+		onbusychange: (busy: boolean) => void;
+		step?: 'outline' | 'printed' | 'offices' | 'personal';
+	} = $props();
+	const steps = [
+		{ id: 'outline', title: 'Form outline', hint: 'Align the reference' },
+		{ id: 'printed', title: 'Printed areas & term', hint: 'School, logo and semester' },
+		{ id: 'offices', title: 'Offices & signatures', hint: 'Checkboxes and signing areas' },
+		{ id: 'personal', title: 'Personal inputs', hint: 'Optional · for later use' }
+	] as const;
 	let corners = $state<Corners>(
 		untrack(() => structuredClone(template.definition?.corners ?? UNIT_CORNERS))
 	);
@@ -82,6 +93,7 @@
 			source = image;
 			sourceUrl = image.toDataURL('image/jpeg', 0.95);
 			if (!template.definition) {
+				step = 'outline';
 				const found = p.detectBorder(image);
 				corners = structuredClone(found ?? UNIT_CORNERS);
 				drawing = !found;
@@ -96,6 +108,7 @@
 		if (!source || locked || drawing || dragging || !validCorners(corners)) return;
 		const p = await import('#lib/clearance/scan.client.js');
 		aligned = p.alignTemplate(source, corners).toDataURL('image/png');
+		step = 'printed';
 		suggestions = undefined;
 		error = '';
 	}
@@ -204,26 +217,50 @@
 </script>
 
 <section
-	class="portal-panel space-y-5 p-5 sm:p-6"
+	class="portal-panel min-w-0 space-y-5 p-4 sm:p-6"
 	aria-labelledby="template-setup-title"
 	aria-busy={busy || saving || detecting || personalBusy || officeBusy}
 >
 	<div class="flex items-center gap-3">
 		<MapPin class="text-primary" size={22} aria-hidden="true" />
 		<div>
-			<h2 id="template-setup-title" class="font-bold">Mark template details</h2>
+			<h2 id="template-setup-title" class="font-bold">Template setup</h2>
 			<p class="mt-1 text-sm text-base-content/65">
-				Define where this form’s printed details belong. Test uploads use these areas, including
-				logos placed on the side.
+				Work through each step, then save your template settings.
 			</p>
 		</div>
 	</div>
+	<nav aria-label="Template setup steps" class="grid grid-cols-2 gap-2 lg:grid-cols-4">
+		{#each steps as item, i (item.id)}
+			<button
+				type="button"
+				aria-label={item.title}
+				aria-pressed={step === item.id}
+				aria-current={step === item.id ? 'step' : undefined}
+				disabled={locked || (item.id !== 'outline' && !aligned)}
+				onclick={() => {
+					step = item.id;
+				}}
+				class={`flex min-w-0 items-start gap-2.5 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-45 ${step === item.id ? 'border-primary bg-primary/5' : 'border-base-300 hover:bg-base-200/60'}`}
+			>
+				<span
+					class={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold ${step === item.id ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content/60'}`}
+				>
+					{i + 1}
+				</span>
+				<span class="min-w-0">
+					<span class="block text-xs font-bold sm:text-sm">{item.title}</span>
+					<span class="mt-0.5 hidden text-xs text-base-content/55 sm:block">{item.hint}</span>
+				</span>
+			</button>
+		{/each}
+	</nav>
 	{#if busy}
 		<p role="status" class="text-sm">Loading reference...</p>
 	{/if}
 	{#if sourceUrl}
-		<details open={!aligned} class="rounded-xl border border-base-300 p-4">
-			<summary class="cursor-pointer text-sm font-semibold">1. Confirm reference outline</summary>
+		<div hidden={step !== 'outline'} class="space-y-3">
+			<h3 class="text-sm font-bold">Confirm reference outline</h3>
 			<div class="mt-4 max-w-3xl space-y-3">
 				<BorderEditor
 					src={sourceUrl}
@@ -245,18 +282,18 @@
 					Use this outline
 				</button>
 			</div>
-		</details>
+		</div>
 	{/if}
 	{#if aligned}
-		<div class="space-y-4">
-			<h3 class="text-sm font-bold">2. Mark permanent printed areas</h3>
+		<div hidden={step !== 'printed'} class="space-y-4">
+			<h3 class="text-sm font-bold">Printed areas &amp; required term</h3>
 			<p class="text-xs text-base-content/65">
 				Add school name and form title as text, a logo or table structure as an image, and the
 				semester and academic year. Include whole lines with a little margin. Exclude handwriting,
 				signatures and checkbox interiors.
 			</p>
 			<div class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4">
-				<button type="button" class="btn btn-primary btn-sm" onclick={detect} disabled={locked}>
+				<button type="button" class="btn btn-outline btn-sm" onclick={detect} disabled={locked}>
 					{#if detecting}
 						<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
 					{:else}
@@ -283,17 +320,20 @@
 						<p role="status" class="text-sm font-semibold">
 							Found {suggestions.areas.length} suggested areas
 						</p>
-						<ul class="list-inside list-disc space-y-1 text-xs text-base-content/65">
-							{#each suggestions.hints as hint (hint)}
-								<li>{hint}</li>
-							{/each}
-						</ul>
+						<details class="text-xs text-base-content/65">
+							<summary class="cursor-pointer">Detection notes</summary>
+							<ul class="mt-2 list-inside list-disc space-y-1">
+								{#each suggestions.hints as hint (hint)}
+									<li>{hint}</li>
+								{/each}
+							</ul>
+						</details>
 						{#if suggestions.areas.length}
 							<p class="text-xs text-base-content/65">
 								Select a suggestion to view its box. Delete unwanted suggestions using the trash
 								button beside them.
 							</p>
-							<div class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+							<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
 								<ul aria-label="Suggested areas" class="max-h-96 space-y-2 overflow-auto text-xs">
 									{#each suggestions.areas as area (area.id)}
 										<li
@@ -336,9 +376,13 @@
 										<div
 											role="img"
 											aria-label={`${previewSuggestion.label} highlighted on the reference`}
-											class="relative overflow-hidden rounded-md border border-base-300 bg-white"
+											class="relative w-fit max-w-full overflow-hidden rounded-md border border-base-300 bg-white"
 										>
-											<img src={aligned} alt="" class="block w-full" />
+											<img
+												src={aligned}
+												alt=""
+												class="block h-auto max-h-[65vh] w-auto max-w-full"
+											/>
 											<svg
 												class="pointer-events-none absolute inset-0 h-full w-full"
 												viewBox="0 0 100 100"
@@ -376,7 +420,7 @@
 						<div class="flex flex-wrap gap-2">
 							<button
 								type="button"
-								class="btn btn-primary btn-sm"
+								class="btn btn-outline btn-sm"
 								disabled={locked || !suggestions.areas.length}
 								onclick={applySuggestions}
 							>
@@ -396,119 +440,124 @@
 					</div>
 				{/if}
 			</div>
-			<div class="flex flex-wrap gap-2">
-				<button
-					type="button"
-					class="btn btn-outline btn-sm"
-					onclick={() => add('text')}
-					disabled={locked || areas.length >= 20}
-				>
-					<Plus size={14} />Text area
-				</button>
-				<button
-					type="button"
-					class="btn btn-outline btn-sm"
-					onclick={() => add('image')}
-					disabled={locked || areas.length >= 20}
-				>
-					Logo / structure
-				</button>
-				<button
-					type="button"
-					class="btn btn-outline btn-sm"
-					onclick={() => add('semester')}
-					disabled={locked || areas.some((a) => a.kind === 'semester')}
-				>
-					Semester area
-				</button>
-				<button
-					type="button"
-					class="btn btn-outline btn-sm"
-					onclick={() => add('academicYear')}
-					disabled={locked || areas.some((a) => a.kind === 'academicYear')}
-				>
-					Year area
-				</button>
-			</div>
-			{#if areas.length}
-				<div class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-					<div class="space-y-3">
-						<ul class="space-y-2" aria-label="Marked areas">
-							{#each areas as area, i (area.id)}
-								<li
-									class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1"
-								>
-									<button
-										type="button"
-										aria-pressed={selected === i}
-										class={`min-w-0 flex-1 rounded p-2 text-left text-xs ${selected === i ? 'bg-primary/10 font-semibold' : ''}`}
-										disabled={locked}
-										onclick={() => {
-											selected = i;
-										}}
+			{#if !suggestions}
+				<details class="rounded-lg border border-base-300 p-3">
+					<summary class="cursor-pointer text-xs font-semibold">Add an area manually</summary>
+					<div class="mt-3 flex flex-wrap gap-2">
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={() => add('text')}
+							disabled={locked || areas.length >= 20}
+						>
+							<Plus size={14} />Text area
+						</button>
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={() => add('image')}
+							disabled={locked || areas.length >= 20}
+						>
+							Logo / structure
+						</button>
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={() => add('semester')}
+							disabled={locked || areas.some((a) => a.kind === 'semester')}
+						>
+							Semester area
+						</button>
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={() => add('academicYear')}
+							disabled={locked || areas.some((a) => a.kind === 'academicYear')}
+						>
+							Year area
+						</button>
+					</div>
+				</details>
+				{#if areas.length}
+					<div class="grid min-w-0 items-start gap-5 lg:grid-cols-[17rem_minmax(0,1fr)]">
+						<div class="min-w-0 space-y-3">
+							<ul class="max-h-72 space-y-1.5 overflow-y-auto pr-1" aria-label="Marked areas">
+								{#each areas as area, i (area.id)}
+									<li
+										class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1"
 									>
-										{area.label}
-									</button>
-									<button
-										type="button"
-										class="btn btn-square shrink-0 btn-ghost text-error btn-sm"
-										aria-label={`Remove permanent ${area.label}`}
-										disabled={locked}
-										onclick={() => removeArea(area.id)}
-									>
-										<Trash2 size={14} aria-hidden="true" />
-									</button>
-								</li>
-							{/each}
-						</ul>
-						{#if active}
-							<label class="block text-sm">
-								Area label
-								<input
-									class="input mt-1 w-full"
-									maxlength="60"
-									bind:value={active.label}
-									disabled={locked}
-								/>
-							</label>
-							{#if active.kind === 'text'}
+										<button
+											type="button"
+											aria-pressed={selected === i}
+											class={`min-w-0 flex-1 rounded p-2 text-left text-xs ${selected === i ? 'bg-primary/10 font-semibold' : ''}`}
+											disabled={locked}
+											onclick={() => {
+												selected = i;
+											}}
+										>
+											{area.label}
+										</button>
+										<button
+											type="button"
+											class="btn btn-square shrink-0 btn-ghost text-error btn-sm"
+											aria-label={`Remove permanent ${area.label}`}
+											disabled={locked}
+											onclick={() => removeArea(area.id)}
+										>
+											<Trash2 size={14} aria-hidden="true" />
+										</button>
+									</li>
+								{/each}
+							</ul>
+							{#if active}
 								<label class="block text-sm">
-									Expected printed text
-									<textarea
-										class="textarea mt-1 w-full"
-										rows="3"
-										maxlength="1000"
-										placeholder="Type the exact text shown in this area"
-										bind:value={active.expected}
-										disabled={locked}></textarea>
+									Area label
+									<input
+										class="input mt-1 w-full"
+										maxlength="60"
+										bind:value={active.label}
+										disabled={locked}
+									/>
 								</label>
+								{#if active.kind === 'text'}
+									<label class="block text-sm">
+										Expected printed text
+										<textarea
+											class="textarea mt-1 w-full"
+											rows="3"
+											maxlength="1000"
+											placeholder="Type the exact text shown in this area"
+											bind:value={active.expected}
+											disabled={locked}></textarea>
+									</label>
+								{/if}
+								<label class="block text-sm">
+									Area type
+									<select
+										aria-label="Area type"
+										class="select mt-1 w-full"
+										bind:value={active.kind}
+										disabled={locked}
+									>
+										<option value="text">Printed text</option>
+										<option value="image">Logo or structure</option>
+										<option value="semester">Semester</option>
+										<option value="academicYear">Academic year</option>
+									</select>
+								</label>
+								{#if active.kind !== 'text' && active.kind !== 'image' && active.expected}
+									<p class="text-xs text-base-content/60">Suggested reading: {active.expected}</p>
+								{/if}
 							{/if}
-							<label class="block text-sm">
-								Area type
-								<select
-									aria-label="Area type"
-									class="select mt-1 w-full"
-									bind:value={active.kind}
-									disabled={locked}
-								>
-									<option value="text">Printed text</option>
-									<option value="image">Logo or structure</option>
-									<option value="semester">Semester</option>
-									<option value="academicYear">Academic year</option>
-								</select>
-							</label>
-							{#if active.kind !== 'text' && active.kind !== 'image' && active.expected}
-								<p class="text-xs text-base-content/60">Suggested reading: {active.expected}</p>
-							{/if}
+						</div>
+						{#if active}
+							<AreaEditor src={aligned} bind:box={active.box} disabled={locked} />
 						{/if}
 					</div>
-					{#if active}
-						<AreaEditor src={aligned} bind:box={active.box} disabled={locked} />
-					{/if}
-				</div>
+				{/if}
 			{/if}
 			<fieldset disabled={locked} class="grid gap-3 sm:grid-cols-2">
-				<legend class="mb-2 text-sm font-bold">3. Required term</legend>
+				<legend class="mb-2 text-sm font-bold">Required term</legend>
 				<label class="text-sm">
 					Semester
 					<select class="select mt-1 w-full" bind:value={semester}>
@@ -526,6 +575,8 @@
 					/>
 				</label>
 			</fieldset>
+		</div>
+		<div hidden={step !== 'personal'}>
 			<PersonalFieldsSetup
 				{source}
 				image={aligned}
@@ -536,6 +587,8 @@
 					personalBusy = value;
 				}}
 			/>
+		</div>
+		<div hidden={step !== 'offices'}>
 			<OfficeFieldsSetup
 				{source}
 				image={aligned}
@@ -546,14 +599,24 @@
 					officeBusy = value;
 				}}
 			/>
-			{#if !valid.success}
-				<p class="text-xs text-base-content/65">{valid.error.issues[0]?.message}</p>
-			{/if}
+		</div>
+		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-4">
+			<div class="min-w-0 text-xs text-base-content/60">
+				<p>Save applies all steps. Tests use your saved settings.</p>
+				{#if suggestions}
+					<p class="mt-1 text-warning">
+						Apply or discard the printed-area suggestions before saving.
+					</p>
+				{/if}
+				{#if !valid.success}
+					<p class="mt-1 text-warning">{valid.error.issues[0]?.message}</p>
+				{/if}
+			</div>
 			<button
 				type="button"
 				class="btn btn-primary btn-sm"
 				onclick={save}
-				disabled={locked || !valid.success}
+				disabled={locked || !valid.success || !!suggestions}
 			>
 				<Save size={16} />{saving ? 'Saving...' : 'Save template areas'}
 			</button>

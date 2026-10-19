@@ -16,6 +16,10 @@
 	let selectedName = $state('');
 	let previewError = $state(false);
 	let feedback = $state('');
+	let replacing = $state(false);
+	let workspace = $state<'setup' | 'test'>('setup');
+	let setupStep = $state<'outline' | 'printed' | 'offices' | 'personal'>('printed');
+	const locked = $derived(busy || testBusy || setupBusy);
 	function clearSelection() {
 		if (preview) URL.revokeObjectURL(preview);
 		preview = '';
@@ -74,198 +78,263 @@
 				File storage is not configured. Configure storage before uploading a template.
 			</p>
 		{/if}
-		<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-			<form
-				{...uploadClearanceTemplate.enhance(async (form) => {
-					if (busy || testBusy || setupBusy || previewError) return;
-					busy = true;
-					feedback = '';
-					showLoading('Saving clearance template...');
-					try {
-						if (await form.submit()) {
-							form.element.reset();
-							clearSelection();
-							feedback = form.result?.cleanupWarning
-								? 'Template saved. The previous file could not be removed from storage.'
-								: 'Clearance template saved successfully.';
-							showSuccess(feedback);
-						} else showError('Choose a supported image up to 10 MiB.');
-					} catch (caught) {
-						showError(
-							getErrorMessage(
-								caught,
-								'Could not save the template. Check storage connectivity and try again.'
-							)
-						);
-					} finally {
-						busy = false;
-					}
-				})}
-				enctype="multipart/form-data"
-				aria-busy={busy}
-				class="portal-panel min-w-0"
-			>
-				<input
-					{...uploadClearanceTemplate.fields.revision.as(
-						'hidden',
-						current.template?.revision ?? ''
-					)}
-				/>
-				<div class="space-y-5 p-5 sm:p-6">
-					<div class="flex items-center gap-3">
-						<div class="rounded-xl bg-primary/10 p-2.5 text-primary">
-							<ClipboardCheck size={22} aria-hidden="true" />
-						</div>
-						<div>
-							<h2 class="font-bold">Reference template</h2>
-							<p class="text-xs text-base-content/60">Upload a clean, unfilled clearance form.</p>
-						</div>
-					</div>
-					{#if current.template}
-						<div class="space-y-3 rounded-xl border border-base-300 bg-base-200/50 p-4">
-							<div class="flex items-start gap-2">
-								<FileImage size={18} class="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
-								<div class="min-w-0">
-									<p class="text-sm font-semibold break-all">{current.template.filename}</p>
-									<p class="mt-1 text-xs text-base-content/60">
-										{(current.template.size / 1024 / 1024).toFixed(2)} MiB · Updated {uploaded(
-											current.template.uploadedAt
-										)}
-									</p>
-								</div>
-							</div>
-							<a
-								href={imageUrl(current.template.revision)}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="block overflow-hidden rounded-lg border border-base-300 bg-white"
-								aria-label="Open saved clearance template"
-							>
-								<img
-									src={imageUrl(current.template.revision)}
-									alt="Saved blank clearance template"
-									class="max-h-96 w-full object-contain"
-								/>
-							</a>
-						</div>
-					{:else}
-						<div
-							class="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-8 text-center"
-						>
-							<FileImage size={36} class="mx-auto text-base-content/35" aria-hidden="true" />
-							<h3 class="mt-3 text-sm font-semibold">No template uploaded</h3>
-							<p class="mt-1 text-xs text-base-content/60">
-								Add the official blank clearance form to get started.
-							</p>
-						</div>
-					{/if}
-					<label class="block space-y-2">
-						<span class="text-sm font-semibold">Choose template image</span>
-						<input
-							{...uploadClearanceTemplate.fields.file.as('file')}
-							type="file"
-							accept="image/jpeg,image/png,image/webp"
-							class="file-input w-full border-base-300 bg-base-200"
-							onchange={selectFile}
-							disabled={busy || testBusy || setupBusy || !current.configured}
-							required
-							aria-describedby="template-file-help"
-						/>
-					</label>
-					<p id="template-file-help" class="text-xs text-base-content/60">
-						JPG, PNG or WebP · Maximum 10 MiB. Include the complete form, with readable printed
-						headings and no student details.
+		{#if current.template}
+			<div class="portal-panel flex flex-wrap items-center gap-4 p-4 sm:p-5">
+				<a
+					href={imageUrl(current.template.revision)}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="shrink-0 overflow-hidden rounded-lg border border-base-300 bg-white"
+					aria-label="Open saved clearance template"
+				>
+					<img
+						src={imageUrl(current.template.revision)}
+						alt="Saved blank clearance template"
+						class="h-20 w-24 object-contain"
+					/>
+				</a>
+				<div class="min-w-0 flex-1 basis-48 space-y-1">
+					<p class="text-xs font-semibold tracking-wide text-primary uppercase">Current template</p>
+					<p class="text-sm font-bold break-all">{current.template.filename}</p>
+					<p class="text-xs text-base-content/60">
+						Updated {uploaded(current.template.uploadedAt)} · {(
+							current.template.size /
+							1024 /
+							1024
+						).toFixed(2)} MiB
 					</p>
-					{#if preview}
-						<div class="space-y-2">
-							<p class="text-sm font-semibold break-all">New template: {selectedName}</p>
-							<img
-								src={preview}
-								alt="Selected clearance template preview"
-								class="max-h-96 w-full rounded-lg border border-base-300 bg-white object-contain"
-								onerror={() => {
-									previewError = true;
-								}}
-							/>
-							{#if previewError}
-								<p class="text-sm text-error" role="alert">
-									This image could not be opened. Choose another file.
-								</p>
-							{/if}
-						</div>
-					{/if}
-					{#each uploadClearanceTemplate.fields.allIssues() ?? [] as issue (issue.message)}
-						<p role="alert" class="text-sm text-error">{issue.message}</p>
-					{/each}
-					{#if feedback}
-						<p role="status" class="text-sm text-success">{feedback}</p>
+					{#if current.template.definition}
+						<p class="text-xs text-base-content/70">
+							Semester {current.template.definition.semester} · {current.template.definition
+								.schoolYear} · {current.template.definition.areas.length} printed areas · {current
+								.template.definition.officeRows?.length ?? 0} offices
+						</p>
+					{:else}
+						<p class="text-xs text-warning">
+							Set up the form outline and checking areas to get started.
+						</p>
 					{/if}
 				</div>
-				<div
-					class="flex flex-wrap items-center justify-end gap-3 border-t border-base-300 bg-base-200/30 px-5 py-4 sm:px-6"
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					disabled={locked || replacing}
+					onclick={() => {
+						replacing = true;
+					}}
+				>
+					<Upload size={15} aria-hidden="true" />Replace image
+				</button>
+			</div>
+		{/if}
+		{#if !current.template || replacing}
+			<div>
+				<form
+					{...uploadClearanceTemplate.enhance(async (form) => {
+						if (busy || testBusy || setupBusy || previewError) return;
+						busy = true;
+						feedback = '';
+						showLoading('Saving clearance template...');
+						try {
+							if (await form.submit()) {
+								form.element.reset();
+								clearSelection();
+								replacing = false;
+								workspace = 'setup';
+								setupStep = 'outline';
+								feedback = form.result?.cleanupWarning
+									? 'Template saved. The previous file could not be removed from storage.'
+									: 'Clearance template saved successfully.';
+								showSuccess(feedback);
+							} else showError('Choose a supported image up to 10 MiB.');
+						} catch (caught) {
+							showError(
+								getErrorMessage(
+									caught,
+									'Could not save the template. Check storage connectivity and try again.'
+								)
+							);
+						} finally {
+							busy = false;
+						}
+					})}
+					enctype="multipart/form-data"
+					aria-busy={busy}
+					class="portal-panel min-w-0"
+				>
+					<input
+						{...uploadClearanceTemplate.fields.revision.as(
+							'hidden',
+							current.template?.revision ?? ''
+						)}
+					/>
+					<div class="space-y-5 p-5 sm:p-6">
+						<div class="flex items-center gap-3">
+							<div class="rounded-xl bg-primary/10 p-2.5 text-primary">
+								<ClipboardCheck size={22} aria-hidden="true" />
+							</div>
+							<div>
+								<h2 class="font-bold">
+									{current.template ? 'Replace reference image' : 'Upload reference template'}
+								</h2>
+								<p class="text-xs text-base-content/60">Upload a clean, unfilled clearance form.</p>
+							</div>
+						</div>
+						{#if current.template}
+							<p class="rounded-lg bg-warning/10 p-3 text-sm text-base-content/75">
+								Replacing the image clears its saved areas. Your current template stays active until
+								you save the replacement.
+							</p>
+						{:else}
+							<div
+								class="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-8 text-center"
+							>
+								<FileImage size={36} class="mx-auto text-base-content/35" aria-hidden="true" />
+								<h3 class="mt-3 text-sm font-semibold">No template uploaded</h3>
+								<p class="mt-1 text-xs text-base-content/60">
+									Add the official blank clearance form to get started.
+								</p>
+							</div>
+						{/if}
+						<label class="block space-y-2">
+							<span class="text-sm font-semibold">Choose template image</span>
+							<input
+								{...uploadClearanceTemplate.fields.file.as('file')}
+								type="file"
+								accept="image/jpeg,image/png,image/webp"
+								class="file-input w-full border-base-300 bg-base-200"
+								onchange={selectFile}
+								disabled={busy || testBusy || setupBusy || !current.configured}
+								required
+								aria-describedby="template-file-help"
+							/>
+						</label>
+						<p id="template-file-help" class="text-xs text-base-content/60">
+							JPG, PNG or WebP · Maximum 10 MiB. Include the complete form, with readable printed
+							headings and no student details.
+						</p>
+						{#if preview}
+							<div class="space-y-2">
+								<p class="text-sm font-semibold break-all">New template: {selectedName}</p>
+								<img
+									src={preview}
+									alt="Selected clearance template preview"
+									class="max-h-96 w-full rounded-lg border border-base-300 bg-white object-contain"
+									onerror={() => {
+										previewError = true;
+									}}
+								/>
+								{#if previewError}
+									<p class="text-sm text-error" role="alert">
+										This image could not be opened. Choose another file.
+									</p>
+								{/if}
+							</div>
+						{/if}
+						{#each uploadClearanceTemplate.fields.allIssues() ?? [] as issue (issue.message)}
+							<p role="alert" class="text-sm text-error">{issue.message}</p>
+						{/each}
+						{#if feedback}
+							<p role="status" class="text-sm text-success">{feedback}</p>
+						{/if}
+					</div>
+					<div
+						class="flex flex-wrap items-center justify-end gap-3 border-t border-base-300 bg-base-200/30 px-5 py-4 sm:px-6"
+					>
+						{#if current.template}
+							<button
+								type="button"
+								class="btn btn-ghost btn-sm"
+								disabled={busy}
+								onclick={(event) => {
+									event.currentTarget.closest('form')?.reset();
+									clearSelection();
+									replacing = false;
+								}}
+							>
+								Cancel replacement
+							</button>
+						{/if}
+						<button
+							type="reset"
+							class="btn btn-ghost btn-sm"
+							onclick={clearSelection}
+							disabled={busy || testBusy || setupBusy || !preview}
+						>
+							<RotateCcw size={15} aria-hidden="true" />Discard
+						</button>
+						<button
+							type="submit"
+							class="btn btn-primary btn-sm"
+							disabled={busy ||
+								testBusy ||
+								setupBusy ||
+								!current.configured ||
+								!preview ||
+								previewError}
+						>
+							{#if busy}
+								<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
+							{:else}
+								<Save size={16} aria-hidden="true" />
+							{/if}
+							{busy ? 'Saving...' : current.template ? 'Replace template' : 'Save template'}
+						</button>
+					</div>
+				</form>
+			</div>
+		{/if}
+		{#if current.template}
+			<div hidden={replacing} class="space-y-4">
+				<nav
+					aria-label="Clearance workspace"
+					class="flex flex-wrap gap-1 rounded-xl border border-base-300 bg-base-200/50 p-1"
 				>
 					<button
-						type="reset"
-						class="btn btn-ghost btn-sm"
-						onclick={clearSelection}
-						disabled={busy || testBusy || setupBusy || !preview}
+						type="button"
+						class={`btn flex-1 btn-sm sm:flex-none ${workspace === 'setup' ? 'bg-base-100 shadow-sm' : 'btn-ghost'}`}
+						aria-pressed={workspace === 'setup'}
+						disabled={locked}
+						onclick={() => {
+							workspace = 'setup';
+						}}
 					>
-						<RotateCcw size={15} aria-hidden="true" />Discard
+						<ClipboardCheck size={16} aria-hidden="true" />Template setup
 					</button>
 					<button
-						type="submit"
-						class="btn btn-primary btn-sm"
-						disabled={busy ||
-							testBusy ||
-							setupBusy ||
-							!current.configured ||
-							!preview ||
-							previewError}
+						type="button"
+						class={`btn flex-1 btn-sm sm:flex-none ${workspace === 'test' ? 'bg-base-100 shadow-sm' : 'btn-ghost'}`}
+						aria-pressed={workspace === 'test'}
+						disabled={locked}
+						onclick={() => {
+							workspace = 'test';
+						}}
 					>
-						{#if busy}
-							<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
-						{:else}
-							<Save size={16} aria-hidden="true" />
-						{/if}
-						{busy ? 'Saving...' : current.template ? 'Replace template' : 'Save template'}
+						<FileImage size={16} aria-hidden="true" />Test clearance
 					</button>
-				</div>
-			</form>
-			<aside class="portal-panel space-y-4 p-5 sm:p-6" aria-label="Template guidance">
-				<div class="flex items-center gap-2 text-sm font-bold">
-					<Upload size={18} class="text-primary" aria-hidden="true" />Before uploading
-				</div>
-				<p class="text-sm leading-relaxed text-base-content/70">
-					Use the official blank clearance form. Keep all four borders visible and the image
-					upright.
-				</p>
-				<p class="text-sm leading-relaxed text-base-content/70">
-					After uploading, mark the printed details and save their areas below. Replacing the image
-					clears its previous area setup.
-				</p>
-				<div class="rounded-lg bg-base-200 p-3 text-xs leading-relaxed text-base-content/65">
-					Only administrators can upload or replace this template. The file is stored privately in
-					Garage.
-				</div>
-			</aside>
-		</div>
-		{#if current.template}
-			{#key current.template.revision}
-				<TemplateSetup
-					template={current.template}
-					disabled={busy || testBusy}
-					onbusychange={(value) => {
-						setupBusy = value;
-					}}
-				/>
-				<ClearanceTest
-					template={current.template}
-					disabled={busy || setupBusy}
-					onbusychange={(value) => {
-						testBusy = value;
-					}}
-				/>
-			{/key}
+				</nav>
+				{#key current.template.revision}
+					<div hidden={workspace !== 'setup'}>
+						<TemplateSetup
+							template={current.template}
+							bind:step={setupStep}
+							disabled={busy || testBusy || replacing}
+							onbusychange={(value) => {
+								setupBusy = value;
+							}}
+						/>
+					</div>
+					<div hidden={workspace !== 'test'}>
+						<ClearanceTest
+							template={current.template}
+							disabled={busy || setupBusy || replacing}
+							onbusychange={(value) => {
+								testBusy = value;
+							}}
+						/>
+					</div>
+				{/key}
+			</div>
 		{:else}
 			<div class="portal-panel p-5 text-sm text-base-content/65 sm:p-6">
 				Save a reference template to enable clearance testing here.

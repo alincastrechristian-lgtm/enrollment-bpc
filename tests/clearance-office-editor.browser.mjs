@@ -50,8 +50,9 @@ test(
 			await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 			await page.waitForURL('**/user/dashboard');
 			await page.goto(`${base}/user/settings/clearance`, { waitUntil: 'networkidle' });
+			await page.getByRole('button', { name: 'Offices & signatures', exact: true }).click();
 			const office = page.getByRole('region', {
-				name: '5. Offices, checkboxes and signatures',
+				name: 'Offices, checkboxes and signatures',
 				exact: true
 			});
 			const rows = office
@@ -70,6 +71,7 @@ test(
 			);
 			const legend = office.getByRole('group', { name: 'Office area legend', exact: true });
 			const editor = office.getByRole('group', { name: 'Marked area editor', exact: true });
+			await office.locator('summary').filter({ hasText: 'Controls and coordinates' }).click();
 			const coords = office.getByRole('group', { name: 'Area coordinates', exact: true });
 			const labels = ['Office name', 'Cleared checkbox', 'Signature / stamp'];
 			assert.equal(await editor.locator('svg rect').count(), 3);

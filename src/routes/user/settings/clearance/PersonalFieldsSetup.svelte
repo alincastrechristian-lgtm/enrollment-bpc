@@ -106,24 +106,16 @@
 	}
 </script>
 
-<section
-	aria-labelledby="personal-fields-title"
-	class="space-y-4 rounded-xl border border-base-300 bg-base-200/30 p-4"
-	aria-busy={detecting}
->
+<section aria-labelledby="personal-fields-title" class="min-w-0 space-y-4" aria-busy={detecting}>
 	<div>
-		<h3 id="personal-fields-title" class="text-sm font-bold">
-			4. Personal information input areas
-		</h3>
+		<h3 id="personal-fields-title" class="text-sm font-bold">Personal information input areas</h3>
 		<p class="mt-1 text-xs text-base-content/65">
-			Mark where students write their details, excluding the printed labels. These boxes are saved
-			for later extraction and are not compared as permanent template content. No student values are
-			stored here.
+			Optional: mark the writing areas for future identity checks. Exclude the printed labels.
 		</p>
 	</div>
 	<button
 		type="button"
-		class="btn btn-primary btn-sm"
+		class="btn btn-outline btn-sm"
 		disabled={locked || !source}
 		onclick={detect}
 	>
@@ -145,11 +137,14 @@
 			<p role="status" class="text-sm font-semibold">
 				Found {pending.fields.length} personal input areas
 			</p>
-			<ul class="list-inside list-disc space-y-1 text-xs text-base-content/65">
-				{#each pending.hints as hint (hint)}
-					<li>{hint}</li>
-				{/each}
-			</ul>
+			<details class="text-xs text-base-content/65">
+				<summary class="cursor-pointer">Detection notes</summary>
+				<ul class="mt-2 list-inside list-disc space-y-1">
+					{#each pending.hints as hint (hint)}
+						<li>{hint}</li>
+					{/each}
+				</ul>
+			</details>
 			<p class="text-xs text-base-content/65">
 				Review or adjust the suggested boxes below. Use suggestions to replace only the
 				personal-area draft; the saved setup stays unchanged until you save.
@@ -177,22 +172,25 @@
 			</div>
 		</div>
 	{/if}
-	<div class="flex flex-wrap gap-2" aria-label="Add personal input area">
-		{#each kinds as kind (kind)}
-			<button
-				type="button"
-				class="btn btn-outline whitespace-normal btn-sm"
-				disabled={locked || !!pending || unavailable(kind) || fields.length >= 5}
-				onclick={() => add(kind)}
-			>
-				<Plus size={13} aria-hidden="true" />{PERSONAL_FIELD_LABELS[kind]}
-			</button>
-		{/each}
-	</div>
+	<details class="rounded-lg border border-base-300 p-3">
+		<summary class="cursor-pointer text-xs font-semibold">Add fields manually</summary>
+		<div class="mt-3 flex flex-wrap gap-2" aria-label="Add personal input area">
+			{#each kinds as kind (kind)}
+				<button
+					type="button"
+					class="btn btn-outline whitespace-normal btn-sm"
+					disabled={locked || !!pending || unavailable(kind) || fields.length >= 5}
+					onclick={() => add(kind)}
+				>
+					<Plus size={13} aria-hidden="true" />{PERSONAL_FIELD_LABELS[kind]}
+				</button>
+			{/each}
+		</div>
+	</details>
 	{#if displayed.length && active}
-		<div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-			<div class="space-y-3">
-				<ul class="space-y-2" aria-label="Personal input areas">
+		<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+			<div class="min-w-0 space-y-3">
+				<ul class="max-h-72 space-y-1.5 overflow-y-auto pr-1" aria-label="Personal input areas">
 					{#each displayed as area, i (area.id)}
 						<li class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1">
 							<button
@@ -250,7 +248,4 @@
 	{#if error}
 		<p role="alert" class="text-sm text-error">{error}</p>
 	{/if}
-	<p class="text-xs text-base-content/60">
-		Personal input boxes are saved with the template using “Save template areas” below.
-	</p>
 </section>

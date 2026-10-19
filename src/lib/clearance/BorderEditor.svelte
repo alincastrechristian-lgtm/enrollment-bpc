@@ -193,7 +193,7 @@
 		role="group"
 		aria-label="Form border editor"
 		aria-describedby={helpId}
-		class="relative my-2 touch-none rounded-lg border border-base-300 bg-white select-none"
+		class="relative my-2 w-fit max-w-full touch-none rounded-lg border border-base-300 bg-white select-none"
 		class:cursor-crosshair={!disabled}
 		onpointerdown={(event) => begin(event)}
 		onpointermove={move}
@@ -205,7 +205,7 @@
 			{src}
 			alt="Uploaded clearance with adjustable alignment corners"
 			draggable="false"
-			class="pointer-events-none block w-full rounded-lg select-none"
+			class="pointer-events-none block h-auto max-h-[65vh] w-auto max-w-full rounded-lg select-none"
 		/>
 		<svg
 			class="pointer-events-none absolute inset-0 h-full w-full"

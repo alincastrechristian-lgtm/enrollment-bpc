@@ -72,8 +72,7 @@
 		<div>
 			<h2 id="clearance-test-title" class="text-lg font-bold">Test a clearance</h2>
 			<p class="mt-1 text-sm text-base-content/65">
-				Choose a filled clearance to test against the saved marked areas. Student identity and
-				signatures are not verified.
+				Try a filled form against your saved settings. Save setup changes before testing.
 			</p>
 		</div>
 	</div>

@@ -124,24 +124,16 @@
 	}
 </script>
 
-<section
-	aria-labelledby="office-fields-title"
-	class="space-y-4 rounded-xl border border-base-300 bg-base-200/30 p-4"
-	aria-busy={detecting}
->
+<section aria-labelledby="office-fields-title" class="min-w-0 space-y-4" aria-busy={detecting}>
 	<div>
-		<h3 id="office-fields-title" class="text-sm font-bold">
-			5. Offices, checkboxes and signatures
-		</h3>
+		<h3 id="office-fields-title" class="text-sm font-bold">Offices, checkboxes and signatures</h3>
 		<p class="mt-1 text-xs text-base-content/65">
-			Link each office name to its cleared checkbox and signature / stamp space. Review every box:
-			rows may be offset, wrapped or split across tables. These areas are saved for later
-			inspection, separately from permanent format matching.
+			Select an office, then adjust its name, cleared checkbox and signature / stamp area.
 		</p>
 	</div>
 	<button
 		type="button"
-		class="btn btn-primary btn-sm"
+		class="btn btn-outline btn-sm"
 		disabled={locked || !source}
 		onclick={detect}
 	>
@@ -161,14 +153,16 @@
 	{#if suggestions}
 		<div class="space-y-3 rounded-lg border border-base-300 bg-base-100 p-3">
 			<p role="status" class="text-sm font-semibold">Found {rows.length} office rows</p>
-			<ul class="list-inside list-disc space-y-1 text-xs text-base-content/65">
-				{#each suggestions.hints as hint (hint)}
-					<li>{hint}</li>
-				{/each}
-			</ul>
+			<details class="text-xs text-base-content/65">
+				<summary class="cursor-pointer">Detection notes</summary>
+				<ul class="mt-2 list-inside list-disc space-y-1">
+					{#each suggestions.hints as hint (hint)}
+						<li>{hint}</li>
+					{/each}
+				</ul>
+			</details>
 			<p class="text-xs text-base-content/65">
-				Suggestions are now in your draft. Review and adjust the boxes below, then save template
-				areas to keep them. Discard restores your office rows from before detection.
+				Review the boxes below, then save. Discard restores your previous draft.
 			</p>
 			<div class="flex flex-wrap gap-2">
 				<button type="button" class="btn btn-ghost btn-sm" disabled={locked} onclick={discard}>
@@ -186,9 +180,9 @@
 		<Plus size={14} aria-hidden="true" />Add office
 	</button>
 	{#if active}
-		<div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-			<div class="space-y-3">
-				<ul class="space-y-2" aria-label="Office rows">
+		<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+			<div class="min-w-0 space-y-3">
+				<ul class="max-h-72 space-y-1.5 overflow-y-auto pr-1" aria-label="Office rows">
 					{#each rows as row, i (row.id)}
 						<li class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1">
 							<button
@@ -288,7 +282,7 @@
 		</div>
 	{:else if !detecting}
 		<p class="text-xs text-base-content/65">
-			No office rows selected. Detect rows or add offices manually. This setup step is optional.
+			No offices added. Detect rows or add them manually to enable student clearance checks.
 		</p>
 	{/if}
 	{#if !valid.success}
@@ -297,8 +291,4 @@
 	{#if error}
 		<p role="alert" class="text-sm text-error">{error}</p>
 	{/if}
-	<p class="text-xs text-base-content/60">
-		Use “Save template areas” below to save office boxes. A mark indicates presence, not an
-		authentic signature or clearance approval.
-	</p>
 </section>

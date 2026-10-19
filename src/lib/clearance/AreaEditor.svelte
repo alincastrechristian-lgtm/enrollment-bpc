@@ -161,15 +161,13 @@
 />
 <div class="space-y-3">
 	<p class="text-xs text-base-content/65">
-		Drag inside {areas.length ? 'any box' : 'the selected box'} to move it, or drag a selected corner
-		to resize. Drag outside the boxes to draw a new one. Arrow keys move the focused box or corner; Shift
-		makes larger steps. Escape cancels.
+		Drag to draw a box. Drag inside to move it, or drag a corner to resize.
 	</p>
 	<div
 		bind:this={viewport}
 		role="group"
 		aria-label="Marked area editor"
-		class="relative touch-none border border-base-300 bg-white select-none"
+		class="relative w-fit max-w-full touch-none border border-base-300 bg-white select-none"
 		onpointerdown={(e) => begin(e)}
 		onpointermove={move}
 		onpointerup={(e) => finish(e)}
@@ -180,7 +178,7 @@
 			{src}
 			alt="Aligned reference for marking printed details"
 			draggable="false"
-			class="pointer-events-none block w-full"
+			class="pointer-events-none block h-auto max-h-[65vh] w-auto max-w-full"
 		/>
 		<svg
 			class="pointer-events-none absolute inset-0 h-full w-full"
@@ -238,24 +236,31 @@
 			{/each}
 		{/if}
 	</div>
-	<fieldset {disabled} class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-		<legend class="sr-only">Area coordinates</legend>
-		{#each ['x', 'y', 'width', 'height'] as axis (axis)}
-			<label class="text-xs">
-				{axis} %
-				<input
-					type="number"
-					min="0"
-					max="100"
-					step="0.1"
-					class="input w-full input-sm"
-					value={+(box[axis as keyof Box] * 100).toFixed(1)}
-					oninput={(e) => {
-						const n = Number(e.currentTarget.value);
-						if (Number.isFinite(n)) update({ ...box, [axis]: clamp(n / 100) }, selectedId);
-					}}
-				/>
-			</label>
-		{/each}
-	</fieldset>
+	<details class="rounded-lg border border-base-300 p-3">
+		<summary class="cursor-pointer text-xs font-semibold">Controls and coordinates</summary>
+		<p class="my-3 text-xs text-base-content/65">
+			Drag outside existing boxes to draw. Arrow keys move the focused box or corner; Shift makes
+			larger steps. Escape cancels.
+		</p>
+		<fieldset {disabled} class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+			<legend class="sr-only">Area coordinates</legend>
+			{#each ['x', 'y', 'width', 'height'] as axis (axis)}
+				<label class="text-xs">
+					{axis} %
+					<input
+						type="number"
+						min="0"
+						max="100"
+						step="0.1"
+						class="input w-full input-sm"
+						value={+(box[axis as keyof Box] * 100).toFixed(1)}
+						oninput={(e) => {
+							const n = Number(e.currentTarget.value);
+							if (Number.isFinite(n)) update({ ...box, [axis]: clamp(n / 100) }, selectedId);
+						}}
+					/>
+				</label>
+			{/each}
+		</fieldset>
+	</details>
 </div>
