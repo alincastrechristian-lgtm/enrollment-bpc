@@ -549,4 +549,9 @@
 </form>
 
 <ProgramDialog bind:this={programDialog} bind:busy={catalogBusy} oncreated={programCreated} />
-<SubjectDialog bind:this={subjectDialog} bind:busy={catalogBusy} oncreated={subjectCreated} />
+<SubjectDialog
+	bind:this={subjectDialog}
+	bind:busy={catalogBusy}
+	oncreated={subjectCreated}
+	subjects={subjectOptions}
+/>

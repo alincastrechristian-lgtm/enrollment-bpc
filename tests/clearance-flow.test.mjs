@@ -218,6 +218,9 @@ function fixture(t) {
 	});
 	const plan = load('src/lib/server/enrollment.ts', {
 		...deps,
+		'#lib/subject-prerequisites.js': load('src/lib/subject-prerequisites.ts', {
+			'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts')
+		}),
 		'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts')
 	});
 	return {

@@ -1,6 +1,6 @@
 import { MAX_ITEMS_PER_PAGE } from '#lib/components/Table/TableValues.js';
 import { Role } from '#lib/Roles.js';
-import { subject, filterSubjectSchema } from '#lib/schema.js';
+import { subject, subjectPrerequisite, filterSubjectSchema } from '#lib/schema.js';
 import { schemaFilters } from '#lib/server/filters.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
@@ -39,5 +39,18 @@ export const load: PageServerLoad = ({ locals, url }) => {
 		.limit(MAX_ITEMS_PER_PAGE)
 		.offset((page - 1) * MAX_ITEMS_PER_PAGE)
 		.all();
-	return { records, total, search, status, filters, canManage: locals.user?.role === Role.ADMIN };
+	return {
+		records,
+		total,
+		search,
+		status,
+		filters,
+		canManage: locals.user?.role === Role.ADMIN,
+		subjectOptions: db
+			.select({ id: subject.id, code: subject.code, name: subject.name })
+			.from(subject)
+			.orderBy(asc(subject.code))
+			.all(),
+		prerequisites: db.select().from(subjectPrerequisite).all()
+	};
 };

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { formatGrade } from '#lib/enrollment-grades.js';
+	import { getMissingPrerequisites } from '#lib/subject-prerequisites.js';
 	import { enrollStudent } from '#lib/actions/user.remote.js';
 	import { correctEnrollment } from '#lib/actions/enrollment.remote.js';
 	import { getStudentDocumentReview } from '#lib/actions/documents.remote.js';
@@ -95,6 +96,15 @@
 		data.entries.filter((entry) => entry.yearLevel === yearLevel && entry.semester === semester)
 	);
 	const totalUnits = $derived(rows.reduce((sum, entry) => sum + (Number(entry.units) || 0), 0));
+	const missingPrerequisites = $derived(
+		getMissingPrerequisites(data.prerequisites.requirements, data.prerequisites.attempts, {
+			schoolYearStart: schoolYearStart ?? 0,
+			semester
+		})
+	);
+	const blockedSelection = $derived(
+		missingPrerequisites.filter((entry) => rows.some((row) => row.subjectId === entry.subjectId))
+	);
 	const initial = untrack(() =>
 		JSON.stringify({ yearLevel, semester, schoolYearStart, section, rows })
 	);
@@ -174,6 +184,10 @@
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
 		if (busy || saved) return;
+		if (blockedSelection.length) {
+			message = 'Complete and finalize the required prerequisite subjects before enrolling.';
+			return;
+		}
 		if (documentBlock) {
 			message = documentBlock;
 			return;
@@ -509,12 +523,17 @@
 													const snapshot = termEntries.find(
 														(subject) => subject.subjectId === item.id
 													);
+													const required = missingPrerequisites.filter(
+														(entry) => entry.subjectId === item.id
+													);
 													return {
 														value: item.id,
-														label: `${snapshot?.subjectCode ?? item.code} — ${snapshot?.subjectName ?? item.name}${item.isActive ? '' : ' (Inactive)'}`,
-														disabled: rows.some(
-															(row) => row.key !== entry.key && row.subjectId === item.id
-														)
+														label: `${snapshot?.subjectCode ?? item.code} — ${snapshot?.subjectName ?? item.name}${item.isActive ? '' : ' (Inactive)'}${required.length ? ` — Requires ${required.map((entry) => `${entry.code} (${entry.status})`).join(', ')}` : ''}`,
+														disabled:
+															missingPrerequisites.some(
+																(required) => required.subjectId === item.id
+															) ||
+															rows.some((row) => row.key !== entry.key && row.subjectId === item.id)
 													};
 												})}
 												placeholder="Select a subject"
@@ -522,6 +541,11 @@
 												required
 												disabled={busy || saved}
 											/>
+											{#each missingPrerequisites.filter((required) => required.subjectId === entry.subjectId) as required (required.prerequisiteId)}
+												<p class="mt-1 text-xs text-error">
+													Requires {required.code} — {required.name} ({required.status}).
+												</p>
+											{/each}
 										</td>
 										<td>
 											{#if entry.subjectId}
@@ -619,6 +643,11 @@
 			<p class="text-sm font-semibold">
 				{saved ? 'Enrollment saved' : 'Ready to review this enrollment?'}
 			</p>
+			{#if blockedSelection.length}
+				<p class="text-sm text-error" role="status">
+					Remove blocked subjects or complete their prerequisites before enrolling.
+				</p>
+			{/if}
 			<p class="mt-1 text-xs text-base-content/55">
 				{rows.length} subjects · {totalUnits} units · Review your selection before confirming.
 			</p>
@@ -626,7 +655,7 @@
 		<button
 			type="submit"
 			class="btn btn-primary btn-sm"
-			disabled={busy || saved || !rows.length || !!documentBlock}
+			disabled={busy || saved || !rows.length || !!documentBlock || blockedSelection.length > 0}
 		>
 			{#if busy}
 				<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>

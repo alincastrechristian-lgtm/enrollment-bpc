@@ -46,6 +46,7 @@ function academicRows(db) {
 		schema.subject,
 		schema.curriculum,
 		schema.curriculumSubject,
+		schema.subjectPrerequisite,
 		schema.studentData
 	].map((table) => db.select().from(table).all());
 }
@@ -78,7 +79,7 @@ test('seed creates linked catalog data and active curricula without student acco
 	const { db, sqlite } = fixture(t);
 	assert.deepEqual(seedAcademicData(db), {
 		programs: 3,
-		subjects: 20,
+		subjects: 49,
 		curricula: 3,
 		students: 0
 	});
@@ -92,7 +93,7 @@ test('seed creates linked catalog data and active curricula without student acco
 			curriculum.id
 		);
 	}
-	assert.equal(entries.length, 33);
+	assert.equal(entries.length, 77);
 	for (const entry of entries) {
 		const curriculum = curricula.find((record) => record.id === entry.curriculumId);
 		assert.ok(entry.yearLevel >= 1 && entry.yearLevel <= curriculum.yearLevels);
@@ -125,7 +126,7 @@ test('seed reuses existing catalog IDs and preserves edited and published record
 		.run();
 	assert.deepEqual(seedAcademicData(db), {
 		programs: 2,
-		subjects: 19,
+		subjects: 48,
 		curricula: 3,
 		students: 0
 	});
@@ -158,6 +159,37 @@ test('seed rolls back academic inserts when curriculum activation fails', (t) =>
 	);
 	assert.throws(() => seedAcademicData(db), /test failure/);
 	assert.ok(academicRows(db).every((rows) => rows.length === 0));
+});
+
+test('sample prerequisites exist in earlier terms for every curriculum and reruns preserve rule edits', (t) => {
+	const { db, sqlite } = fixture(t);
+	seedAcademicData(db);
+	const curricula = db.select().from(schema.curriculum).all();
+	const entries = db.select().from(schema.curriculumSubject).all();
+	const rules = db.select().from(schema.subjectPrerequisite).all();
+	assert.ok(rules.length >= 30);
+	for (const curriculum of curricula) {
+		const placements = new Map(
+			entries
+				.filter((entry) => entry.curriculumId === curriculum.id)
+				.map((entry) => [entry.subjectId, entry])
+		);
+		for (const rule of rules) {
+			const dependent = placements.get(rule.subjectId);
+			if (!dependent) continue;
+			const prerequisite = placements.get(rule.prerequisiteId);
+			assert.ok(prerequisite, `Prerequisite missing from ${curriculum.programCode}`);
+			assert.ok(
+				prerequisite.yearLevel < dependent.yearLevel ||
+					(prerequisite.yearLevel === dependent.yearLevel &&
+						prerequisite.semester < dependent.semester),
+				`Prerequisite must precede dependent in ${curriculum.programCode}`
+			);
+		}
+	}
+	sqlite.exec('DELETE FROM subject_prerequisite');
+	seedAcademicData(db);
+	assert.deepEqual(db.select().from(schema.subjectPrerequisite).all(), []);
 });
 
 test('seed CLI creates the configured admin and skips all changes once seeded', () => {

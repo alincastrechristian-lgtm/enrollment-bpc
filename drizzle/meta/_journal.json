@@ -267,6 +267,13 @@
       "when": 1792427921070,
       "tag": "0037_required_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1792443255177,
+      "tag": "0038_subject_prerequisites",
+      "breakpoints": true
     }
   ]
 }

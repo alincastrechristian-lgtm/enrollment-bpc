@@ -120,6 +120,9 @@ function fixture(
 		'$app/env/private': { ORIGIN: 'https://example.com' },
 		'$app/paths': { resolve: (path) => path },
 		'#lib/enrollment-grades.js': loadModule('src/lib/enrollment-grades.ts'),
+		'#lib/subject-prerequisites.js': loadModule('src/lib/subject-prerequisites.ts', {
+			'#lib/enrollment-grades.js': loadModule('src/lib/enrollment-grades.ts')
+		}),
 		'#lib/Roles.js': { Role },
 		'#lib/schema.js': schema,
 		'#lib/errors.js': errorHelpers,

@@ -24,7 +24,12 @@
 
 	function open(subject: Subject | null = null) {
 		if (busy || !data.canManage) return;
-		subjectDialog?.open(subject);
+		subjectDialog?.open(
+			subject,
+			data.prerequisites
+				.filter((entry) => entry.subjectId === subject?.id)
+				.map((entry) => entry.prerequisiteId)
+		);
 	}
 
 	async function remove(subject: Subject) {
@@ -89,6 +94,7 @@
 			<th class="py-4 pl-5">Subject</th>
 			<th>Code</th>
 			<th>Description</th>
+			<th>Prerequisites</th>
 			<th class={data.canManage ? '' : 'pr-5'}>Status</th>
 			{#if data.canManage}
 				<th class="pr-5 text-right">Actions</th>
@@ -117,6 +123,16 @@
 				<p class="line-clamp-2 wrap-break-word whitespace-pre-line">
 					{subject.description || 'No description'}
 				</p>
+			</td>
+
+			<td class="max-w-sm text-sm text-base-content/60">
+				{data.prerequisites
+					.filter((entry) => entry.subjectId === subject.id)
+					.map(
+						(entry) =>
+							data.subjectOptions.find((option) => option.id === entry.prerequisiteId)?.code
+					)
+					.join(', ') || 'None'}
 			</td>
 
 			<!-- Status -->
@@ -160,7 +176,7 @@
 		</tr>
 	{:else}
 		<tr>
-			<td colspan={data.canManage ? 5 : 4} class="py-12 text-center">
+			<td colspan={data.canManage ? 6 : 5} class="py-12 text-center">
 				<p class="font-semibold">No subjects found</p>
 				<p class="mt-1 text-sm text-base-content/50">
 					{data.search || Object.keys(data.filters).length > 0
@@ -175,5 +191,5 @@
 </CatalogPage>
 
 {#if data.canManage}
-	<SubjectDialog bind:this={subjectDialog} bind:busy />
+	<SubjectDialog bind:this={subjectDialog} bind:busy subjects={data.subjectOptions} />
 {/if}

@@ -369,6 +369,8 @@ Deleting a program is blocked while any curriculum references it. Inactivation i
 
 A subject stores a unique code, name, optional description, and active status. Units are not properties of the subject catalog: they belong to the curriculum placement and the actual enrollment attempt.
 
+Administrators can select prerequisite subjects when creating or editing a subject. These rules apply across all curricula. Every prerequisite requires a finalized passing grade (1.00–3.00) from an earlier school year/semester. The latest valid earlier attempt controls eligibility: failed, incomplete, pending, or missing results block enrollment in the dependent subject. A later passed retake unlocks it. Dropped or voided enrollments do not count, and selecting the prerequisite and dependent subject together does not satisfy the rule. Staff see unmet requirements in the enrollment editor; the server enforces the same checks on new enrollments and corrections. Subject saves reject self-references and circular dependencies.
+
 Administrators create/edit subjects. Catalog renaming does not rewrite previously published curriculum subject snapshots or existing enrollment subject snapshots. Subject deletion is blocked by curriculum references, and enrollment subject foreign keys also protect referenced subjects. An enrollment selector labels inactive subjects but the current server does not categorically reject them; staff must apply institutional selection policy.
 
 ![Flowchart 8. Program and subject maintenance. Historical dependencies protect referenced records from deletion.](system-guide-assets/05-catalog.png)
@@ -1042,7 +1044,7 @@ Docker Compose mounts `./data` into `/app/data` and declares restart behavior. T
 
 ## 21.6 Seed behavior and sample data
 
-The seed process checks singleton `seeded` and skips when already true. It creates/reuses sample programs BSIS, ACT, and DHRMT, twenty sample subjects, and three sample published curricula named 2026 Sample Curriculum. It does not currently create sample student accounts or enrollments. Existing program selections and existing curriculum rows are not overwritten on rerun.
+The seed process checks singleton `seeded` and skips when already true. It creates/reuses sample programs BSIS, ACT, and DHRMT, 49 sample subjects, and three sample published curricula named 2026 Sample Curriculum. BSIS has 32 subject placements, ACT 23, and DHRMT 22, with 40 prerequisite links across the catalog. Every required subject is scheduled in an earlier term. These are demonstration curricula, not official academic requirements. It does not currently create sample student accounts or enrollments. Existing program selections, curriculum rows, and edited prerequisite rules are not overwritten on rerun.
 
 The initial admin uses seed environment inputs when present; the code contains development fallback credentials. Operational deployment should supply controlled values and secure/change the account rather than treat development defaults as institutional policy. The seed marks the selected initial admin as admin/setup complete and then sets seeded true.
 
@@ -1136,7 +1138,7 @@ If grades are already finalized, an administrator must reopen before academic co
 
 ## 23.5 What current implementation does not provide
 
-The current routes do not provide a separate applicant review pipeline, student self-registration, instructor grade-entry role, cashier/payment/tuition ledger, timetable/room allocation, class seat capacity, automatic prerequisite enforcement, automatic retake insertion, graduation processing, or automatic next-term enrollment. Staff remains responsible for those institutional decisions or external processes.
+The current routes do not provide a separate applicant review pipeline, student self-registration, instructor grade-entry role, cashier/payment/tuition ledger, timetable/room allocation, class seat capacity, automatic retake insertion, graduation processing, or automatic next-term enrollment. Staff remains responsible for those institutional decisions or external processes.
 
 Clearance does not authenticate signatures. Production uses Gemini transcription to compare handwritten name/number with the student record; this supports staff review and does not prove document authenticity. The system stores one current submission per enrollment, not an append-only archive of every failed scan or upload replacement.
 

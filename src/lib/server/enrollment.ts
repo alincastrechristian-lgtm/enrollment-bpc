@@ -14,13 +14,52 @@ import {
 	program,
 	studentData,
 	subject,
+	subjectPrerequisite,
 	SubjectSource
 } from '#lib/schema.js';
 import type { db, Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
-import { and, desc, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { documentEnrollmentBlock } from '#lib/server/documents.js';
+import { getMissingPrerequisites } from '#lib/subject-prerequisites.js';
+
+export function getEnrollmentPrerequisites(
+	database: typeof db | Transaction,
+	studentId: string,
+	excludedEnrollmentId?: string
+) {
+	return {
+		requirements: database
+			.select({
+				subjectId: subjectPrerequisite.subjectId,
+				prerequisiteId: subjectPrerequisite.prerequisiteId,
+				code: subject.code,
+				name: subject.name
+			})
+			.from(subjectPrerequisite)
+			.innerJoin(subject, eq(subject.id, subjectPrerequisite.prerequisiteId))
+			.all(),
+		attempts: database
+			.select({
+				subjectId: enrollmentSubject.subjectId,
+				grade: enrollmentSubject.grade,
+				finalizedGrades: enrollment.finalizedGrades,
+				schoolYearStart: enrollment.schoolYearStart,
+				semester: enrollment.semester
+			})
+			.from(enrollmentSubject)
+			.innerJoin(enrollment, eq(enrollment.id, enrollmentSubject.enrollmentId))
+			.where(
+				and(
+					eq(enrollment.studentId, studentId),
+					notInArray(enrollment.status, ['dropped', 'voided']),
+					excludedEnrollmentId ? ne(enrollment.id, excludedEnrollmentId) : undefined
+				)
+			)
+			.all()
+	};
+}
 
 export const enrollStudentSchema = z.object({
 	userId: z.string().trim().min(1, 'Student account is required'),
@@ -228,14 +267,19 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 		)
 			error(400, 'Select a term after the current enrollment.');
 	}
-	return { ...context, subjects: getEnrollmentSubjects(database, data, selectedCurriculum) };
+	return {
+		...context,
+		subjects: getEnrollmentSubjects(database, data, selectedCurriculum, context.student.studentId)
+	};
 }
 
 // Corrections and new enrollments share catalog validation and subject classification.
 export function getEnrollmentSubjects(
 	database: typeof db | Transaction,
 	data: EnrollStudentInput,
-	selectedCurriculum: typeof curriculum.$inferSelect
+	selectedCurriculum: typeof curriculum.$inferSelect,
+	studentId: string,
+	excludedEnrollmentId?: string
 ) {
 	if (
 		data.yearLevel > selectedCurriculum.yearLevels ||
@@ -258,6 +302,17 @@ export function getEnrollmentSubjects(
 			.map((entry) => [entry.id, entry])
 	);
 	if (catalog.size !== ids.length) error(400, 'One or more subjects do not exist in the database.');
+	const prerequisites = getEnrollmentPrerequisites(database, studentId, excludedEnrollmentId);
+	const missing = getMissingPrerequisites(
+		prerequisites.requirements,
+		prerequisites.attempts,
+		data
+	).filter((entry) => catalog.has(entry.subjectId));
+	if (missing.length)
+		error(
+			409,
+			`Prerequisites not completed: ${missing.map((entry) => `${catalog.get(entry.subjectId)!.code} requires ${entry.code} (${entry.status})`).join('; ')}. Pass and finalize these prerequisite subjects in an earlier term before enrolling.`
+		);
 
 	// Only subjects in this year and semester count as curriculum subjects. Others are extras.
 	const matchingSubjects = new Map(

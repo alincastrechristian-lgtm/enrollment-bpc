@@ -15,6 +15,7 @@ import { db } from '#lib/server/db/index.js';
 import {
 	getEnrollmentContext,
 	getEnrollmentLockReason,
+	getEnrollmentPrerequisites,
 	getOutstandingEnrollmentSubjects
 } from '#lib/server/enrollment.js';
 import { error } from '@sveltejs/kit';
@@ -148,6 +149,7 @@ export function loadEnrollmentEditor({
 			),
 		plan: context
 			? {
+					prerequisites: getEnrollmentPrerequisites(db, record.student.studentId, target?.id),
 					restoredSubjects: target
 						? programCode === target.programCode
 							? originalSubjects.map((entry) => ({ id: entry.subjectId, units: entry.units }))

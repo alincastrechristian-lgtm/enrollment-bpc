@@ -205,6 +205,9 @@ function fixture(t) {
 	};
 	const deps = {
 		'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts'),
+		'#lib/subject-prerequisites.js': load('src/lib/subject-prerequisites.ts', {
+			'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts')
+		}),
 		'#lib/server/email/templates.js': emailTemplates,
 		'#lib/server/email/index.js': {
 			sendEmail: async (...args) => {
@@ -361,6 +364,61 @@ test('staff create a student without enrollment or academic columns, then enroll
 		]
 	);
 	assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+});
+
+test('prerequisites block both staff roles, concurrent selection, failed and incomplete results; passing unlocks enrollment', async (t) => {
+	const f = fixture(t);
+	f.db.insert(schema.subjectPrerequisite).values({ subjectId: 's2', prerequisiteId: 's1' }).run();
+	const created = await f.createStudent(personal);
+	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+		f.state.role = role;
+		await assert.rejects(
+			f.enrollStudent(f.input(created)),
+			(cause) => status(409)(cause) && /requires.*Not completed/.test(cause.body.message)
+		);
+		assert.equal(f.db.select().from(schema.enrollment).all().length, 0);
+		assert.equal(
+			f.db
+				.select()
+				.from(schema.notification)
+				.all()
+				.filter((entry) => entry.type === 'enrollment_confirmed').length,
+			0
+		);
+	}
+	const first = await f.enrollStudent(f.input(created, { subjects: [{ id: 's1', units: 3 }] }));
+	f.sqlite
+		.prepare(
+			'UPDATE enrollment SET finalized_grades=1,submitted_clearance=1,follow_up_completed_at=1 WHERE id=?'
+		)
+		.run(first.enrollmentId);
+	const next = f.input(created, {
+		currentEnrollmentId: first.enrollmentId,
+		semester: 2,
+		acknowledgeGradeConcerns: true,
+		subjects: [{ id: 's2', units: 3 }]
+	});
+	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+		f.state.role = role;
+		for (const grade of [4, null]) {
+			f.sqlite
+				.prepare('UPDATE enrollment_subject SET grade=? WHERE enrollment_id=?')
+				.run(grade, first.enrollmentId);
+			await assert.rejects(
+				f.enrollStudent(next),
+				(cause) => status(409)(cause) && /Prerequisites not completed/.test(cause.body.message)
+			);
+			assert.equal(f.db.select().from(schema.enrollment).all().length, 1);
+			assert.equal(
+				f.db.select().from(schema.studentData).get().currentEnrollmentId,
+				first.enrollmentId
+			);
+		}
+	}
+	f.sqlite
+		.prepare('UPDATE enrollment_subject SET grade=3 WHERE enrollment_id=?')
+		.run(first.enrollmentId);
+	assert.equal((await f.enrollStudent(next)).success, true);
 });
 test('enrollment confirmation sends after commit and email failure preserves enrollment', async (t) => {
 	const f = fixture(t);

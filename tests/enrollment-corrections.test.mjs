@@ -37,6 +37,73 @@ const rejects = (status, message) => (cause) =>
 	cause.status === status &&
 	(!message || cause.body.message.includes(message));
 
+test('corrections enforce every prerequisite using only this student’s earlier valid attempts', (t) => {
+	const f = fixture(t);
+	f.sqlite.exec(`
+		INSERT INTO subject_prerequisite VALUES ('s3','s1'),('s3','s2');
+		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,finalized_grades,status)
+		VALUES ('prior','MA-001','c1','A',2025,2,1,1,'completed');
+		INSERT INTO enrollment_subject(id,enrollment_id,subject_id,source,subject_code,subject_name,units,grade,added_by)
+		VALUES ('prior1','prior','s1','extra','GEN101','General Subject',3,3,'registrar'),
+		('prior2','prior','s2','extra','IS101','Old Program Subject',3,2,'registrar');
+	`);
+	const before = { row: f.row(), subjects: f.subjects(), counts: f.counts() };
+	for (const [grade, finalized, status, year, semester, student] of [
+		[4, 1, 'completed', 2025, 2, 'MA-001'],
+		[null, 1, 'completed', 2025, 2, 'MA-001'],
+		[2, 0, 'enrolled', 2025, 2, 'MA-001'],
+		[2, 1, 'dropped', 2025, 2, 'MA-001'],
+		[2, 1, 'voided', 2025, 2, 'MA-001'],
+		[2, 1, 'completed', 2027, 1, 'MA-001'],
+		[2, 1, 'completed', 2025, 2, 'MA-002']
+	]) {
+		// Current enrollment's saved passing grade cannot satisfy its own prerequisite.
+		f.sqlite
+			.prepare(
+				'UPDATE enrollment SET finalized_grades=?,status=?,school_year_start=?,semester=?,student_id=? WHERE id=?'
+			)
+			.run(finalized, status, year, semester, student, 'prior');
+		f.sqlite.prepare('UPDATE enrollment_subject SET grade=? WHERE id=?').run(grade, 'prior1');
+		assert.throws(
+			() => f.correctStudentEnrollment(f.db, f.input(), registrar, url),
+			rejects(409, 'Prerequisites not completed')
+		);
+		assert.deepEqual(
+			{
+				row: f.row(),
+				subjects: f.subjects().filter((entry) => entry.enrollment_id === 'current'),
+				counts: f.counts()
+			},
+			{ ...before, subjects: before.subjects.filter((entry) => entry.enrollment_id === 'current') }
+		);
+	}
+	f.sqlite.exec(
+		"UPDATE enrollment SET finalized_grades=1,status='completed',school_year_start=2025,semester=2,student_id='MA-001' WHERE id='prior'; UPDATE enrollment_subject SET grade=3 WHERE id='prior1'"
+	);
+	f.correctStudentEnrollment(f.db, f.input(), registrar, url);
+	assert.equal(f.row().revision, 1);
+});
+
+test('latest earlier attempt controls prerequisites; a passed retake clears a prior failure', (t) => {
+	const f = fixture(t);
+	f.sqlite.exec(`
+		INSERT INTO subject_prerequisite VALUES ('s3','s1');
+		INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,finalized_grades,status)
+		VALUES ('early','MA-001','c1','A',2024,2,1,1,'completed'), ('retake','MA-001','c1','A',2025,2,1,1,'completed');
+		INSERT INTO enrollment_subject(id,enrollment_id,subject_id,source,subject_code,subject_name,units,grade,added_by)
+		VALUES ('early1','early','s1','extra','GEN101','General Subject',3,2,'registrar'),('retake1','retake','s1','extra','GEN101','General Subject',3,4,'registrar');
+	`);
+	assert.throws(
+		() => f.correctStudentEnrollment(f.db, f.input(), admin, url),
+		rejects(409, 'Failed')
+	);
+	f.sqlite.exec(
+		"UPDATE enrollment_subject SET grade=4 WHERE id='early1'; UPDATE enrollment_subject SET grade=2 WHERE id='retake1'"
+	);
+	f.correctStudentEnrollment(f.db, f.input(), admin, url);
+	assert.equal(f.row().revision, 1);
+});
+
 function fixture(t, proveMigration = false) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
@@ -140,6 +207,9 @@ function fixture(t, proveMigration = false) {
 		'#lib/Roles.js': roles,
 		'#lib/schema.js': schema,
 		'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts'),
+		'#lib/subject-prerequisites.js': load('src/lib/subject-prerequisites.ts', {
+			'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts')
+		}),
 		'#lib/server/db/index.js': { db },
 		'@sveltejs/kit': { error }
 	};

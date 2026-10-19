@@ -42,7 +42,7 @@ const status = (n) => (cause) => kit.isHttpError(cause) && cause.status === n;
 const pdf = () =>
 	new File(['%PDF-1.7\nTest document\n%%EOF'], 'record.pdf', { type: 'application/pdf' });
 
-function fixture(t, through = 37) {
+function fixture(t, through = 38) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
 	const db = drizzle(sqlite, { schema });
@@ -123,6 +123,9 @@ function fixture(t, through = 37) {
 	const download = load('src/routes/user/document-files/[id]/+server.ts', deps).GET;
 	const plan = load('src/lib/server/enrollment.ts', {
 		...deps,
+		'#lib/subject-prerequisites.js': load('src/lib/subject-prerequisites.ts', {
+			'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts')
+		}),
 		'#lib/server/documents.js': service,
 		'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts')
 	});
@@ -391,7 +394,7 @@ test('additive migration preserves existing data; rollback refuses to erase docu
 	const f = fixture(t, 36);
 	const tables = ['user', 'student', 'enrollment', 'enrollment_subject'];
 	const before = tables.map((table) => f.sqlite.prepare(`SELECT * FROM ${table}`).all());
-	migrate(f.db, { migrationsFolder: 'drizzle' });
+	migrate(f.db, migrationConfigThrough(t, 37));
 	assert.deepEqual(
 		tables.map((table) => f.sqlite.prepare(`SELECT * FROM ${table}`).all()),
 		before
@@ -402,7 +405,7 @@ test('additive migration preserves existing data; rollback refuses to erase docu
 		f.sqlite.prepare("SELECT name FROM sqlite_master WHERE name='required_document'").get(),
 		undefined
 	);
-	migrate(f.db, { migrationsFolder: 'drizzle' });
+	migrate(f.db, migrationConfigThrough(t, 37));
 	await f.request(['tor']);
 	assert.throws(() => f.sqlite.exec(rollback), /CHECK constraint failed/);
 	if (f.sqlite.inTransaction) f.sqlite.exec('ROLLBACK');

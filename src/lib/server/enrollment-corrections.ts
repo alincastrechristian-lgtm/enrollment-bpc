@@ -176,7 +176,13 @@ export function correctStudentEnrollment(
 						'The corrected term must stay between the student’s earlier and later enrollments.'
 					);
 			}
-			const subjects = getEnrollmentSubjects(tx, data, context.curriculum);
+			const subjects = getEnrollmentSubjects(
+				tx,
+				data,
+				context.curriculum,
+				record.student.studentId,
+				record.enrollment.id
+			);
 			const before = snapshot(tx, record.enrollment.id);
 			const selected = new Set(subjects.map((entry) => entry.subjectId));
 			const removed = before.subjects.filter((entry) => !selected.has(entry.subjectId));

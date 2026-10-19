@@ -90,6 +90,23 @@ export const subject = sqliteTable('subject', {
 	isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull()
 });
 
+export const subjectPrerequisite = sqliteTable(
+	'subject_prerequisite',
+	{
+		subjectId: text('subject_id')
+			.notNull()
+			.references(() => subject.id, { onDelete: 'cascade' }),
+		prerequisiteId: text('prerequisite_id')
+			.notNull()
+			.references(() => subject.id, { onDelete: 'restrict' })
+	},
+	(table) => [
+		primaryKey({ columns: [table.subjectId, table.prerequisiteId] }),
+		index('subject_prerequisite_required_idx').on(table.prerequisiteId),
+		check('subject_prerequisite_not_self', sql`${table.subjectId} <> ${table.prerequisiteId}`)
+	]
+);
+
 export const curriculum = sqliteTable(
 	'curriculum',
 	{
