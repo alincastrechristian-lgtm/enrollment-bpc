@@ -151,3 +151,57 @@ test('real written photo rejects four empty checkboxes while accepting the Advis
 	);
 	assert.equal(clearancePassed(report), false);
 });
+
+test('photocopied printed areas and italic year match without accepting empty offices, wrong years or a replaced logo', async () => {
+	const folder = 'tests/fixtures/clearance-photocopy/';
+	const { definition: configured, uploadCorners } = JSON.parse(
+		readFileSync(folder + 'definition.json', 'utf8')
+	) as { definition: TemplateDefinition; uploadCorners: typeof UNIT_CORNERS };
+	const reference = readFileSync(folder + 'reference.jpg'),
+		bytes = readFileSync(folder + 'upload.jpg');
+	const image = await decodeClearance(bytes);
+	const report = await checkClearance(reference, image, uploadCorners, configured);
+	assert.equal(overall(report.template), 'pass', JSON.stringify(report.template));
+	assert.equal(
+		clearancePassed(report),
+		false,
+		'Template match must not approve empty office checkboxes.'
+	);
+	assert(
+		report.offices
+			.filter((check) => check.label.endsWith('cleared checkbox'))
+			.every((check) => check.verdict === 'fail')
+	);
+	const wrongYear = await checkClearance(reference, image, uploadCorners, {
+		...configured,
+		schoolYear: '2027-2028'
+	});
+	assert.equal(overall(wrongYear.template), 'fail');
+	assert.deepEqual(wrongYear.offices, []);
+	const area = configured.areas.find((area) => area.kind === 'image')!.box;
+	const matrix = homography(UNIT_CORNERS, uploadCorners);
+	const point = (x: number, y: number) => {
+		const p = project(matrix, { x, y });
+		return `${p.x * image.width},${p.y * image.height}`;
+	};
+	const erase = Buffer.from(
+		`<svg xmlns="http://www.w3.org/2000/svg" width="${image.width}" height="${image.height}"><polygon fill="white" points="${point(area.x, area.y)} ${point(area.x + area.width, area.y)} ${point(area.x + area.width, area.y + area.height)} ${point(area.x, area.y + area.height)}"/><rect x="125" y="45" width="100" height="110" fill="black"/><path d="M125 45L225 155M225 45L125 155" stroke="white" stroke-width="15"/></svg>`
+	);
+	const replaced = await sharp(bytes)
+		.composite([{ input: erase }])
+		.png()
+		.toBuffer();
+	const wrongLogo = await checkClearance(
+		reference,
+		await decodeClearance(replaced),
+		uploadCorners,
+		configured
+	);
+	assert.notEqual(
+		wrongLogo.template.find(
+			(check) => check.label === configured.areas.find((area) => area.kind === 'image')!.label
+		)!.verdict,
+		'pass'
+	);
+	assert.equal(clearancePassed(wrongLogo), false);
+});

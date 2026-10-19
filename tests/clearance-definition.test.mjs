@@ -13,7 +13,7 @@ function load(file, deps = {}) {
 	return exports;
 }
 const core = load('src/lib/clearance/clearance.ts');
-const { definitionSchema, checkAreaText, compareVisual, templateTermIssue } = load(
+const { definitionSchema, checkAreaText, compareVisual, templateTermIssue, printedAreaBox } = load(
 	'src/lib/clearance/definition.ts',
 	{
 		'./clearance': core
@@ -30,6 +30,66 @@ const definition = () => ({
 		expected: kind === 'text' ? 'School name' : '',
 		box: { x: 0.1, y: 0.1 + i * 0.1, width: 0.4, height: 0.05 }
 	}))
+});
+
+test('year OCR uses confidence in the year token, while unclear or incorrect years cannot pass', () => {
+	const { academicYearReading } = load('src/lib/clearance/printed.ts');
+	const area = { ...definition().areas[0], kind: 'academicYear' };
+	const data = (yearConfidence, lineConfidence = 61) => ({
+		text: '. 2026-2027',
+		confidence: lineConfidence,
+		blocks: [
+			{
+				paragraphs: [
+					{
+						lines: [
+							{
+								words: [
+									{ text: '.', confidence: 28 },
+									{ text: '2026-2027', confidence: yearConfidence }
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	});
+	const good = academicYearReading(data(95));
+	assert.equal(good.confidence, 95);
+	assert.equal(
+		checkAreaText(area, good, { semester: '1', schoolYear: '2026-2027' }).verdict,
+		'pass'
+	);
+	assert.equal(checkAreaText(area, good, definition()).verdict, 'fail');
+	assert.equal(
+		checkAreaText(area, academicYearReading(data(30, 95)), {
+			semester: '1',
+			schoolYear: '2026-2027'
+		}).verdict,
+		'review'
+	);
+	assert.equal(
+		academicYearReading({ text: '2026-2027', confidence: 33, blocks: null }).confidence,
+		33
+	);
+	assert.equal(academicYearReading({ ...data(95), text: '2026-2027 or 2027-2028' }).confidence, 61);
+});
+
+test('year crops gain bounded margin without changing stored boxes or other printed regions', () => {
+	const area = {
+		...definition().areas[0],
+		kind: 'academicYear',
+		box: { x: 0.5, y: 0.15, width: 0.13, height: 0.032 }
+	};
+	const original = structuredClone(area.box),
+		box = printedAreaBox(area);
+	assert(box.x < original.x && box.y < original.y);
+	assert(box.width > original.width && box.height > original.height);
+	assert.deepEqual(area.box, original);
+	assert.deepEqual(printedAreaBox({ ...area, kind: 'image' }), original);
+	const edge = printedAreaBox({ ...area, box: { x: 0, y: 0, width: 1, height: 1 } });
+	assert.deepEqual(edge, { x: 0, y: 0, width: 1, height: 1 });
 });
 
 test('template coverage compares the current enrollment semester and school year', () => {

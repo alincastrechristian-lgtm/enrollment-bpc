@@ -150,6 +150,20 @@ export type TemplateInfo = {
 };
 export type Box = TemplateArea['box'];
 
+// Leave room for italic year strokes and OCR segmentation without changing the saved box.
+export function printedAreaBox(area: TemplateArea): Box {
+	if (area.kind !== 'academicYear') return area.box;
+	const padding = area.box.height / 8;
+	const x = Math.max(0, area.box.x - padding),
+		y = Math.max(0, area.box.y - padding);
+	return {
+		x,
+		y,
+		width: Math.min(1, area.box.x + area.box.width + padding) - x,
+		height: Math.min(1, area.box.y + area.box.height + padding) - y
+	};
+}
+
 const normalize = (text: string) =>
 	text
 		.normalize('NFKD')
@@ -200,30 +214,48 @@ export function compareVisual(
 	)
 		throw new Error('Invalid visual patches.');
 	let best = -1;
-	for (let dy = -2; dy <= 2; dy++)
-		for (let dx = -2; dx <= 2; dx++) {
-			let n = 0,
-				a = 0,
-				b = 0,
-				aa = 0,
-				bb = 0,
-				ab = 0;
-			for (let y = 2; y < height - 2; y++)
-				for (let x = 2; x < width - 2; x++) {
-					const r = reference[y * width + x],
-						s = actual[(y + dy) * width + x + dx];
-					n++;
-					a += r;
-					b += s;
-					aa += r * r;
-					bb += s * s;
-					ab += r * s;
+	// Small local scale changes occur in photocopies even after page alignment.
+	// Keep the same shape/detail and correlation requirements for every candidate.
+	for (const scaleY of [0.9, 1, 1.1])
+		for (const scaleX of [0.9, 1, 1.1])
+			for (let dy = -2; dy <= 2; dy++)
+				for (let dx = -2; dx <= 2; dx++) {
+					let n = 0,
+						a = 0,
+						b = 0,
+						aa = 0,
+						bb = 0,
+						ab = 0;
+					for (let y = 2; y < height - 2; y++)
+						for (let x = 2; x < width - 2; x++) {
+							const sx = (x - (width - 1) / 2) * scaleX + (width - 1) / 2 + dx,
+								sy = (y - (height - 1) / 2) * scaleY + (height - 1) / 2 + dy;
+							if (sx < 0 || sy < 0 || sx > width - 1 || sy > height - 1) continue;
+							const x0 = Math.floor(sx),
+								y0 = Math.floor(sy),
+								x1 = Math.min(width - 1, x0 + 1),
+								y1 = Math.min(height - 1, y0 + 1),
+								tx = sx - x0,
+								ty = sy - y0;
+							const r = reference[y * width + x],
+								s =
+									actual[y0 * width + x0] * (1 - tx) * (1 - ty) +
+									actual[y0 * width + x1] * tx * (1 - ty) +
+									actual[y1 * width + x0] * (1 - tx) * ty +
+									actual[y1 * width + x1] * tx * ty;
+							n++;
+							a += r;
+							b += s;
+							aa += r * r;
+							bb += s * s;
+							ab += r * s;
+						}
+					if (n < (width - 4) * (height - 4) * 0.9) continue;
+					const av = aa - (a * a) / n,
+						bv = bb - (b * b) / n;
+					if (av / n < 25 || bv / n < 25) continue;
+					best = Math.max(best, (ab - (a * b) / n) / Math.sqrt(av * bv));
 				}
-			const av = aa - (a * a) / n,
-				bv = bb - (b * b) / n;
-			if (av / n < 25 || bv / n < 25) continue;
-			best = Math.max(best, (ab - (a * b) / n) / Math.sqrt(av * bv));
-		}
 	return {
 		score: Math.max(0, best),
 		verdict: best < 0 ? 'review' : best >= 0.8 ? 'pass' : best < 0.45 ? 'fail' : 'review'

@@ -5,8 +5,10 @@ import { suggestPrintedAreas, suggestGraphicAreas, type AreaSuggestions } from '
 import { suggestPersonalFields, type PersonalFieldSuggestions } from './personal-suggestions';
 import { suggestOfficeRows, type OfficeSuggestions } from './office-suggestions';
 import { threshold } from './report';
+import { enhancePrintedContrast, academicYearReading } from './printed';
 import {
 	checkAreaText,
+	printedAreaBox,
 	compareVisual,
 	type TemplateArea,
 	type TemplateDefinition
@@ -191,31 +193,14 @@ function preparePrinted(image: HTMLCanvasElement, enhance: boolean) {
 	if (enhance) {
 		const pixels = context(image).getImageData(0, 0, image.width, image.height);
 		const gray = new Uint8Array(image.width * image.height);
-		const histogram = new Uint32Array(256);
 		for (let i = 0; i < gray.length; i++) {
 			gray[i] = Math.round(
 				pixels.data[i * 4] * 0.299 + pixels.data[i * 4 + 1] * 0.587 + pixels.data[i * 4 + 2] * 0.114
 			);
-			histogram[gray[i]]++;
 		}
-		const percentile = (fraction: number) => {
-			let count = 0;
-			for (let value = 0; value < 256; value++) {
-				count += histogram[value];
-				if (count >= gray.length * fraction) return value;
-			}
-			return 255;
-		};
-		const white = percentile(0.9),
-			dark = percentile(0.01);
-		// Preserve faint strokes on low-contrast crops rather than turning a blank gray crop black.
-		const black = white - dark >= 32 ? dark : 0;
+		enhancePrintedContrast(gray);
 		for (let i = 0; i < gray.length; i++) {
-			const value = Math.max(
-				0,
-				Math.min(255, Math.round(((gray[i] - black) * 255) / Math.max(1, white - black)))
-			);
-			pixels.data[i * 4] = pixels.data[i * 4 + 1] = pixels.data[i * 4 + 2] = value;
+			pixels.data[i * 4] = pixels.data[i * 4 + 1] = pixels.data[i * 4 + 2] = gray[i];
 		}
 		context(image).putImageData(pixels, 0, 0);
 	}
@@ -291,7 +276,13 @@ async function recognizeRegions<K extends keyof typeof REGIONS>(
 }
 
 async function recognizeJobs<K extends string>(
-	jobs: { key: K; label: string; multiline: boolean; image: () => HTMLCanvasElement }[],
+	jobs: {
+		key: K;
+		label: string;
+		multiline: boolean;
+		academicYear?: boolean;
+		image: () => HTMLCanvasElement;
+	}[],
 	onProgress: (text: string) => void,
 	signal: AbortSignal
 ): Promise<Record<K, Reading>> {
@@ -307,8 +298,13 @@ async function recognizeJobs<K extends string>(
 				}),
 				stopped
 			]);
-			const { data } = await Promise.race([worker.recognize(job.image()), stopped]);
-			result[job.key] = { text: data.text.trim(), confidence: data.confidence };
+			const { data } = await Promise.race([
+				worker.recognize(job.image(), {}, { blocks: !!job.academicYear }),
+				stopped
+			]);
+			result[job.key] = job.academicYear
+				? academicYearReading(data)
+				: { text: data.text.trim(), confidence: data.confidence };
 		}
 		return result;
 	});
@@ -466,11 +462,12 @@ export async function detectTemplateAreas(
 }
 
 function areaRegion(area: TemplateArea, page: { width: number; height: number }): Region {
+	const box = printedAreaBox(area);
 	return {
-		x: area.box.x * page.width,
-		y: area.box.y * page.height,
-		width: Math.max(1, Math.round(area.box.width * page.width)),
-		height: Math.max(1, Math.round(area.box.height * page.height))
+		x: box.x * page.width,
+		y: box.y * page.height,
+		width: Math.max(1, Math.round(box.width * page.width)),
+		height: Math.max(1, Math.round(box.height * page.height))
 	};
 }
 
@@ -511,6 +508,7 @@ export async function compareDefinedTemplate(
 				key: area.id,
 				label: area.label,
 				multiline: area.kind === 'text' && /\n/.test(area.expected),
+				academicYear: area.kind === 'academicYear',
 				image: () =>
 					preparePrinted(
 						// Keep OCR sampling independent of display preview dimensions.

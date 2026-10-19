@@ -7,17 +7,21 @@ import {
 	project,
 	UNIT_CORNERS,
 	overall,
+	WIDTH,
+	HEIGHT,
 	type Corners,
 	type Check
 } from '#lib/clearance/clearance.js';
 import {
 	checkAreaText,
+	printedAreaBox,
 	compareVisual,
 	type TemplateDefinition,
 	type Box
 } from '#lib/clearance/definition.js';
 import { checkOfficeMarks, type ClearanceReport } from '#lib/clearance/report.js';
 import { error } from '@sveltejs/kit';
+import { enhancePrintedContrast, academicYearReading } from '#lib/clearance/printed.js';
 
 type Image = { data: Uint8Array; width: number; height: number };
 let running = false;
@@ -114,9 +118,20 @@ export async function checkClearance(
 		worker = await Promise.race([pending, timeout]);
 		for (const area of definition.areas) {
 			if (area.kind === 'image') {
-				const a = sample(reference, definition.corners, area.box, 64, 64),
-					b = sample(upload, corners, area.box, 64, 64);
-				const visual = compareVisual(a.data, b.data, 64, 64);
+				const visualPatch = async (image: Image, points: Corners) => {
+					const patch = sample(image, points, area.box, 256, 256);
+					return sharp(patch.data, { raw: { width: 256, height: 256, channels: 1 } })
+						.resize(64, 64)
+						.greyscale()
+						.raw()
+						.toBuffer();
+				};
+				const visual = compareVisual(
+					await visualPatch(reference, definition.corners),
+					await visualPatch(upload, corners),
+					64,
+					64
+				);
 				checks.push({
 					label: area.label,
 					verdict: visual.verdict,
@@ -136,22 +151,33 @@ export async function checkClearance(
 				[reference, definition.corners, 'Reference'],
 				[upload, corners, 'Upload']
 			] as const) {
+				const box = printedAreaBox(area);
 				const patch = sample(
 					image,
 					points,
-					area.box,
-					Math.max(100, Math.round(area.box.width * 3000)),
-					Math.max(40, Math.round(area.box.height * 2400))
+					box,
+					Math.max(100, Math.round(box.width * WIDTH * 3)),
+					Math.max(40, Math.round(box.height * HEIGHT * 3))
 				);
+				if (area.kind === 'academicYear') enhancePrintedContrast(patch.data);
 				const png = await sharp(patch.data, {
 					raw: { width: patch.width, height: patch.height, channels: 1 }
 				})
 					.extend({ top: 12, bottom: 12, left: 12, right: 12, background: '#fff' })
 					.png()
 					.toBuffer();
-				const { data } = await Promise.race([worker.recognize(png), timeout]);
+				const { data } = await Promise.race([
+					worker.recognize(png, {}, { blocks: area.kind === 'academicYear' }),
+					timeout
+				]);
 				checks.push({
-					...checkAreaText(area, { text: data.text, confidence: data.confidence }, definition),
+					...checkAreaText(
+						area,
+						area.kind === 'academicYear'
+							? academicYearReading(data)
+							: { text: data.text, confidence: data.confidence },
+						definition
+					),
 					label: `${prefix}: ${area.label}`
 				});
 			}
