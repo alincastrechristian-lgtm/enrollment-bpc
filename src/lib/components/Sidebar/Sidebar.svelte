@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CollegeLogo from '#lib/components/CollegeLogo.svelte';
 	import { authClient } from '#lib/auth-client.js';
 	import { resolve } from '$app/paths';
 	import { ArrowUpRight, LogOut, ShieldCheck } from '@lucide/svelte';
@@ -30,11 +31,7 @@
 		class="flex shrink-0 items-center gap-3 border-b border-base-300 px-6 py-6"
 		aria-label="BPC Enrollment Portal dashboard"
 	>
-		<span
-			class="grid size-11 place-items-center rounded-xl bg-primary text-xs font-black text-primary-content"
-		>
-			BPC
-		</span>
+		<CollegeLogo class="size-11" />
 		<span>
 			<span class="block text-sm font-bold tracking-tight">Enrollment Portal</span>
 			<span class="mt-1 block text-[10px] text-base-content/50">Bulacan Polytechnic College</span>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CollegeLogo from '#lib/components/CollegeLogo.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import {
@@ -28,11 +29,7 @@
 <div class="portal-auth min-h-dvh bg-base-200/50">
 	<header class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-6 sm:px-8">
 		<a href={resolve('/')} class="flex items-center gap-3" aria-label="BPC Enrollment Portal home">
-			<span
-				class="grid size-10 place-items-center rounded-xl bg-primary text-xs font-black text-primary-content"
-			>
-				BPC
-			</span>
+			<CollegeLogo class="size-10" />
 			<span>
 				<span class="block text-sm font-bold">Enrollment Portal</span>
 				<span class="mt-0.5 hidden text-[11px] text-base-content/55 sm:block">

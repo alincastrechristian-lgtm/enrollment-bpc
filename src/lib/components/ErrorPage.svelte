@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CollegeLogo from '#lib/components/CollegeLogo.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import {
@@ -96,11 +97,7 @@
 	<div class="w-full max-w-xl">
 		{#if !embedded}
 			<div class="mb-8 flex items-center justify-center gap-3">
-				<div
-					class="grid size-12 place-items-center rounded-full bg-primary text-sm font-black text-primary-content"
-				>
-					BPC
-				</div>
+				<CollegeLogo class="size-12" />
 				<div>
 					<p class="text-sm font-bold">Bulacan Polytechnic College</p>
 					<p class="text-xs text-base-content/60">Enrollment Portal</p>

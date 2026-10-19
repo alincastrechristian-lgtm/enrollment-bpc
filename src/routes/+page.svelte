@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CollegeLogo from '#lib/components/CollegeLogo.svelte';
 	import { resolve } from '$app/paths';
 	import ThemeController from '#lib/components/ThemeController/ThemeController.svelte';
 	import {
@@ -94,11 +95,7 @@
 				aria-label="BPC Enrollment Portal home"
 				class="flex min-w-0 items-center gap-3"
 			>
-				<span
-					class="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-sm font-black text-primary-content"
-				>
-					BPC
-				</span>
+				<CollegeLogo class="size-11" />
 				<span class="min-w-0">
 					<span class="block text-sm font-bold tracking-tight">Enrollment Portal</span>
 					<span class="mt-0.5 hidden text-[11px] text-base-content/55 sm:block">
@@ -342,8 +339,8 @@
 					<ShieldCheck class="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
 					<p class="text-xs leading-relaxed text-base-content/60">
 						<span class="font-semibold text-base-content/80">Already have an account?</span>
-						 No need to register again. Sign in using the email and password associated with your BPC
-						portal account.
+						No need to register again. Sign in using the email and password associated with your BPC portal
+						account.
 					</p>
 				</div>
 			</div>
@@ -479,7 +476,7 @@
 							>
 								Forgot password
 							</a>
-							 and enter your account’s email address to request a reset link. If you no longer have access
+							and enter your account’s email address to request a reset link. If you no longer have access
 							to that email, contact the Registrar’s Office.
 						</p>
 					</details>
@@ -532,11 +529,7 @@
 			class="mx-auto flex max-w-7xl flex-col justify-between gap-5 px-5 py-7 sm:flex-row sm:items-center sm:px-8 lg:px-10"
 		>
 			<div class="flex items-center gap-3">
-				<span
-					class="grid size-9 place-items-center rounded-lg border border-base-300 bg-base-100 text-[11px] font-black text-primary"
-				>
-					BPC
-				</span>
+				<CollegeLogo class="size-9" />
 				<div>
 					<p class="text-xs font-bold">Bulacan Polytechnic College</p>
 					<p class="mt-1 text-[11px] text-base-content/50">College Enrollment System</p>
