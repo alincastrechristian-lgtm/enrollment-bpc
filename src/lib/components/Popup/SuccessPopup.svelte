@@ -28,44 +28,43 @@
 
 {#if visible}
 	<PopupCard onClose={close}>
-		<div class="card-body gap-6 p-6">
+		<div class="portal-dialog-form">
 			<!-- Header -->
-			<div class="flex items-center gap-4">
-				<div
-					class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-success/10 text-success"
-				>
-					<CircleCheck class="size-7" />
+			<div class="portal-dialog-header items-center">
+				<div class="portal-dialog-icon bg-success/10 text-success">
+					<CircleCheck class="size-6" />
 				</div>
 
 				<div class="min-w-0">
-					<h2 class="text-lg font-semibold">
+					<h2 class="portal-dialog-title">
 						{title}
 					</h2>
-
-					<p class="mt-1 text-sm wrap-break-word text-base-content/60">
-						{message}
-					</p>
 				</div>
 			</div>
 
 			<!-- Success hint -->
-			{#if hintText}
-				<div class="rounded-xl border border-success/20 bg-success/5 p-4">
-					<div class="flex items-start gap-3">
-						<Check class="mt-0.5 size-4 shrink-0 text-success" />
+			<div class="portal-dialog-body">
+				<p class="text-sm leading-relaxed wrap-break-word text-base-content/70">{message}</p>
+				{#if hintText}
+					<div class="rounded-xl border border-success/20 bg-success/5 p-4">
+						<div class="flex items-start gap-3">
+							<Check class="mt-0.5 size-4 shrink-0 text-success" />
 
-						<p class="text-sm text-base-content/70">
-							{hintText}
-						</p>
+							<p class="text-sm text-base-content/70">
+								{hintText}
+							</p>
+						</div>
 					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
 
 			<!-- Action -->
-			<button class="btn w-full btn-primary" onclick={close}>
-				<Check class="size-4" />
-				{buttonText}
-			</button>
+			<div class="portal-dialog-footer">
+				<button class="btn btn-primary" onclick={close}>
+					<Check class="size-4" />
+					{buttonText}
+				</button>
+			</div>
 		</div>
 	</PopupCard>
 {/if}

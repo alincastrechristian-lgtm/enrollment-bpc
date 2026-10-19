@@ -116,18 +116,17 @@
 
 <dialog
 	bind:this={dialog}
-	class="fixed inset-0 z-0 m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0"
+	class="fixed inset-0 z-0 m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0 backdrop:bg-transparent"
 	aria-labelledby="program-form-title"
+	aria-describedby="program-form-description"
 	oncancel={(event) => {
 		if (busy) event.preventDefault();
 	}}
 >
 	<PopupCard onClose={close} class="max-w-xl">
-		<form class="flex max-h-[85dvh] flex-col overflow-hidden rounded-box" onsubmit={save}>
-			<div class="flex items-start gap-4 border-b border-base-300 p-6">
-				<div
-					class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-				>
+		<form class="portal-dialog-form" onsubmit={save}>
+			<div class="portal-dialog-header">
+				<div class="portal-dialog-icon bg-primary/10 text-primary">
 					{#if selectedProgram}
 						<Pencil class="size-6" aria-hidden="true" />
 					{:else}
@@ -135,11 +134,11 @@
 					{/if}
 				</div>
 				<div class="min-w-0 flex-1">
-					<h2 id="program-form-title" class="text-lg font-semibold">
+					<h2 id="program-form-title" class="portal-dialog-title">
 						{selectedProgram ? 'Edit' : 'New'}
 						Program
 					</h2>
-					<p class="mt-1 text-sm text-base-content/60">
+					<p id="program-form-description" class="portal-dialog-description">
 						{selectedProgram ? 'Update details and availability.' : 'Add a program to the catalog.'}
 					</p>
 				</div>
@@ -147,13 +146,13 @@
 					type="button"
 					disabled={busy}
 					onclick={close}
-					class="btn btn-circle btn-ghost btn-sm"
+					class="btn btn-square shrink-0 btn-ghost btn-sm"
 					aria-label="Close program form"
 				>
 					<X class="size-4" aria-hidden="true" />
 				</button>
 			</div>
-			<fieldset disabled={busy} class="min-w-0 space-y-5 overflow-y-auto p-6">
+			<fieldset disabled={busy} class="portal-dialog-body min-w-0">
 				<div class="space-y-2">
 					<label for="program-name" class="text-sm font-semibold">Name</label>
 					<input
@@ -231,16 +230,16 @@
 					</span>
 				</label>
 			</fieldset>
-			<div class="flex gap-2 border-t border-base-300 bg-base-200/40 p-6">
+			<div class="portal-dialog-footer">
 				<button
 					type="button"
-					class="btn flex-1 border-base-300 btn-outline"
+					class="btn border-base-300 btn-outline"
 					disabled={busy}
 					onclick={close}
 				>
 					Cancel
 				</button>
-				<button type="submit" class="btn flex-1 btn-primary" disabled={busy}>
+				<button type="submit" class="btn btn-primary" disabled={busy}>
 					{#if busy}
 						<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>
 					{/if}

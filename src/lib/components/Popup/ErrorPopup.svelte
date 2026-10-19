@@ -36,44 +36,45 @@
 
 {#if visible}
 	<PopupCard onClose={close}>
-		<div class="card-body gap-6 p-6">
+		<div class="portal-dialog-form">
 			<!-- Header -->
-			<div class="flex items-center gap-4">
-				<div class={`flex size-14 shrink-0 items-center justify-center rounded-xl ${iconColor}`}>
-					<TriangleAlert class="size-7" />
+			<div class="portal-dialog-header items-center">
+				<div class={`portal-dialog-icon ${iconColor}`}>
+					<TriangleAlert class="size-6" />
 				</div>
 
 				<div class="min-w-0">
-					<h2 class="text-lg font-semibold">
+					<h2 class="portal-dialog-title">
 						{title}
 					</h2>
-
-					<p class="mt-1 text-sm wrap-break-word text-base-content/60">
-						{message}
-					</p>
 				</div>
 			</div>
 
 			<!-- Error hint -->
-			{#if hintText}
-				<div class={`rounded-xl border p-4 ${hintColor}`}>
-					<div class="flex items-start gap-3">
-						<TriangleAlert
-							class={`mt-0.5 size-4 shrink-0 ${tone === 'warning' ? 'text-warning' : 'text-error'}`}
-						/>
+			<div class="portal-dialog-body">
+				<p class="text-sm leading-relaxed wrap-break-word text-base-content/70">{message}</p>
+				{#if hintText}
+					<div class={`rounded-xl border p-4 ${hintColor}`}>
+						<div class="flex items-start gap-3">
+							<TriangleAlert
+								class={`mt-0.5 size-4 shrink-0 ${tone === 'warning' ? 'text-warning' : 'text-error'}`}
+							/>
 
-						<p class="text-sm text-base-content/70">
-							{hintText}
-						</p>
+							<p class="text-sm text-base-content/70">
+								{hintText}
+							</p>
+						</div>
 					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
 
 			<!-- Action -->
-			<button class="btn w-full border-base-300 btn-outline" onclick={close}>
-				<X class="size-4" />
-				{buttonText}
-			</button>
+			<div class="portal-dialog-footer">
+				<button class="btn border-base-300 btn-outline" onclick={close}>
+					<X class="size-4" />
+					{buttonText}
+				</button>
+			</div>
 		</div>
 	</PopupCard>
 {/if}

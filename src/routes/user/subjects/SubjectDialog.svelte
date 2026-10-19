@@ -85,18 +85,17 @@
 
 <dialog
 	bind:this={dialog}
-	class="fixed inset-0 z-0 m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0"
+	class="fixed inset-0 z-0 m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0 backdrop:bg-transparent"
 	aria-labelledby="subject-form-title"
+	aria-describedby="subject-form-description"
 	oncancel={(event) => {
 		if (busy) event.preventDefault();
 	}}
 >
 	<PopupCard onClose={close} class="max-w-xl">
-		<form class="flex max-h-[85dvh] flex-col overflow-hidden rounded-box" onsubmit={save}>
-			<div class="flex shrink-0 items-start gap-4 border-b border-base-300 p-6">
-				<div
-					class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-				>
+		<form class="portal-dialog-form" onsubmit={save}>
+			<div class="portal-dialog-header">
+				<div class="portal-dialog-icon bg-primary/10 text-primary">
 					{#if selectedSubject}
 						<Pencil class="size-6" aria-hidden="true" />
 					{:else}
@@ -104,11 +103,11 @@
 					{/if}
 				</div>
 				<div class="min-w-0 flex-1">
-					<h2 id="subject-form-title" class="text-lg font-semibold">
+					<h2 id="subject-form-title" class="portal-dialog-title">
 						{selectedSubject ? 'Edit' : 'New'}
 						Subject
 					</h2>
-					<p class="mt-1 text-sm text-base-content/60">
+					<p id="subject-form-description" class="portal-dialog-description">
 						{selectedSubject ? 'Update details and availability.' : 'Add a subject to the catalog.'}
 					</p>
 				</div>
@@ -116,14 +115,14 @@
 					type="button"
 					disabled={busy}
 					onclick={close}
-					class="btn btn-circle btn-ghost btn-sm"
+					class="btn btn-square shrink-0 btn-ghost btn-sm"
 					aria-label="Close subject form"
 				>
 					<X class="size-4" aria-hidden="true" />
 				</button>
 			</div>
-			<div class="min-h-0 flex-1 overflow-y-auto">
-				<fieldset disabled={busy} class="min-w-0 space-y-5 p-6">
+			<div class="portal-dialog-body">
+				<fieldset disabled={busy} class="min-w-0 space-y-5">
 					<div class="space-y-2">
 						<label for="subject-name" class="text-sm font-semibold">Name</label>
 						<input
@@ -226,16 +225,16 @@
 					</label>
 				</fieldset>
 			</div>
-			<div class="flex shrink-0 gap-2 border-t border-base-300 bg-base-200 p-6">
+			<div class="portal-dialog-footer">
 				<button
 					type="button"
-					class="btn flex-1 border-base-300 btn-outline"
+					class="btn border-base-300 btn-outline"
 					disabled={busy}
 					onclick={close}
 				>
 					Cancel
 				</button>
-				<button type="submit" class="btn flex-1 btn-primary" disabled={busy}>
+				<button type="submit" class="btn btn-primary" disabled={busy}>
 					{#if busy}
 						<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>
 					{/if}

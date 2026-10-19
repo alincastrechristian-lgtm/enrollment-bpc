@@ -184,20 +184,22 @@
 
 <dialog
 	bind:this={dialog}
-	class="modal"
+	class="portal-dialog modal"
 	aria-labelledby="change-record-title"
 	oncancel={(event) => {
 		if (busy) event.preventDefault();
 	}}
 	onclose={() => (isOpen = false)}
 >
-	<div class="portal-panel popup-accent-panel modal-box max-w-lg space-y-5 p-6">
-		<header class="flex items-start justify-between gap-3">
-			<div>
-				<h2 id="change-record-title" class="text-xl font-bold">
+	<div
+		class="popup-accent-panel portal-dialog-panel modal-box flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden p-0"
+	>
+		<header class="portal-dialog-header justify-between">
+			<div class="min-w-0">
+				<h2 id="change-record-title" class="portal-dialog-title">
 					{action === 'voided' ? 'Void enrollment' : 'Reopen enrollment'}
 				</h2>
-				<p class="mt-2 text-sm text-base-content/60">
+				<p class="portal-dialog-description">
 					Enter a reason. It will be saved in the audit history and included in the student
 					notification.
 				</p>
@@ -212,24 +214,26 @@
 				<X class="size-5" />
 			</button>
 		</header>
-		<label class="block space-y-2">
-			<span class="text-sm font-semibold">Reason</span>
-			<textarea
-				class="textarea min-h-28 w-full bg-base-200"
-				bind:value={reason}
-				maxlength="1000"
-				minlength="5"
-				required={isOpen}
-				disabled={busy}
-				placeholder="Explain what needs to be corrected..."></textarea>
-		</label>
-		{#if message}
-			<p role="alert" class="text-sm text-error">{message}</p>
-		{/if}
-		<footer class="flex justify-end gap-2">
+		<div class="portal-dialog-body">
+			<label class="block space-y-2">
+				<span class="text-sm font-semibold">Reason</span>
+				<textarea
+					class="textarea min-h-28 w-full bg-base-200"
+					bind:value={reason}
+					maxlength="1000"
+					minlength="5"
+					required={isOpen}
+					disabled={busy}
+					placeholder="Explain what needs to be corrected..."></textarea>
+			</label>
+			{#if message}
+				<p role="alert" class="text-sm text-error">{message}</p>
+			{/if}
+		</div>
+		<footer class="portal-dialog-footer">
 			<button
 				type="button"
-				class="btn btn-ghost btn-sm"
+				class="btn border-base-300 btn-outline"
 				disabled={busy}
 				onclick={() => dialog.close()}
 			>
@@ -237,7 +241,7 @@
 			</button>
 			<button
 				type="button"
-				class="btn btn-primary btn-sm"
+				class="btn btn-primary"
 				disabled={busy || reason.trim().length < 5}
 				onclick={confirm}
 			>

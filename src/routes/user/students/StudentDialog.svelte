@@ -168,7 +168,7 @@
 
 <dialog
 	bind:this={dialog}
-	class="modal"
+	class="portal-dialog modal"
 	aria-labelledby="new-student-title"
 	aria-describedby="new-student-description"
 	oncancel={(event) => {
@@ -176,32 +176,22 @@
 	}}
 >
 	<div
-		class="portal-panel popup-accent-panel modal-box flex max-h-[90dvh] max-w-2xl flex-col overflow-hidden p-0 shadow-xl"
+		class="popup-accent-panel portal-dialog-panel modal-box flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden p-0"
 	>
-		<header
-			class="flex shrink-0 items-start justify-between gap-4 border-b border-base-300 bg-base-200/40 p-5 sm:p-6"
-		>
-			<div class="flex items-start gap-4">
-				<span
-					class="grid size-12 shrink-0 place-items-center rounded-2xl border border-primary/15 bg-primary/10 text-primary"
-				>
+		<header class="portal-dialog-header justify-between">
+			<div class="flex min-w-0 items-start gap-4">
+				<span class="portal-dialog-icon bg-primary/10 text-primary">
 					{#if editingUserId}
 						<Pencil class="size-6" aria-hidden="true" />
 					{:else}
 						<UserPlus class="size-6" aria-hidden="true" />
 					{/if}
 				</span>
-				<div>
-					<p class="mb-1 text-[10px] font-bold tracking-widest text-primary uppercase">
-						{editingUserId ? 'Student record' : 'Student registration'}
-					</p>
-					<h2 id="new-student-title" class="text-xl font-bold tracking-tight">
+				<div class="min-w-0">
+					<h2 id="new-student-title" class="portal-dialog-title">
 						{editingUserId ? 'Edit student' : 'Create student'}
 					</h2>
-					<p
-						id="new-student-description"
-						class="mt-1.5 max-w-sm text-sm leading-relaxed text-base-content/60"
-					>
+					<p id="new-student-description" class="portal-dialog-description max-w-sm">
 						{editingUserId
 							? 'Update personal details and account contact information.'
 							: 'Start with their personal details, then choose when to enroll.'}
@@ -218,12 +208,9 @@
 				<X class="size-4" aria-hidden="true" />
 			</button>
 		</header>
-		<form onsubmit={save} class="flex min-h-0 flex-col" aria-busy={busy}>
-			<div class="min-h-0 flex-1 overflow-y-auto">
-				<fieldset
-					disabled={busy || !!savedUserId}
-					class="grid min-w-0 gap-4 p-5 sm:grid-cols-2 sm:p-6"
-				>
+		<form onsubmit={save} class="portal-dialog-form" aria-busy={busy}>
+			<div class="portal-dialog-body">
+				<fieldset disabled={busy || !!savedUserId} class="grid min-w-0 gap-4 sm:grid-cols-2">
 					<div class="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
 						<h3 class="text-sm font-bold">Personal details</h3>
 						<span class="text-xs text-base-content/45">Required unless marked optional</span>
@@ -370,9 +357,7 @@
 					{/if}
 				</fieldset>
 			</div>
-			<div
-				class="flex shrink-0 flex-col-reverse gap-3 border-t border-base-300 bg-base-200/30 p-5 sm:flex-row sm:justify-end sm:px-6 sm:py-4"
-			>
+			<div class="portal-dialog-footer">
 				{#if savedUserId}
 					<a
 						class="btn btn-primary"
@@ -383,7 +368,7 @@
 				{:else}
 					<button
 						type="button"
-						class="btn btn-ghost"
+						class="btn border-base-300 btn-outline"
 						disabled={busy}
 						onclick={() => dialog.close()}
 					>

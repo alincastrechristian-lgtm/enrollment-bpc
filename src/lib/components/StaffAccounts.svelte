@@ -420,7 +420,7 @@
 
 <dialog
 	bind:this={staffDialog}
-	class="modal"
+	class="portal-dialog modal"
 	oncancel={(event) => {
 		if (creating) event.preventDefault();
 	}}
@@ -428,25 +428,22 @@
 	aria-describedby="new-staff-description"
 >
 	<div
-		class="popup-accent-panel modal-box max-w-lg overflow-y-auto rounded-2xl p-0"
-		style:--popup-accent-height="0.25rem"
+		class="popup-accent-panel portal-dialog-panel modal-box flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden p-0"
 	>
-		<form class="space-y-6 p-6 sm:p-8" aria-busy={creating} onsubmit={saveStaff}>
-			<div class="flex items-start gap-4">
-				<div
-					class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-				>
+		<form class="portal-dialog-form" aria-busy={creating} onsubmit={saveStaff}>
+			<div class="portal-dialog-header">
+				<div class="portal-dialog-icon bg-primary/10 text-primary">
 					{#if editingStaffId}
-						<Pencil class="size-7" aria-hidden="true" />
+						<Pencil class="size-6" aria-hidden="true" />
 					{:else}
-						<UserPlus class="size-7" aria-hidden="true" />
+						<UserPlus class="size-6" aria-hidden="true" />
 					{/if}
 				</div>
 				<div class="min-w-0 flex-1">
-					<h2 id="new-staff-title" class="text-lg font-semibold">
+					<h2 id="new-staff-title" class="portal-dialog-title">
 						{editingStaffId ? `Edit ${noun}` : `New ${noun}`}
 					</h2>
-					<p id="new-staff-description" class="mt-1 text-sm text-base-content/60">
+					<p id="new-staff-description" class="portal-dialog-description">
 						{editingStaffId
 							? `Update the ${noun}’s personal details and sign-in email.`
 							: `Enter the ${noun}’s name and email address.`}
@@ -454,7 +451,7 @@
 				</div>
 				<button
 					type="button"
-					class="btn btn-circle btn-ghost btn-sm"
+					class="btn btn-square shrink-0 btn-ghost btn-sm"
 					aria-label={`Close ${noun} dialog`}
 					disabled={creating}
 					onclick={() => staffDialog.close()}
@@ -463,94 +460,89 @@
 				</button>
 			</div>
 
-			<fieldset class="grid gap-4 sm:grid-cols-2" disabled={creating || saved}>
-				<label class="space-y-2">
-					<span class="text-sm font-semibold">First name</span>
-					<input
-						class="input w-full bg-base-200"
-						bind:value={firstName}
-						required
-						maxlength="100"
-						autocomplete="given-name"
-						placeholder="First name"
-					/>
-				</label>
-				<label class="space-y-2">
-					<span class="text-sm font-semibold">
-						Middle name <span class="font-normal text-base-content/50">(optional)</span>
-					</span>
-					<input
-						class="input w-full bg-base-200"
-						bind:value={middleName}
-						maxlength="100"
-						autocomplete="additional-name"
-						placeholder="Middle name"
-					/>
-				</label>
-				<label class="space-y-2 sm:col-span-2">
-					<span class="text-sm font-semibold">Last name</span>
-					<input
-						class="input w-full bg-base-200"
-						bind:value={lastName}
-						required
-						maxlength="100"
-						autocomplete="family-name"
-						placeholder="Last name"
-					/>
-				</label>
-				<div class="space-y-2 sm:col-span-2">
-					<label for="staff-email" class="text-sm font-semibold">Email</label>
-					<div class="input-bordered input flex w-full items-center gap-3 bg-base-200">
-						<Mail class="size-4 shrink-0 text-base-content/50" aria-hidden="true" />
+			<div class="portal-dialog-body">
+				<fieldset class="grid gap-4 sm:grid-cols-2" disabled={creating || saved}>
+					<label class="space-y-2">
+						<span class="text-sm font-semibold">First name</span>
 						<input
-							id="staff-email"
-							name="email"
-							bind:value={email}
-							type="email"
-							placeholder={`${isAdmin ? 'admin' : 'registrar'}@example.com`}
-							autocomplete="email"
+							class="input w-full bg-base-200"
+							bind:value={firstName}
 							required
-							class="min-w-0 grow text-sm"
+							maxlength="100"
+							autocomplete="given-name"
+							placeholder="First name"
 						/>
+					</label>
+					<label class="space-y-2">
+						<span class="text-sm font-semibold">
+							Middle name <span class="font-normal text-base-content/50">(optional)</span>
+						</span>
+						<input
+							class="input w-full bg-base-200"
+							bind:value={middleName}
+							maxlength="100"
+							autocomplete="additional-name"
+							placeholder="Middle name"
+						/>
+					</label>
+					<label class="space-y-2 sm:col-span-2">
+						<span class="text-sm font-semibold">Last name</span>
+						<input
+							class="input w-full bg-base-200"
+							bind:value={lastName}
+							required
+							maxlength="100"
+							autocomplete="family-name"
+							placeholder="Last name"
+						/>
+					</label>
+					<div class="space-y-2 sm:col-span-2">
+						<label for="staff-email" class="text-sm font-semibold">Email</label>
+						<div class="input-bordered input flex w-full items-center gap-3 bg-base-200">
+							<Mail class="size-4 shrink-0 text-base-content/50" aria-hidden="true" />
+							<input
+								id="staff-email"
+								name="email"
+								bind:value={email}
+								type="email"
+								placeholder={`${isAdmin ? 'admin' : 'registrar'}@example.com`}
+								autocomplete="email"
+								required
+								class="min-w-0 grow text-sm"
+							/>
+						</div>
 					</div>
-				</div>
-			</fieldset>
-
-			<div class="space-y-3">
-				<div class="flex flex-col-reverse gap-2 sm:flex-row">
-					<button
-						type="button"
-						class="btn flex-1 border-base-300 btn-outline"
-						disabled={creating}
-						onclick={() => staffDialog.close()}
-					>
-						Cancel
-					</button>
-					<button
-						type="submit"
-						disabled={creating || saved || !dirty}
-						class="btn flex-1 btn-primary"
-					>
-						{#if creating}
-							<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
-						{:else if !editingStaffId}
-							<Plus class="size-4" aria-hidden="true" />
-						{/if}
-						{creating
-							? editingStaffId
-								? 'Saving…'
-								: 'Creating…'
-							: editingStaffId
-								? 'Save changes'
-								: `Create ${noun}`}
-					</button>
-				</div>
+				</fieldset>
+				{#if !editingStaffId}
+					<p class="text-xs leading-relaxed text-base-content/55">
+						An account setup link will be sent to this email. The {noun} chooses their own password.
+					</p>
+				{/if}
 			</div>
-			{#if !editingStaffId}
-				<p class="text-xs leading-relaxed text-base-content/55">
-					An account setup link will be sent to this email. The {noun} chooses their own password.
-				</p>
-			{/if}
+			<div class="portal-dialog-footer">
+				<button
+					type="button"
+					class="btn border-base-300 btn-outline"
+					disabled={creating}
+					onclick={() => staffDialog.close()}
+				>
+					Cancel
+				</button>
+				<button type="submit" disabled={creating || saved || !dirty} class="btn btn-primary">
+					{#if creating}
+						<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
+					{:else if !editingStaffId}
+						<Plus class="size-4" aria-hidden="true" />
+					{/if}
+					{creating
+						? editingStaffId
+							? 'Saving…'
+							: 'Creating…'
+						: editingStaffId
+							? 'Save changes'
+							: `Create ${noun}`}
+				</button>
+			</div>
 		</form>
 	</div>
 </dialog>

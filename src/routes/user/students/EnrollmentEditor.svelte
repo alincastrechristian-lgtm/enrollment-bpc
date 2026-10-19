@@ -671,21 +671,19 @@
 
 <dialog
 	bind:this={outstandingDialog}
-	class="modal"
+	class="portal-dialog modal"
 	aria-labelledby="outstanding-dialog-title"
 	aria-describedby="outstanding-dialog-description"
 >
 	<div
-		class="portal-panel popup-accent-panel modal-box flex max-h-[85dvh] max-w-3xl flex-col overflow-hidden p-0 shadow-xl"
+		class="popup-accent-panel portal-dialog-panel modal-box flex max-h-[calc(100dvh-2rem)] max-w-3xl flex-col overflow-hidden p-0"
 	>
-		<header
-			class="flex items-start justify-between gap-4 border-b border-base-300 bg-base-200/40 p-5 sm:p-6"
-		>
-			<div>
-				<h2 id="outstanding-dialog-title" class="text-xl font-bold">
+		<header class="portal-dialog-header justify-between">
+			<div class="min-w-0">
+				<h2 id="outstanding-dialog-title" class="portal-dialog-title">
 					Failed and incomplete subjects
 				</h2>
-				<p id="outstanding-dialog-description" class="mt-2 text-sm text-base-content/60">
+				<p id="outstanding-dialog-description" class="portal-dialog-description">
 					Latest finalized results from enrollment history. Subjects passed on a later attempt are
 					excluded.
 				</p>
@@ -740,12 +738,8 @@
 				</li>
 			{/each}
 		</ul>
-		<footer class="flex shrink-0 justify-end border-t border-base-300 bg-base-200/30 p-4 sm:px-6">
-			<button
-				type="button"
-				class="btn btn-primary btn-sm"
-				onclick={() => outstandingDialog.close()}
-			>
+		<footer class="portal-dialog-footer">
+			<button type="button" class="btn btn-primary" onclick={() => outstandingDialog.close()}>
 				Done
 			</button>
 		</footer>

@@ -69,7 +69,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		</script>
 		<Topbar pageTitle={metadata.pageTitle} pageDescription={metadata.pageDescription} backHref={metadata.backHref} />
 		{#key mode+revision}
-			{#if mode==='enroll'}<Editor data={{student:{...applicant,studentId:applicant.applicationId,userId:'u',currentEnrollmentId:null,semester:1},program,curriculum,entries,subjects,schoolYearStart:2026}} />
+			{#if mode==='enroll'}<Editor data={{student:{...applicant,studentId:applicant.applicationId,userId:'u',currentEnrollmentId:null,semester:1},program,curriculum,entries,subjects,prerequisites:{requirements:[],attempts:[]},schoolYearStart:2026}} />
 			{:else if mode==='student'}<Student data={{student}} />
 			{:else if mode==='my-enrollment'}<MyEnrollment data={{record:{studentId:student.studentData.studentId,currentEnrollmentId:'current',enrollments:[{...current,finalizedGrades:true},historical]}}} />
 			{:else if mode==='my-enrollment-empty'}<MyEnrollment data={{record:null}} />

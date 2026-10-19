@@ -49,17 +49,26 @@
 	});
 </script>
 
-{#snippet contents()}
-	<h2 id={popup ? 'document-popup-title' : 'document-notice-title'} class="text-lg font-bold">
+{#snippet title()}
+	<h2
+		id={popup ? 'document-popup-title' : 'document-notice-title'}
+		class={popup ? 'portal-dialog-title' : 'text-lg font-bold'}
+	>
 		{missing.length ? 'Upload your required documents' : 'Documents awaiting verification'}
 	</h2>
+{/snippet}
+
+{#snippet message()}
 	<p class="mt-2 text-sm text-base-content/70">
 		{missing.length
 			? `The Registrar needs ${missing.map((item) => DOCUMENT_LABELS[item.kind]).join(', ')}. Upload every requested document before requesting final-semester enrollment.`
 			: 'Your uploads are with the Registrar. All requested documents must be verified before final-semester enrollment.'}
 	</p>
+{/snippet}
+
+{#snippet uploadLink()}
 	<a
-		class="btn mt-4 btn-primary btn-sm"
+		class={popup ? 'btn btn-primary' : 'btn mt-4 btn-primary btn-sm'}
 		href={`${resolve('/user/enrollment')}#required-documents`}
 		onclick={() => dialog?.close()}
 	>
@@ -68,11 +77,17 @@
 {/snippet}
 
 {#if popup}
-	<dialog bind:this={dialog} class="modal" aria-labelledby="document-popup-title">
-		<div class="modal-box">
-			{@render contents()}
-			<form method="dialog" class="modal-action">
-				<button class="btn btn-ghost btn-sm">Remind me later</button>
+	<dialog bind:this={dialog} class="portal-dialog modal" aria-labelledby="document-popup-title">
+		<div
+			class="popup-accent-panel portal-dialog-panel modal-box flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden p-0"
+		>
+			<header class="portal-dialog-header">{@render title()}</header>
+			<div class="portal-dialog-body">
+				{@render message()}
+			</div>
+			<form method="dialog" class="portal-dialog-footer">
+				<button class="btn border-base-300 btn-outline">Remind me later</button>
+				{@render uploadLink()}
 			</form>
 		</div>
 	</dialog>
@@ -90,6 +105,8 @@
 		class="portal-panel border-warning/40 p-5 sm:p-6"
 		aria-labelledby="document-notice-title"
 	>
-		{@render contents()}
+		{@render title()}
+		{@render message()}
+		{@render uploadLink()}
 	</section>
 {/if}
