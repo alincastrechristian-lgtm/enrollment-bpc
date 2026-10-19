@@ -469,3 +469,18 @@ for (const role of [null, 'unknown']) {
 		await assert.rejects(f.load('u', role), { status: role ? 403 : 401 });
 	});
 }
+
+test('student enrollment page returns only the explicit current enrollment, never newer or private history', async (t) => {
+	const f = fixture(t);
+	assert.deepEqual(
+		(await f.history()).record.enrollments.map((entry) => entry.id),
+		['current']
+	);
+	assert.equal((await f.history('empty')).record, null);
+	f.sqlite.exec("UPDATE student SET enrollment_id=NULL WHERE user_id='u'");
+	assert.deepEqual((await f.history()).record.enrollments, []);
+	f.sqlite.exec(
+		"UPDATE student SET enrollment_id=NULL WHERE user_id='other'; UPDATE student SET enrollment_id='private' WHERE user_id='u'"
+	);
+	assert.deepEqual((await f.history()).record.enrollments, []);
+});

@@ -32,11 +32,13 @@
 	let {
 		enrollments,
 		currentEnrollmentId,
-		studentUserId
+		studentUserId,
+		currentOnly = false
 	}: {
 		enrollments: EnrollmentHistoryEntry[];
 		currentEnrollmentId?: string | null;
 		studentUserId?: string;
+		currentOnly?: boolean;
 	} = $props();
 	let historyFilters = $state({ schoolYear: '', semester: '', status: '', programCode: '' });
 	const schoolYears = $derived(
@@ -68,6 +70,7 @@
 	const filteredEnrollments = $derived(
 		enrollments.filter(
 			(entry) =>
+				(!currentOnly || entry.id === currentEnrollmentId) &&
 				(!historyFilters.schoolYear ||
 					entry.schoolYearStart === Number(historyFilters.schoolYear)) &&
 				(!historyFilters.semester || entry.semester === Number(historyFilters.semester)) &&
@@ -89,9 +92,11 @@
 <section class="space-y-4" aria-labelledby="history-heading">
 	<div class="flex flex-wrap items-center justify-between gap-3">
 		<h2 id="history-heading" class="flex items-center gap-2 text-lg font-bold">
-			<BookOpen class="size-5 text-primary" aria-hidden="true" />Enrollment history
+			<BookOpen class="size-5 text-primary" aria-hidden="true" />{currentOnly
+				? 'Current enrollment'
+				: 'Enrollment history'}
 		</h2>
-		{#if enrollments.length}
+		{#if !currentOnly && enrollments.length}
 			<button
 				type="button"
 				class="btn border-base-300 btn-outline btn-sm"
@@ -102,7 +107,7 @@
 			</button>
 		{/if}
 	</div>
-	{#if enrollments.length}
+	{#if !currentOnly && enrollments.length}
 		<fieldset class="portal-panel grid gap-4 p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
 			<legend class="sr-only">Filter enrollment history</legend>
 			<label class="space-y-2">
@@ -253,9 +258,11 @@
 		</article>
 	{:else}
 		<p class="portal-panel p-6 text-sm text-base-content/60">
-			{enrollments.length
-				? 'No enrollments match these filters. Try another selection or clear filters.'
-				: 'No enrollment records yet.'}
+			{currentOnly
+				? 'No current enrollment.'
+				: enrollments.length
+					? 'No enrollments match these filters. Try another selection or clear filters.'
+					: 'No enrollment records yet.'}
 		</p>
 	{/each}
 </section>

@@ -20,6 +20,7 @@
 	{/if}
 	{#key data.record?.studentId}
 		<EnrollmentHistory
+			currentOnly
 			enrollments={data.record?.enrollments ?? []}
 			currentEnrollmentId={data.record?.currentEnrollmentId}
 		/>

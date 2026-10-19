@@ -56,7 +56,7 @@ for (const [role, expected] of [
 			'Settings'
 		]
 	],
-	['student', ['Dashboard', 'Enrollment', 'Curriculum', 'Notifications', 'Settings']]
+	['student', ['Dashboard', 'Enrollment', 'Notifications', 'Settings']]
 ]) {
 	test(`${role} keeps existing navigation and receives the correct settings links`, () => {
 		const items = getSidebarItems(role);

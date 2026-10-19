@@ -81,59 +81,13 @@ function fixture(t) {
 	return { sqlite, index, detail, event, dependencies };
 }
 
-test('student sees full assigned curriculum even after a newer revision becomes active', (t) => {
+test('students cannot load curriculum catalog or details, including their assigned curriculum', (t) => {
 	const f = fixture(t);
-	const result = f.index(f.event());
-	assert.equal(result.isStudent, true);
-	assert.equal(result.canManage, false);
-	assert.equal(result.studentCurriculum.curriculum.id, 'assigned');
-	assert.equal(result.studentCurriculum.curriculum.status, 'archived');
-	assert.deepEqual(
-		result.studentCurriculum.entries.map((entry) => [
-			entry.subjectCode,
-			entry.yearLevel,
-			entry.semester,
-			entry.units
-		]),
-		[
-			['IS101', 1, 1, 3],
-			['IS201', 2, 2, 4]
-		]
-	);
-	assert.deepEqual(result.records, []);
-	const detail = f.detail(f.event());
-	assert.equal(detail.curriculum.id, 'assigned');
-	assert.equal(detail.canManage, false);
-});
-
-test('student cannot open other curricula, unpublished drafts, or missing records directly', (t) => {
-	const f = fixture(t);
-	for (const curriculumId of ['new', 'draft', 'missing']) {
-		assert.throws(() => f.detail({ ...f.event(), params: { curriculumId } }), hasStatus(404));
+	assert.throws(() => f.index(f.event()), hasStatus(403));
+	for (const curriculumId of ['assigned', 'new', 'draft', 'missing']) {
+		assert.throws(() => f.detail({ ...f.event(), params: { curriculumId } }), hasStatus(403));
 	}
-	assert.throws(() => f.detail(f.event(Role.STUDENT, 'other')), hasStatus(404));
 });
-
-for (const [name, sql] of [
-	['no student record', "DELETE FROM student WHERE user_id='u'"],
-	['no current enrollment', "UPDATE student SET enrollment_id=null WHERE user_id='u'"],
-	[
-		'another student enrollment linked',
-		"UPDATE student SET enrollment_id=null WHERE user_id='other'; UPDATE student SET enrollment_id='foreign' WHERE user_id='u'"
-	],
-	['an unpublished curriculum linked', "UPDATE enrollment SET curriculum_id='draft' WHERE id='own'"]
-]) {
-	test(`${name} returns an empty student view without falling back to the program curriculum`, (t) => {
-		const f = fixture(t);
-		if (name === 'no student record')
-			f.sqlite.exec(
-				"UPDATE student SET enrollment_id=null WHERE user_id='u'; DELETE FROM enrollment WHERE student_id='MA-001';"
-			);
-		f.sqlite.exec(sql);
-		assert.equal(f.index(f.event()).studentCurriculum, null);
-		assert.throws(() => f.detail(f.event()), hasStatus(404));
-	});
-}
 
 test('staff retain catalog access and only admin can manage curricula', (t) => {
 	const f = fixture(t);
@@ -143,7 +97,6 @@ test('staff retain catalog access and only admin can manage curricula', (t) => {
 		const result = f.index(event);
 		assert.equal(result.total, 3);
 		assert.equal(result.canManage, role === Role.ADMIN);
-		assert.equal(result.isStudent, false);
 		assert.equal(f.detail({ ...event, params: { curriculumId: 'draft' } }).curriculum.id, 'draft');
 	}
 });

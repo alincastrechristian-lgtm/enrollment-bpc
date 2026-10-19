@@ -5,5 +5,13 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	validateUser(locals, [Role.STUDENT]);
-	return { record: await getStudentEnrollmentHistory(locals.user.id) };
+	const record = await getStudentEnrollmentHistory(locals.user.id);
+	return {
+		record: record
+			? {
+					...record,
+					enrollments: record.enrollments.filter((entry) => entry.id === record.currentEnrollmentId)
+				}
+			: null
+	};
 };

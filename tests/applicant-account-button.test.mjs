@@ -503,9 +503,11 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('heading', { name: 'ENROLLMENT', exact: true })).toBeVisible();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 		await expect(
-			page.getByText('Review your enrollment history, subjects, and grades.', { exact: true })
+			page.getByText('Review your current enrollment, subjects, and grades.', { exact: true })
 		).toBeVisible();
-		await expect(page.getByText('Showing 2 of 2 enrollments', { exact: true })).toBeVisible();
+		await expect(
+			page.getByRole('heading', { name: 'Current enrollment', exact: true })
+		).toBeVisible();
 		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
 		await expect(
 			page
@@ -516,23 +518,18 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		).toHaveText('1.25');
 		await expect(page.getByRole('link', { name: 'View', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
-		await page.getByLabel('School year', { exact: true }).selectOption('2024');
-		await expect(page.getByText('Showing 1 of 2 enrollments', { exact: true })).toBeVisible();
-		await expect(page.getByRole('cell', { name: 'OLD101', exact: true })).toBeVisible();
-		await expect(page.getByRole('cell', { name: 'SNAP201', exact: true })).toHaveCount(0);
-		await page.getByLabel('Program', { exact: true }).selectOption('BSIS');
+		await expect(page.getByRole('cell', { name: 'OLD101', exact: true })).toHaveCount(0);
 		await expect(
-			page.getByText('No enrollments match these filters.', { exact: false })
-		).toBeVisible();
-		await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
-		await expect(page.getByText('Showing 2 of 2 enrollments', { exact: true })).toBeVisible();
+			page.getByRole('group', { name: 'Filter enrollment history', exact: true })
+		).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Clear filters', exact: true })).toHaveCount(0);
 		await page.setViewportSize({ width: 1360, height: 960 });
 		await page.screenshot({ path: path.resolve('.tmp/my-enrollment-desktop.png'), fullPage: true });
 		await page.setViewportSize({ width: 390, height: 844 });
 		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
 		await page.screenshot({ path: path.resolve('.tmp/my-enrollment-mobile.png'), fullPage: true });
 		await page.evaluate(() => window.show('my-enrollment-empty'));
-		await expect(page.getByText('No enrollment records yet.', { exact: true })).toBeVisible();
+		await expect(page.getByText('No current enrollment.', { exact: true })).toBeVisible();
 		await expect(
 			page.getByRole('group', { name: 'Filter enrollment history', exact: true })
 		).toHaveCount(0);

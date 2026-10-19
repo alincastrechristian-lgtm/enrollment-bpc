@@ -46,7 +46,7 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 	},
 	'/user/enrollment': {
 		pageTitle: 'ENROLLMENT',
-		pageDescription: 'Review your enrollment history, subjects, and grades.'
+		pageDescription: 'Review your current enrollment, subjects, and grades.'
 	},
 	'/user/subjects': {
 		pageTitle: 'SUBJECTS',
