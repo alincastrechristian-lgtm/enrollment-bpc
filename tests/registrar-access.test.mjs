@@ -164,7 +164,7 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 	);
 	await assert.rejects(
 		revokeAccountSessions({ userId: owner.user.id }),
-		(cause) => isHttpError(cause) && cause.status === 404
+		(cause) => isHttpError(cause) && cause.status === 403
 	);
 	await revokeAccountSessions({ userId: student.user.id });
 	assert.equal(await auth.api.getSession({ headers: studentHeaders }), null);
@@ -187,7 +187,7 @@ test('account actions enforce role boundaries, revoke sessions, ban/unban, and p
 		db.select().from(schema.session).where(eq(schema.session.userId, student.user.id)).all().length,
 		0
 	);
-	for (const userId of [owner.user.id, 'missing'])
+	for (const userId of ['missing'])
 		await assert.rejects(
 			revokeAccountSessions({ userId }),
 			(cause) => isHttpError(cause) && cause.status === 404

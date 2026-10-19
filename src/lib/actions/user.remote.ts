@@ -80,18 +80,23 @@ export const deleteStudent = command(z.object({ userId: z.string().min(1) }), ({
 	}
 });
 
-export const deleteRegistrar = command(z.object({ userId: z.string().min(1) }), ({ userId }) => {
+type StaffRole = Role.ADMIN | Role.REGISTRAR;
+
+function deleteStaffAccount(userId: string, role: StaffRole) {
+	const label = role === Role.ADMIN ? 'Administrator' : 'Registrar';
 	const { locals } = getRequestEvent();
 	validateUser(locals, [Role.ADMIN]);
+	if (role === Role.ADMIN && userId === locals.user.id)
+		error(403, 'You cannot delete your own account.');
 	try {
 		return db.transaction(
 			(tx) => {
 				const target = tx
 					.select({ id: user.id })
 					.from(user)
-					.where(and(eq(user.id, userId), eq(user.role, Role.REGISTRAR)))
+					.where(and(eq(user.id, userId), eq(user.role, role)))
 					.get();
-				if (!target) error(404, 'Registrar account not found.');
+				if (!target) error(404, `${label} account not found.`);
 
 				tx.delete(verification)
 					.where(
@@ -106,40 +111,58 @@ export const deleteRegistrar = command(z.object({ userId: z.string().min(1) }), 
 		);
 	} catch (cause) {
 		if (isHttpError(cause)) throw cause;
-		console.error('Registrar deletion failed:', cause);
-		error(500, 'Failed to delete registrar. Please try again.');
+		console.error(`${label} deletion failed:`, cause);
+		error(500, `Failed to delete ${label.toLowerCase()}. Please try again.`);
 	}
-});
+}
 
-export const setRegistrarDisabled = command(
-	z.object({ userId: z.string().min(1), disabled: z.boolean() }),
-	async ({ userId, disabled }) => {
-		const { locals, request } = getRequestEvent();
-		validateUser(locals, [Role.ADMIN]);
-		const target = db
-			.select({ id: user.id })
-			.from(user)
-			.where(and(eq(user.id, userId), eq(user.role, Role.REGISTRAR)))
-			.get();
-		if (!target) error(404, 'Registrar account not found.');
-		try {
-			if (disabled) {
-				await auth.api.banUser({
-					body: { userId, banReason: 'Registrar account disabled by an administrator.' },
-					headers: request.headers
-				});
-			} else {
-				await auth.api.unbanUser({ body: { userId }, headers: request.headers });
-			}
-			return { success: true };
-		} catch (cause) {
-			if (isAPIError(cause) && (cause.statusCode === 401 || cause.statusCode === 403))
-				error(cause.statusCode, 'You do not have permission to change registrar access.');
-			if (isAPIError(cause) && cause.statusCode === 404) error(404, 'Registrar account not found.');
-			console.error('Registrar access update failed:', cause);
-			error(500, 'Failed to update registrar access. Please try again.');
+export const deleteRegistrar = command(z.object({ userId: z.string().min(1) }), ({ userId }) =>
+	deleteStaffAccount(userId, Role.REGISTRAR)
+);
+export const deleteAdmin = command(z.object({ userId: z.string().min(1) }), ({ userId }) =>
+	deleteStaffAccount(userId, Role.ADMIN)
+);
+
+async function setStaffDisabled(userId: string, disabled: boolean, role: StaffRole) {
+	const label = role === Role.ADMIN ? 'Administrator' : 'Registrar';
+	const { locals, request } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN]);
+	if (role === Role.ADMIN && disabled && userId === locals.user.id)
+		error(403, 'You cannot disable your own account.');
+	const target = db
+		.select({ id: user.id })
+		.from(user)
+		.where(and(eq(user.id, userId), eq(user.role, role)))
+		.get();
+	if (!target) error(404, `${label} account not found.`);
+	try {
+		if (disabled) {
+			await auth.api.banUser({
+				body: { userId, banReason: `${label} account disabled by an administrator.` },
+				headers: request.headers
+			});
+		} else {
+			await auth.api.unbanUser({ body: { userId }, headers: request.headers });
 		}
+		return { success: true };
+	} catch (cause) {
+		if (isAPIError(cause) && (cause.statusCode === 401 || cause.statusCode === 403))
+			error(
+				cause.statusCode,
+				`You do not have permission to change ${label.toLowerCase()} access.`
+			);
+		if (isAPIError(cause) && cause.statusCode === 404) error(404, `${label} account not found.`);
+		console.error(`${label} access update failed:`, cause);
+		error(500, `Failed to update ${label.toLowerCase()} access. Please try again.`);
 	}
+}
+
+const staffAccessSchema = z.object({ userId: z.string().min(1), disabled: z.boolean() });
+export const setRegistrarDisabled = command(staffAccessSchema, ({ userId, disabled }) =>
+	setStaffDisabled(userId, disabled, Role.REGISTRAR)
+);
+export const setAdminDisabled = command(staffAccessSchema, ({ userId, disabled }) =>
+	setStaffDisabled(userId, disabled, Role.ADMIN)
 );
 
 export const revokeAccountSessions = command(
@@ -148,10 +171,10 @@ export const revokeAccountSessions = command(
 		const { locals, request } = getRequestEvent();
 		validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
 		const target = db.select({ role: user.role }).from(user).where(eq(user.id, userId)).get();
-		if (!target || (target.role !== Role.STUDENT && target.role !== Role.REGISTRAR))
-			error(404, 'Student or registrar account not found.');
-		if (target.role === Role.REGISTRAR && locals.user.role !== Role.ADMIN)
-			error(403, 'Only administrators can revoke registrar sessions.');
+		if (!target || ![Role.STUDENT, Role.REGISTRAR, Role.ADMIN].includes(target.role as Role))
+			error(404, 'Account not found.');
+		if (target.role !== Role.STUDENT && locals.user.role !== Role.ADMIN)
+			error(403, 'Only administrators can revoke staff sessions.');
 		try {
 			await auth.api.revokeUserSessions({ body: { userId }, headers: request.headers });
 			return { success: true };
@@ -195,6 +218,13 @@ export const resendMagicLink = command(
 			error(400, 'Email is required.');
 		}
 
+		const target = db
+			.select({ role: user.role })
+			.from(user)
+			.where(sql`lower(${user.email}) = ${email.toLowerCase()}`)
+			.get();
+		if (target?.role === Role.ADMIN && locals.user.role !== Role.ADMIN)
+			error(403, 'Only administrators can resend administrator setup links.');
 		await sendPasswordResetLink(email, request.headers);
 
 		return {
@@ -264,27 +294,34 @@ async function createUser(data: CreateUserSchema, role: Role, headers: Headers) 
 	}
 }
 
-export const createRegistrar = command(
-	createUserSchema,
-	async (data): Promise<CreateUserResult> => {
-		const { locals, request } = getRequestEvent();
-		validateUser(locals, [Role.ADMIN]);
+async function createStaffAccount(
+	data: CreateUserSchema,
+	role: StaffRole
+): Promise<CreateUserResult> {
+	const { locals, request } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN]);
 
-		const createdUser = await createUser(data, Role.REGISTRAR, request.headers);
-		let invitationSent = true;
-		try {
-			await sendPasswordResetLink(createdUser.email, request.headers);
-		} catch {
-			invitationSent = false;
-		}
-
-		return {
-			success: true,
-			invitationSent,
-			userId: createdUser.id,
-			email: createdUser.email
-		};
+	const createdUser = await createUser(data, role, request.headers);
+	let invitationSent = true;
+	try {
+		await sendPasswordResetLink(createdUser.email, request.headers);
+	} catch {
+		invitationSent = false;
 	}
+
+	return {
+		success: true,
+		invitationSent,
+		userId: createdUser.id,
+		email: createdUser.email
+	};
+}
+
+export const createRegistrar = command(createUserSchema, (data) =>
+	createStaffAccount(data, Role.REGISTRAR)
+);
+export const createAdmin = command(createUserSchema, (data) =>
+	createStaffAccount(data, Role.ADMIN)
 );
 
 export const createStudent = command(createStudentSchema, async (data) => {
@@ -387,52 +424,59 @@ function saveAccountInformation(
 	return { success: true, userId, emailChanged };
 }
 
-export const updateRegistrar = command(
-	createUserSchema.extend({
-		userId: z.string().min(1),
-		original: z.object({
-			name: z.string(),
-			firstName: z.string(),
-			middleName: z.string(),
-			lastName: z.string(),
-			email: z.string()
-		})
-	}),
-	(data) => {
-		const { locals } = getRequestEvent();
-		validateUser(locals, [Role.ADMIN]);
-		try {
-			return db.transaction(
-				(tx) => {
-					const current = tx
-						.select({
-							name: user.name,
-							firstName: user.firstName,
-							middleName: user.middleName,
-							lastName: user.lastName,
-							email: user.email
-						})
-						.from(user)
-						.where(and(eq(user.id, data.userId), eq(user.role, Role.REGISTRAR)))
-						.get();
-					if (!current) error(404, 'Registrar not found.');
-					if (
-						Object.keys(current).some((field) => {
-							const key = field as keyof typeof current;
-							return current[key] !== data.original[key];
-						})
-					)
-						error(409, 'Registrar information changed. Reload the list before saving again.');
-					return saveAccountInformation(tx, data.userId, current.email, data);
-				},
-				{ behavior: 'immediate' }
-			);
-		} catch (cause) {
-			if (isHttpError(cause)) throw cause;
-			console.error('Registrar information update failed:', cause);
-			error(500, 'Failed to update registrar information. Please try again.');
-		}
+const updateStaffSchema = createUserSchema.extend({
+	userId: z.string().min(1),
+	original: z.object({
+		name: z.string(),
+		firstName: z.string(),
+		middleName: z.string(),
+		lastName: z.string(),
+		email: z.string()
+	})
+});
+
+function updateStaffAccount(data: z.infer<typeof updateStaffSchema>, role: StaffRole) {
+	const label = role === Role.ADMIN ? 'Administrator' : 'Registrar';
+	const { locals } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN]);
+	try {
+		return db.transaction(
+			(tx) => {
+				const current = tx
+					.select({
+						name: user.name,
+						firstName: user.firstName,
+						middleName: user.middleName,
+						lastName: user.lastName,
+						email: user.email
+					})
+					.from(user)
+					.where(and(eq(user.id, data.userId), eq(user.role, role)))
+					.get();
+				if (!current) error(404, `${label} not found.`);
+				if (
+					Object.keys(current).some((field) => {
+						const key = field as keyof typeof current;
+						return current[key] !== data.original[key];
+					})
+				)
+					error(409, `${label} information changed. Reload the list before saving again.`);
+				return saveAccountInformation(tx, data.userId, current.email, data);
+			},
+			{ behavior: 'immediate' }
+		);
+	} catch (cause) {
+		if (isHttpError(cause)) throw cause;
+		console.error(`${label} information update failed:`, cause);
+		error(500, `Failed to update ${label.toLowerCase()} information. Please try again.`);
 	}
+}
+
+export const updateRegistrar = command(updateStaffSchema, (data) =>
+	updateStaffAccount(data, Role.REGISTRAR)
+);
+export const updateAdmin = command(updateStaffSchema, (data) =>
+	updateStaffAccount(data, Role.ADMIN)
 );
 
 export const updateStudent = command(updateStudentSchema, (data) => {

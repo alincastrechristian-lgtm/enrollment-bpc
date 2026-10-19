@@ -10,6 +10,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'DASHBOARD',
 		pageDescription: 'View an overview of your enrollment system.'
 	},
+	'/user/admins': {
+		pageTitle: 'ADMINISTRATORS',
+		pageDescription: 'Manage administrator accounts and access.'
+	},
 	'/user/registrars': {
 		pageTitle: 'REGISTRARS',
 		pageDescription: 'Manage and maintain registrar accounts and access.'

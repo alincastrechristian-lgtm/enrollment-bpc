@@ -32,6 +32,7 @@ export type SidebarItem = SidebarLink | SidebarGroup;
 const staff = [Role.ADMIN, Role.REGISTRAR];
 const items: SidebarItem[] = [
 	{ label: 'Dashboard', href: resolve('/user/dashboard'), icon: Gauge },
+	{ label: 'Administrators', href: resolve('/user/admins'), icon: UserShield, roles: [Role.ADMIN] },
 	{ label: 'Registrars', href: resolve('/user/registrars'), icon: UserShield, roles: [Role.ADMIN] },
 	{ label: 'Students', href: resolve('/user/students'), icon: Users, roles: staff },
 	{

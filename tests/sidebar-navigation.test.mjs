@@ -28,6 +28,7 @@ for (const [role, expected] of [
 		'admin',
 		[
 			'Dashboard',
+			'Administrators',
 			'Registrars',
 			'Students',
 			'Enrollment requests',

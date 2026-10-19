@@ -28,7 +28,7 @@ export const nameHooks = {
 				data.lastName !== undefined
 			) {
 				throw new APIError('BAD_REQUEST', {
-					message: 'Use the student or registrar editor to change account names.'
+					message: 'Use the account editor to change account names.'
 				});
 			}
 		}
