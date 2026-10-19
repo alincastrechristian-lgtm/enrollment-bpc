@@ -36,13 +36,13 @@
       ],
       [
         "f",
-        "Student uploads passed|clearance and requests",
+        "Student saves eligible|clearance; requests review",
         1,
         4
       ],
       [
         "g",
-        "Staff verifies|requested clearance",
+        "Staff verifies original;|confirms ID when needed",
         1,
         5
       ],
@@ -61,7 +61,7 @@
       ],
       [
         "j",
-        "Staff creates next-term|enrollment record",
+        "Prerequisites + due documents;|staff saves next term",
         1,
         7
       ],
@@ -536,7 +536,7 @@
       ],
       [
         "c",
-        "Valid and|unique code?",
+        "Valid code and|prerequisite graph?",
         1,
         2,
         "decision"
@@ -563,7 +563,7 @@
       ],
       [
         "g",
-        "Referenced by|curriculum?",
+        "Curriculum or|prerequisite links?",
         1,
         5,
         "decision"
@@ -815,7 +815,7 @@
       ],
       [
         "i",
-        "Server rechecks all|eligibility and conflicts",
+        "Server rechecks term,|documents + prerequisites",
         1,
         6
       ],
@@ -1164,19 +1164,19 @@
       ],
       [
         "d",
-        "Define printed anchors|and optional personal boxes",
+        "Define permanent printed|anchors and office regions",
         1,
         3
       ],
       [
         "e",
-        "Define each office:|label, Cleared, signature",
+        "Map student name/number;|inspect all saved regions",
         1,
         4
       ],
       [
         "f",
-        "Save validated|template definition",
+        "Save validated definition;|issue fresh revision",
         1,
         5
       ],
@@ -1282,20 +1282,20 @@
       ],
       [
         "e",
-        "Match printed anchors;|check each office region",
+        "Template + offices + writing;|then Gemini identity",
         1,
         4
       ],
       [
         "f",
-        "All checks|pass?",
+        "Requestable|evidence?",
         1,
         5,
         "decision"
       ],
       [
         "g",
-        "Return findings only;|no submission saved",
+        "Local non-pass / ID mismatch:|findings only, no new save",
         0,
         5,
         "end"
@@ -1308,14 +1308,14 @@
       ],
       [
         "i",
-        "Submission ready;|not yet requested",
+        "Ready: matched or review;|explicit request still needed",
         1,
         7,
         "end"
       ],
       [
         "j",
-        "Identity comparison|deferred in production",
+        "ID review requires|staff confirmation",
         2,
         4,
         "end"
@@ -1366,7 +1366,7 @@
     "nodes": [
       [
         "a",
-        "Saved clearance|is ready",
+        "Saved eligible clearance|is ready",
         1,
         0,
         "start"
@@ -1379,7 +1379,7 @@
       ],
       [
         "c",
-        "Current + passing;|same template|revision?",
+        "Current template,|valid report and|upload gate?",
         1,
         2,
         "decision"
@@ -1419,7 +1419,7 @@
       ],
       [
         "i",
-        "Require finalized grades;|verify saved request",
+        "Verify exact requested file;|confirm ID if Needs review",
         1,
         6
       ],
@@ -1674,7 +1674,7 @@
       ],
       [
         "j",
-        "Select current program|default; clamp editor limits",
+        "Select curriculum; review|prerequisites + due documents",
         1,
         6
       ],
@@ -2001,7 +2001,7 @@
   },
   {
     "id": "17-portal",
-    "title": "Student dashboard, enrollment history and assigned curriculum",
+    "title": "Student current enrollment, documents and account tools",
     "nodes": [
       [
         "a",
@@ -2038,13 +2038,13 @@
       ],
       [
         "f",
-        "Enrollment: inspect|current or history",
+        "Enrollment: current term|subjects + released grades",
         0,
         4
       ],
       [
         "g",
-        "Curriculum: inspect|assigned published plan",
+        "Required documents:|upload requested copies",
         1,
         4
       ],
@@ -2818,7 +2818,7 @@
       ],
       [
         "g",
-        "Validate PNG crops;|call local Ollama",
+        "Validate PNG crops;|call shared Gemini service",
         2,
         4
       ],
@@ -2972,7 +2972,7 @@
       ],
       [
         "b",
-        "All-pass upload|saved as ready",
+        "Requestable image saved|ready: ID match or review",
         1,
         1
       ],
@@ -3009,7 +3009,7 @@
       ],
       [
         "h",
-        "Correct form; upload|new all-pass image",
+        "Correct form; upload|eligible replacement",
         0,
         5
       ],
@@ -3124,20 +3124,20 @@
       ],
       [
         "h",
-        "Aggregate version-2|pass/review/fail report",
+        "Check name/number writing|against blank reference",
         1,
         6
       ],
       [
         "i",
-        "All pass may save;|human review still required",
+        "If local checks pass:|run Gemini identity",
         1,
         7,
         "end"
       ],
       [
         "j",
-        "Student identity and|signature authenticity|are not established",
+        "Office ink does not prove|signature authenticity",
         2,
         6,
         "end"
@@ -3454,7 +3454,7 @@
       ],
       [
         "e",
-        "Garage: template and|clearance file objects",
+        "Garage: reference images,|clearance and documents",
         1,
         3
       ],
@@ -3479,9 +3479,9 @@
       ],
       [
         "i",
-        "Diagnostic only:|Ollama handwriting service",
+        "Gemini transcription:|two PNG field crops",
         2,
-        5,
+        4,
         "end"
       ]
     ],
@@ -3519,6 +3519,713 @@
       [
         "d",
         "h"
+      ],
+      [
+        "g",
+        "i",
+        "",
+        "r",
+        "l"
+      ]
+    ]
+  },
+  {
+    "id": "31-required-documents",
+    "title": "Requested academic documents: upload and manual decision",
+    "nodes": [
+      [
+        "a",
+        "Staff opens student|Required documents",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Current final year,|semester 1?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "Cannot create new request;|existing reviews remain",
+        0,
+        1,
+        "end"
+      ],
+      [
+        "d",
+        "Select new Form137/SF10/TOR;|save in-app notification",
+        1,
+        2
+      ],
+      [
+        "e",
+        "Student uploads own copy;|PDF/image up to 10 MiB",
+        1,
+        3
+      ],
+      [
+        "f",
+        "Uploaded: awaiting|authorized staff review",
+        1,
+        4
+      ],
+      [
+        "g",
+        "Staff accepts|valid copy?",
+        1,
+        5,
+        "decision"
+      ],
+      [
+        "h",
+        "Rejected with reason;|student may replace",
+        0,
+        6
+      ],
+      [
+        "i",
+        "Verified; reviewer/time|and notification saved",
+        2,
+        6
+      ],
+      [
+        "j",
+        "Replacement uploaded;|staff reviews again",
+        0,
+        7,
+        "end"
+      ],
+      [
+        "k",
+        "Verified copy satisfies|ordinary final-term gate",
+        2,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "b",
+        "d",
+        "Yes"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f"
+      ],
+      [
+        "f",
+        "g"
+      ],
+      [
+        "g",
+        "h",
+        "No",
+        "l",
+        "t"
+      ],
+      [
+        "g",
+        "i",
+        "Yes",
+        "r",
+        "t"
+      ],
+      [
+        "h",
+        "j"
+      ],
+      [
+        "i",
+        "k"
+      ]
+    ]
+  },
+  {
+    "id": "32-prerequisites",
+    "title": "Prerequisite enforcement against latest earlier subject attempts",
+    "nodes": [
+      [
+        "a",
+        "Staff selects target term|and subject rows",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Load global direct|prerequisite rules",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Load own attempts;|exclude dropped/voided",
+        1,
+        2
+      ],
+      [
+        "d",
+        "Ignore same/future term;|keep latest earlier attempt",
+        1,
+        3
+      ],
+      [
+        "e",
+        "Finalized pass|for every rule?",
+        1,
+        4,
+        "decision"
+      ],
+      [
+        "f",
+        "Show missing/Pending/INC/|Failed reason; save blocked",
+        0,
+        4,
+        "end"
+      ],
+      [
+        "g",
+        "UI permits draft; server|rechecks rules/history",
+        1,
+        5
+      ],
+      [
+        "h",
+        "Save enrollment and rows|atomically if all gates pass",
+        1,
+        6,
+        "end"
+      ],
+      [
+        "i",
+        "Admin graph save rejects|cycles/self/missing links",
+        2,
+        1,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "i",
+        "b",
+        "",
+        "l",
+        "r"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "e",
+        "g",
+        "Yes"
+      ],
+      [
+        "g",
+        "h"
+      ]
+    ]
+  },
+  {
+    "id": "33-identity-review",
+    "title": "Matched identity, human review and blocked mismatch",
+    "nodes": [
+      [
+        "a",
+        "Server analyzes|clearance original",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Template, offices,|both writing fields|pass?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "Return findings;|no Gemini call/new save",
+        0,
+        1,
+        "end"
+      ],
+      [
+        "d",
+        "Gemini transcribes two crops;|server compares DB identity",
+        1,
+        2
+      ],
+      [
+        "e",
+        "Identity outcome?",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "f",
+        "Mismatch: blocked;|no new ready submission",
+        0,
+        3,
+        "end"
+      ],
+      [
+        "g",
+        "Match: save ready",
+        1,
+        4
+      ],
+      [
+        "h",
+        "Review: save ready|with Needs review warning",
+        2,
+        4
+      ],
+      [
+        "i",
+        "Student request; required|document upload gate",
+        1,
+        5
+      ],
+      [
+        "j",
+        "Staff accepts|original + identity?",
+        1,
+        6,
+        "decision"
+      ],
+      [
+        "k",
+        "Reject with reason;|correct and upload again",
+        0,
+        6,
+        "end"
+      ],
+      [
+        "l",
+        "If ID review: staff must|confirm name + number",
+        1,
+        7
+      ],
+      [
+        "m",
+        "Verify; retain report and|reviewer metadata; complete",
+        1,
+        8,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "b",
+        "d",
+        "Yes"
+      ],
+      [
+        "d",
+        "e"
+      ],
+      [
+        "e",
+        "f",
+        "",
+        "l",
+        "r"
+      ],
+      [
+        "e",
+        "g",
+        "Match"
+      ],
+      [
+        "e",
+        "h",
+        "Review",
+        "r",
+        "t"
+      ],
+      [
+        "g",
+        "i"
+      ],
+      [
+        "h",
+        "i",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "i",
+        "j"
+      ],
+      [
+        "j",
+        "k",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "j",
+        "l",
+        "Yes"
+      ],
+      [
+        "l",
+        "m"
+      ]
+    ]
+  },
+  {
+    "id": "34-final-term-gates",
+    "title": "Required-document upload gate and verified-document enrollment gate",
+    "nodes": [
+      [
+        "a",
+        "Read stored student|document requirements",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "No requirement|records?",
+        1,
+        1,
+        "decision"
+      ],
+      [
+        "c",
+        "No document block;|other academic checks apply",
+        0,
+        1,
+        "end"
+      ],
+      [
+        "d",
+        "Evaluate applicable|progression action",
+        1,
+        2
+      ],
+      [
+        "e",
+        "Student request near final|term of current curriculum",
+        0,
+        3
+      ],
+      [
+        "f",
+        "Ordinary final-term save|in selected curriculum",
+        2,
+        3
+      ],
+      [
+        "g",
+        "All uploaded|or verified?",
+        0,
+        4,
+        "decision"
+      ],
+      [
+        "h",
+        "All verified?",
+        2,
+        4,
+        "decision"
+      ],
+      [
+        "i",
+        "Block action; upload|or review missing items",
+        1,
+        4,
+        "end"
+      ],
+      [
+        "j",
+        "Upload gate satisfied;|other request checks apply",
+        0,
+        5,
+        "end"
+      ],
+      [
+        "k",
+        "Document gate satisfied;|other save checks apply",
+        2,
+        5,
+        "end"
+      ],
+      [
+        "l",
+        "Corrections exempt from|document gate; not prerequisites",
+        1,
+        6,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c",
+        "Yes",
+        "l",
+        "r"
+      ],
+      [
+        "b",
+        "d",
+        "No"
+      ],
+      [
+        "d",
+        "e",
+        "Request",
+        "l",
+        "t"
+      ],
+      [
+        "d",
+        "f",
+        "Enroll",
+        "r",
+        "t"
+      ],
+      [
+        "e",
+        "g"
+      ],
+      [
+        "f",
+        "h"
+      ],
+      [
+        "g",
+        "i",
+        "No",
+        "r",
+        "l"
+      ],
+      [
+        "h",
+        "i",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "g",
+        "j",
+        "Yes"
+      ],
+      [
+        "h",
+        "k",
+        "Yes"
+      ]
+    ]
+  },
+  {
+    "id": "35-alignment",
+    "title": "Student/test form outline: geometric border and printed-anchor fallback",
+    "nodes": [
+      [
+        "a",
+        "Open student/test image|with saved template context",
+        1,
+        0,
+        "start"
+      ],
+      [
+        "b",
+        "Try geometric|border detection",
+        1,
+        1
+      ],
+      [
+        "c",
+        "Border found?",
+        1,
+        2,
+        "decision"
+      ],
+      [
+        "d",
+        "Suggest border corners",
+        0,
+        3
+      ],
+      [
+        "e",
+        "Saved definition|available?",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "f",
+        "Draw or adjust|corners manually",
+        2,
+        3
+      ],
+      [
+        "g",
+        "OCR permanent anchors;|fit bounded transformation",
+        1,
+        4
+      ],
+      [
+        "h",
+        "Evidence/coverage|and corners valid?",
+        1,
+        5,
+        "decision"
+      ],
+      [
+        "i",
+        "Keep corners; retry or|draw manually",
+        2,
+        5
+      ],
+      [
+        "j",
+        "User inspects and|confirms form outline",
+        1,
+        6
+      ],
+      [
+        "k",
+        "Production still rechecks|original image and evidence",
+        1,
+        7,
+        "end"
+      ]
+    ],
+    "edges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "c"
+      ],
+      [
+        "c",
+        "d",
+        "Yes",
+        "l",
+        "t"
+      ],
+      [
+        "c",
+        "e",
+        "No"
+      ],
+      [
+        "e",
+        "f",
+        "No",
+        "r",
+        "l"
+      ],
+      [
+        "e",
+        "g",
+        "Yes"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "h",
+        "i",
+        "No",
+        "r",
+        "l"
+      ],
+      [
+        "h",
+        "j",
+        "Yes"
+      ],
+      [
+        "d",
+        "j",
+        "",
+        "b",
+        "l"
+      ],
+      [
+        "f",
+        "i"
+      ],
+      [
+        "i",
+        "j",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "j",
+        "k"
       ]
     ]
   }
