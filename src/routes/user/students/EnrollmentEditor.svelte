@@ -2,6 +2,8 @@
 	import { formatGrade } from '#lib/enrollment-grades.js';
 	import { enrollStudent } from '#lib/actions/user.remote.js';
 	import { correctEnrollment } from '#lib/actions/enrollment.remote.js';
+	import { getStudentDocumentReview } from '#lib/actions/documents.remote.js';
+	import { DOCUMENT_LABELS } from '#lib/documents.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import SearchableSelect from '#lib/components/Dropdown/SearchableSelect.svelte';
 	import { showError, showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
@@ -42,6 +44,26 @@
 	let outstandingDialog: HTMLDialogElement;
 	let reason = $state('');
 	const correcting = $derived(!!data.editing);
+	const documents = $derived(getStudentDocumentReview(data.student.userId));
+	const finalTerm = $derived(
+		!correcting &&
+			yearLevel === data.curriculum.yearLevels &&
+			semester === data.curriculum.semesters
+	);
+	const documentBlock = $derived(
+		finalTerm
+			? documents.error
+				? 'Could not load document requirements. Refresh before enrolling.'
+				: !documents.current
+					? 'Checking required documents…'
+					: documents.current.items.some((item) => item.status !== 'verified')
+						? `Verify required documents before enrolling: ${documents.current.items
+								.filter((item) => item.status !== 'verified')
+								.map((item) => DOCUMENT_LABELS[item.kind])
+								.join(', ')}.`
+						: null
+			: null
+	);
 	const removedGradedSubjects = $derived(
 		(data.editing?.originalSubjects ?? []).filter(
 			(subject) =>
@@ -152,6 +174,10 @@
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
 		if (busy || saved) return;
+		if (documentBlock) {
+			message = documentBlock;
+			return;
+		}
 		message = '';
 		if (!section.trim() || !Number.isSafeInteger(schoolYearStart) || (schoolYearStart ?? 0) < 1) {
 			message = 'Enter a section and a valid school year start.';
@@ -295,6 +321,17 @@
 	{#if hasGradeConcerns}
 		<p class="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm" role="status">
 			{gradeWarning}
+		</p>
+	{/if}
+	{#if documentBlock}
+		<p role="status" class="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
+			{documentBlock}
+			<a
+				class="link text-primary"
+				href={`${resolve('/user/students/[userId]', { userId: data.student.userId })}#required-documents`}
+			>
+				Review required documents
+			</a>
 		</p>
 	{/if}
 	{#if message}
@@ -586,7 +623,11 @@
 				{rows.length} subjects · {totalUnits} units · Review your selection before confirming.
 			</p>
 		</div>
-		<button type="submit" class="btn btn-primary btn-sm" disabled={busy || saved || !rows.length}>
+		<button
+			type="submit"
+			class="btn btn-primary btn-sm"
+			disabled={busy || saved || !rows.length || !!documentBlock}
+		>
 			{#if busy}
 				<span class="loading loading-sm loading-spinner" aria-hidden="true"></span>
 			{:else if correcting}

@@ -10,6 +10,7 @@ import {
 import type { db, Transaction } from './db';
 import { getStudentEnrollment } from './student-enrollment';
 import { clearanceCanSubmit, clearanceNeedsIdentityReview } from '#lib/clearance/report.js';
+import { documentUploadBlock } from '#lib/server/documents.js';
 
 type Database = typeof db | Transaction;
 export function submissionInfo(record: typeof clearanceSubmission.$inferSelect | undefined) {
@@ -68,6 +69,8 @@ export function requestClearanceEnrollment(
 				.get();
 			if (!submission) error(404, 'Clearance submission not found.');
 			const record = requireClearanceEnrollment(tx, userId, submission.enrollmentId);
+			const documentBlock = documentUploadBlock(tx, userId, record.enrollment);
+			if (documentBlock) error(409, documentBlock);
 			if (
 				record.enrollment.submittedClearance ||
 				submission.status !== 'ready' ||

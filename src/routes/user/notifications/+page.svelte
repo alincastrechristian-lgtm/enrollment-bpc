@@ -13,7 +13,7 @@
 	import { goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { emailEventLabels, emailEventTypes } from '#lib/email.js';
+	import { notificationEventLabels, notificationEventTypes } from '#lib/email.js';
 	import { readNotifications } from '#lib/actions/notifications.remote.js';
 	import { showError } from '#lib/components/Popup/Popup.svelte.js';
 	import { getErrorMessage } from '#lib/errors.js';
@@ -30,7 +30,7 @@
 	const notifications = $derived(
 		data.items.map((item) => ({
 			...item,
-			category: emailEventLabels[item.type],
+			category: notificationEventLabels[item.type],
 			date: formatter.format(item.createdAt),
 			unread: canRead && !item.readAt
 		}))
@@ -133,8 +133,8 @@
 				onchange={(event) => event.currentTarget.form?.requestSubmit()}
 			>
 				<option value="">All email types</option>
-				{#each emailEventTypes as type (type)}
-					<option value={type}>{emailEventLabels[type]}</option>
+				{#each notificationEventTypes as type (type)}
+					<option value={type}>{notificationEventLabels[type]}</option>
 				{/each}
 			</select>
 			<button class="btn btn-primary" type="submit">Search</button>

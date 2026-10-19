@@ -13,7 +13,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import z from 'zod';
-import { EmailApiType, emailEventTypes } from './email';
+import { EmailApiType, notificationEventTypes } from './email';
 import type { TemplateDefinition } from './clearance/definition';
 import type { ClearanceReport } from './clearance/report';
 import type { Corners } from './clearance/clearance';
@@ -306,6 +306,54 @@ export const clearanceSubmission = sqliteTable(
 	]
 );
 
+export const requiredDocument = sqliteTable(
+	'required_document',
+	{
+		id: uuid(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'restrict' }),
+		requestedEnrollmentId: text('requested_enrollment_id')
+			.notNull()
+			.references(() => enrollment.id, { onDelete: 'restrict' }),
+		kind: text('kind', { enum: ['form137', 'sf10', 'tor'] }).notNull(),
+		status: text('status', { enum: ['requested', 'uploaded', 'verified', 'rejected'] })
+			.notNull()
+			.default('requested'),
+		revision: integer('revision').notNull().default(0),
+		dueYearLevel: integer('due_year_level').notNull(),
+		dueSemester: integer('due_semester').notNull(),
+		requestedBy: text('requested_by').references(() => user.id, { onDelete: 'set null' }),
+		requestedAt: integer('requested_at', { mode: 'timestamp_ms' }).notNull(),
+		objectKey: text('object_key').unique(),
+		filename: text('filename'),
+		contentType: text('content_type'),
+		size: integer('size'),
+		uploadedAt: integer('uploaded_at', { mode: 'timestamp_ms' }),
+		reviewedBy: text('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
+		reviewerName: text('reviewer_name'),
+		reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
+		rejectionReason: text('rejection_reason')
+	},
+	(table) => [
+		uniqueIndex('required_document_user_kind_unique').on(table.userId, table.kind),
+		check('required_document_kind_valid', sql`${table.kind} IN ('form137','sf10','tor')`),
+		check(
+			'required_document_status_valid',
+			sql`${table.status} IN ('requested','uploaded','verified','rejected')`
+		),
+		check('required_document_revision_valid', sql`${table.revision} >= 0`),
+		check(
+			'required_document_file_valid',
+			sql`(${table.status} = 'requested' AND ${table.objectKey} IS NULL) OR (${table.status} != 'requested' AND ${table.objectKey} IS NOT NULL AND ${table.filename} IS NOT NULL AND ${table.contentType} IS NOT NULL AND ${table.size} > 0 AND ${table.uploadedAt} IS NOT NULL)`
+		),
+		check(
+			'required_document_due_valid',
+			sql`${table.dueYearLevel} > 0 AND ${table.dueSemester} > 0`
+		)
+	]
+);
+
 // Append-only snapshots retain removed subjects/grades and staff identity after account deletion.
 export const enrollmentAudit = sqliteTable(
 	'enrollment_audit',
@@ -432,7 +480,7 @@ export const notification = sqliteTable(
 			.references(() => user.id, { onDelete: 'cascade' }),
 		actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
 		enrollmentId: text('enrollment_id').references(() => enrollment.id, { onDelete: 'set null' }),
-		type: text('type', { enum: emailEventTypes }).notNull(),
+		type: text('type', { enum: notificationEventTypes }).notNull(),
 		readAt: integer('read_at', { mode: 'timestamp_ms' }),
 		title: text('title').notNull(),
 		message: text('message').notNull(),

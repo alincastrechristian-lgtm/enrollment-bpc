@@ -5,6 +5,7 @@
 		requestEnrollment
 	} from '#lib/actions/clearance.remote.js';
 	import BorderEditor from '#lib/clearance/BorderEditor.svelte';
+	import { getStudentDocuments } from '#lib/actions/documents.remote.js';
 	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
 	import {
 		clearanceCanSubmit,
@@ -18,6 +19,8 @@
 	import { getErrorMessage } from '#lib/errors.js';
 	import { ArrowRight, ClipboardCheck, FileImage, Upload } from '@lucide/svelte';
 	const progress = getStudentClearance();
+	const documents = getStudentDocuments();
+	const documentBlock = $derived(documents.current?.uploadBlock);
 	let image = $state(''),
 		corners = $state<Corners>(structuredClone(UNIT_CORNERS));
 	let aligning = $state(false);
@@ -92,7 +95,16 @@
 		}
 	}
 	async function request() {
-		if (!submission || busy || loading || aligning) return;
+		if (
+			!submission ||
+			busy ||
+			loading ||
+			aligning ||
+			!documents.current ||
+			documents.error ||
+			documentBlock
+		)
+			return;
 		busy = true;
 		message = '';
 		try {
@@ -348,6 +360,16 @@
 				</p>
 			{/if}
 			{#if ready}
+				{#if documentBlock}
+					<p role="alert" class="rounded-xl bg-warning/10 p-4 text-sm">
+						{documentBlock}
+						<a class="link font-semibold" href="#required-documents">Upload required documents</a>
+					</p>
+				{:else if documents.error}
+					<p role="alert" class="text-sm text-error">
+						Could not check required documents. Refresh before requesting enrollment.
+					</p>
+				{/if}
 				<div
 					class="flex flex-col gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
 				>
@@ -367,6 +389,9 @@
 						type="button"
 						class="btn shrink-0 btn-primary btn-sm"
 						disabled={busy ||
+							!documents.current ||
+							!!documents.error ||
+							!!documentBlock ||
 							loading ||
 							aligning ||
 							!!image ||

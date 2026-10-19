@@ -1,5 +1,5 @@
 import { Role } from '#lib/Roles.js';
-import type { EmailEventType } from '#lib/email.js';
+import type { NotificationEventType } from '#lib/email.js';
 import { notification, user } from '#lib/schema.js';
 import type { db, Transaction } from './db/index';
 import { and, count, desc, eq, isNull, like, or } from 'drizzle-orm';
@@ -28,7 +28,7 @@ export function recordNotification(
 		recipientId: string;
 		actorId?: string | null;
 		enrollmentId?: string;
-		type: EmailEventType;
+		type: NotificationEventType;
 		title: string;
 		message: string;
 	}
@@ -55,7 +55,7 @@ export function getNotifications(
 	viewer: Viewer,
 	options: {
 		search?: string;
-		type?: EmailEventType;
+		type?: NotificationEventType;
 		unreadOnly?: boolean;
 		page?: number;
 		pageSize?: number;

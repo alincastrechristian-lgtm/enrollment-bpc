@@ -14,6 +14,7 @@ test(
 		let server, browser;
 		try {
 			const files = {
+				'documents.js': `export function getStudentDocuments(){return {current:{items:[],uploadBlock:null}};}`,
 				'index.html':
 					'<html data-theme="light"><main id="app" style="padding:24px"></main><script type="module" src="/main.js"></script></html>',
 				'main.js':
@@ -50,6 +51,10 @@ test(
 				plugins: [tailwindcss(), svelte({ configFile: false, preprocess: vitePreprocess() })],
 				resolve: {
 					alias: [
+						{
+							find: '#lib/actions/documents.remote.js',
+							replacement: path.join(root, 'documents.js')
+						},
 						{ find: '#lib/clearance/scan.client.js', replacement: path.join(root, 'scan.js') },
 						{
 							find: '#lib/actions/clearance.remote.js',

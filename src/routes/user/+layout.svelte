@@ -6,6 +6,7 @@
 	import LoadingPage from '#lib/components/Popup/LoadingPopup.svelte';
 	import Sidebar from '#lib/components/Sidebar/Sidebar.svelte';
 	import UserTopbar from '#lib/components/Topbar/Topbar.svelte';
+	import DocumentNotice from '#lib/components/documents/DocumentNotice.svelte';
 
 	let { children, data } = $props();
 	const session = authClient.useSession();
@@ -18,6 +19,9 @@
 </script>
 
 {#if $session && $session.data}
+	{#if $session.data.user.role === 'student'}
+		<DocumentNotice popup />
+	{/if}
 	<div class="portal-shell drawer min-h-dvh bg-base-200/60 xl:drawer-open">
 		<input
 			id={drawerId}

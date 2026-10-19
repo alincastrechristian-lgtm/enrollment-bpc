@@ -2,7 +2,7 @@ import { chromium, expect } from '@playwright/test';
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { createServer } from 'vite';
@@ -11,6 +11,7 @@ const sourcePath = (file) => path.resolve(file).replaceAll('\\', '/');
 test('enrollment page edits subjects, protects drafts, submits once, and opens complete student record', async () => {
 	const root = mkdtempSync(path.resolve('.tmp-applicant-account-'));
 	const files = {
+		'documents.js': `export function getStudentDocuments(){return {current:{items:[],uploadBlock:null}};}export function getStudentDocumentReview(){return {current:{items:[],canRequest:false}};}export const uploadDocument={for:()=>({})};export async function requestDocuments(){}export async function reviewDocument(){}`,
 		'index.html':
 			'<html data-theme="light"><main id="app" class="bg-base-200 p-6"></main><script type="module" src="/main.js"></script></html>',
 		'style.css': "@import '../src/routes/layout.css'; @source '../src';",
@@ -87,14 +88,21 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 	};
 	let server, browser;
 	try {
+		files['actions.js'] +=
+			`export async function createAdmin(){throw Error('Unexpected admin creation');}export async function updateAdmin(){throw Error('Unexpected admin edit');}export async function deleteAdmin(){throw Error('Unexpected admin deletion');}export async function setAdminDisabled(){throw Error('Unexpected admin access change');}`;
 		for (const [name, contents] of Object.entries(files))
 			writeFileSync(path.join(root, name), contents);
 		server = await createServer({
 			root,
+			cacheDir: path.join(root, 'node_modules/.vite'),
 			configFile: false,
 			plugins: [tailwindcss(), svelte({ configFile: false, preprocess: vitePreprocess() })],
 			resolve: {
 				alias: [
+					{
+						find: '#lib/actions/documents.remote.js',
+						replacement: path.join(root, 'documents.js')
+					},
 					{ find: '$app/state', replacement: path.join(root, 'state.svelte.js') },
 					{ find: '$app/navigation', replacement: path.join(root, 'navigation.js') },
 					{ find: '$app/paths', replacement: path.join(root, 'paths.js') },
@@ -599,7 +607,9 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 	} finally {
 		await browser?.close();
 		await server?.close();
-		for (const name of Object.keys(files)) rmSync(path.join(root, name), { force: true });
-		rmdirSync(root);
+		const resolved = path.resolve(root);
+		assert.equal(path.dirname(resolved), process.cwd());
+		assert.ok(path.basename(resolved).startsWith('.tmp-applicant-account-'));
+		rmSync(resolved, { recursive: true, force: true, maxRetries: 3 });
 	}
 });

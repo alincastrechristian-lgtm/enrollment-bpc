@@ -253,6 +253,11 @@ function fixture(t) {
 		}
 	};
 	deps['#lib/server/notifications.js'] = load('src/lib/server/notifications.ts', deps);
+	deps['#lib/server/documents.js'] = load('src/lib/server/documents.ts', {
+		...deps,
+		'#lib/documents.js': load('src/lib/documents.ts'),
+		'./notifications': deps['#lib/server/notifications.js']
+	});
 	deps['#lib/server/enrollment.js'] = load('src/lib/server/enrollment.ts', deps);
 	deps['#lib/server/student-enrollment.js'] = load('src/lib/server/student-enrollment.ts', deps);
 	const core = load('src/lib/clearance/clearance.ts');

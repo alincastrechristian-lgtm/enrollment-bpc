@@ -161,6 +161,11 @@ function fixture(t) {
 			form: (validator, handler) => async (input) => handler(validator.parse(input))
 		}
 	};
+	deps['#lib/server/documents.js'] = load('src/lib/server/documents.ts', {
+		...deps,
+		'#lib/documents.js': load('src/lib/documents.ts'),
+		'./notifications': load('src/lib/server/notifications.ts', deps)
+	});
 	const enrollmentService = load('src/lib/server/student-enrollment.ts', deps);
 	const workflow = load('src/lib/server/clearance-workflow.ts', {
 		...deps,
@@ -311,6 +316,49 @@ test('finalize → private checked upload → student request → staff verifica
 		0,
 		'Consumed/current-enrollment scope removes completed requests.'
 	);
+});
+
+test('final-semester requests require every selected document upload; staff enrollment also requires verification', async (t) => {
+	const f = fixture(t);
+	f.sqlite.exec('UPDATE enrollment SET year_level=4,semester=1');
+	const result = await f.upload();
+	for (const kind of ['form137', 'sf10'])
+		f.db
+			.insert(schema.requiredDocument)
+			.values({
+				userId: 's',
+				requestedEnrollmentId: 'e',
+				kind,
+				dueYearLevel: 4,
+				dueSemester: 2,
+				requestedBy: 'staff',
+				requestedAt: new Date()
+			})
+			.run();
+	await assert.rejects(
+		f.remote.requestEnrollment({ submissionId: result.submission.id }),
+		status(409)
+	);
+	f.sqlite.exec(
+		"UPDATE required_document SET status='uploaded',object_key=id,filename='document.pdf',content_type='application/pdf',size=20,uploaded_at=1 WHERE kind='form137'"
+	);
+	await assert.rejects(
+		f.remote.requestEnrollment({ submissionId: result.submission.id }),
+		status(409)
+	);
+	f.sqlite.exec(
+		"UPDATE required_document SET status='uploaded',object_key=id,filename='document.pdf',content_type='application/pdf',size=20,uploaded_at=1 WHERE kind='sf10'"
+	);
+	await f.remote.requestEnrollment({ submissionId: result.submission.id });
+	f.state.role = 'registrar';
+	f.state.userId = 'staff';
+	await f.grades.verifyEnrollmentClearance(f.reference(result.submission.id));
+	const next = { ...f.next(), yearLevel: 4, semester: 2 };
+	assert.throws(() => f.plan.getEnrollmentPlan(f.db, next), status(409));
+	f.sqlite.exec("UPDATE required_document SET status='verified' WHERE kind='form137'");
+	assert.throws(() => f.plan.getEnrollmentPlan(f.db, next), status(409));
+	f.sqlite.exec("UPDATE required_document SET status='verified' WHERE kind='sf10'");
+	assert.doesNotThrow(() => f.plan.getEnrollmentPlan(f.db, next));
 });
 
 test('failed or uncertain template/office checks never save a file or permit an enrollment request', async (t) => {

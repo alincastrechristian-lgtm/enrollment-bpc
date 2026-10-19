@@ -16,6 +16,7 @@
 	import { ArrowRight, Eye, GraduationCap, MailCheck, Pencil, Trash2 } from '@lucide/svelte';
 	import { semesterLabel } from '../../curriculum/SubjectLayout.svelte';
 	import StudentDialog from '../StudentDialog.svelte';
+	import DocumentReview from '#lib/components/documents/DocumentReview.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -290,6 +291,9 @@
 		</aside>
 	</div>
 	{#key student.id}
+		{#if record}
+			<DocumentReview userId={student.id} />
+		{/if}
 		<EnrollmentHistory
 			{enrollments}
 			currentEnrollmentId={record?.currentEnrollmentId}

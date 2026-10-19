@@ -20,6 +20,7 @@ import type { db, Transaction } from '#lib/server/db/index.js';
 import { error } from '@sveltejs/kit';
 import { and, desc, eq, inArray, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { documentEnrollmentBlock } from '#lib/server/documents.js';
 
 export const enrollStudentSchema = z.object({
 	userId: z.string().trim().min(1, 'Student account is required'),
@@ -161,6 +162,8 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 		error(409, 'Active curriculum changed. Refresh and try again.');
 	if (context.student.currentEnrollmentId !== data.currentEnrollmentId)
 		error(409, 'Current enrollment changed. Refresh and try again.');
+	const documentBlock = documentEnrollmentBlock(database, data.userId, data, selectedCurriculum);
+	if (documentBlock) error(409, documentBlock);
 	const duplicate = database
 		.select({ id: enrollment.id })
 		.from(enrollment)

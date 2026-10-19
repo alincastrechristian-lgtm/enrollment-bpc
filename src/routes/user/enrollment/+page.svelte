@@ -3,6 +3,7 @@
 	import { GraduationCap } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 	import StudentClearance from './StudentClearance.svelte';
+	import StudentDocuments from '#lib/components/documents/StudentDocuments.svelte';
 
 	let { data }: PageProps = $props();
 </script>
@@ -11,6 +12,7 @@
 
 <section class="w-full space-y-6">
 	<StudentClearance />
+	<StudentDocuments />
 	{#if data.record}
 		<p class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
 			<GraduationCap class="size-4 text-primary" aria-hidden="true" />

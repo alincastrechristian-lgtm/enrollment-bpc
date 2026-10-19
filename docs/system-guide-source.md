@@ -337,7 +337,15 @@ Choose Check and save clearance. A fail or review finding does not save a submis
 
 After requesting, wait for staff review. Rejection displays its reason and requires correction, a new passing upload, and another explicit request. Verification satisfies clearance for the current enrollment. Staff still performs the next enrollment, and failed grades may require a completed Registrar meeting first.
 
-## 8.4 Notifications, meetings, and personal information
+## 8.4 Required academic documents
+
+During the first semester of a student's final curriculum year, an administrator or registrar opens the student's profile and selects Form 137, SF10, TOR, or any combination. Every selected document is required. The student receives an in-app notification and popup, with a dashboard reminder until all requested copies are verified.
+
+Students upload each document under Enrollment → Required documents. PDF, JPEG, PNG and WebP files are accepted up to 10 MiB per document; combine multiple pages into one PDF. Files are private and available only to the owning student, administrators and registrars.
+
+Missing or rejected copies block the student's final-semester enrollment request. Uploaded copies permit that request, but staff cannot save final-semester enrollment until every requested document is verified. Staff reviews copies from the student's profile and either verifies them or requests a replacement with a reason. A replacement must be reviewed again. Earlier-semester enrollment remains unaffected by this document gate.
+
+## 8.5 Notifications, meetings, and personal information
 
 Notifications lists events addressed to the student, with unread filters and mark-read controls. Reading a notification does not finalize grades, complete a meeting, verify clearance, or enroll the student.
 

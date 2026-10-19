@@ -28,3 +28,18 @@ export const emailEventLabels: Record<EmailEventType, string> = {
 	enrollment_voided: 'Voided enrollment',
 	enrollment_reopened: 'Reopened enrollment'
 };
+
+// In-app events include email events without adding document actions to email delivery.
+export const notificationEventTypes = [
+	...emailEventTypes,
+	'documents_requested',
+	'document_verified',
+	'document_rejected'
+] as const;
+export type NotificationEventType = (typeof notificationEventTypes)[number];
+export const notificationEventLabels: Record<NotificationEventType, string> = {
+	...emailEventLabels,
+	documents_requested: 'Required documents',
+	document_verified: 'Document verified',
+	document_rejected: 'Document correction'
+};

@@ -23,6 +23,7 @@
 	import { showError } from '#lib/components/Popup/Popup.svelte.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import ClearanceNotice from './ClearanceNotice.svelte';
+	import DocumentNotice from '#lib/components/documents/DocumentNotice.svelte';
 
 	let {
 		data,
@@ -123,6 +124,7 @@
 	</header>
 
 	<ClearanceNotice />
+	<DocumentNotice />
 
 	{#each data.droppedEnrollments as droppedEnrollment (droppedEnrollment.id)}
 		<section

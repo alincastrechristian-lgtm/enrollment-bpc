@@ -1,5 +1,5 @@
 import { Role } from '#lib/Roles.js';
-import { emailEventTypes } from '#lib/email.js';
+import { notificationEventTypes } from '#lib/email.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
 import { getNotificationCounts, getNotifications } from '#lib/server/notifications.js';
@@ -11,7 +11,7 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR, Role.STUDENT]);
 	const search = url.searchParams.get('q')?.trim() ?? '';
 	const parsedType = z
-		.enum(emailEventTypes)
+		.enum(notificationEventTypes)
 		.optional()
 		.safeParse(url.searchParams.get('type') || undefined);
 	if (!parsedType.success) error(400, 'Choose a valid notification type.');

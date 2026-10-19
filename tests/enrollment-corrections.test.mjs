@@ -143,6 +143,11 @@ function fixture(t, proveMigration = false) {
 		'#lib/server/db/index.js': { db },
 		'@sveltejs/kit': { error }
 	};
+	dependencies['#lib/server/documents.js'] = load('src/lib/server/documents.ts', {
+		...dependencies,
+		'#lib/documents.js': load('src/lib/documents.ts'),
+		'./notifications': load('src/lib/server/notifications.ts', dependencies)
+	});
 	const enrollment = load('src/lib/server/enrollment.ts', dependencies);
 	const guards = load('src/lib/server/student-enrollment.ts', dependencies);
 	const actions = load('src/lib/server/enrollment-corrections.ts', {
