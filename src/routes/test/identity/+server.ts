@@ -1,9 +1,11 @@
-import { isHttpError, json } from '@sveltejs/kit';
+import { dev } from '$app/env';
+import { error, isHttpError, json } from '@sveltejs/kit';
 import { getIdentityStudent, readIdentityCrops, recognizeIdentity } from '../identity.server';
 import { matchIdentity } from '#lib/clearance/identity.js';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ locals, request, url }) => {
+	if (!dev) error(404, 'Not found');
 	// Expected identity comes from the session/database, never from browser input.
 	const student = getIdentityStudent(locals);
 	const headers = { 'Cache-Control': 'private, no-store' };

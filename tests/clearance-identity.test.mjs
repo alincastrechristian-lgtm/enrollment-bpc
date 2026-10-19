@@ -110,7 +110,7 @@ const png =
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=';
 const crops = { name: png, studentNumber: png };
 const locals = (role = 'student', id = 'other') => ({ user: { id, role }, session: {} });
-function fixture(t) {
+function fixture(t, dev = true) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
 	const db = drizzle(sqlite, { schema });
@@ -135,11 +135,14 @@ function fixture(t) {
 		'@sveltejs/kit': { error }
 	});
 	const endpoint = load('src/routes/test/identity/+server.ts', {
+		'$app/env': { dev },
 		'../identity.server': service,
 		'#lib/clearance/identity.js': core,
-		'@sveltejs/kit': { json, isHttpError }
+		'@sveltejs/kit': { error, json, isHttpError }
 	}).POST;
 	const page = load('src/routes/test/+page.server.ts', {
+		'$app/env': { dev },
+		'@sveltejs/kit': { error },
 		'./identity.server': service,
 		'#lib/server/clearance-template.js': { getClearanceTemplateInfo: () => null }
 	}).load;
@@ -170,6 +173,25 @@ function reply(name = '', studentNumber = '', finishReason = 'STOP') {
 		]
 	});
 }
+
+test('production diagnostics reject every role before image processing or paid recognition', async (t) => {
+	const f = fixture(t, false);
+	let calls = 0;
+	mockTranscription(t, async () => {
+		calls++;
+		return reply();
+	});
+	for (const viewer of [{}, locals(), locals('registrar', 'staff'), locals('admin', 'staff')]) {
+		for (let attempt = 0; attempt < 3; attempt++) {
+			await assert.rejects(f.endpoint(event(viewer)), status(404));
+		}
+		assert.throws(() => f.page({ locals: viewer, setHeaders: () => {} }), status(404));
+	}
+	assert.equal(calls, 0);
+	// Blocking diagnostics must leave production recognition configured and its slot available.
+	await f.service.recognizeIdentity(crops, new AbortController().signal);
+	assert.equal(calls, 1);
+});
 
 test('session chooses own student; staff use fixed test record; anonymous access reveals no identity', async (t) => {
 	const f = fixture(t);

@@ -6,7 +6,7 @@ import test from 'node:test';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
-import { error, isHttpError } from '@sveltejs/kit';
+import { error, isHttpError, redirect } from '@sveltejs/kit';
 import { betterAuth } from 'better-auth/minimal';
 import { APIError } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -124,6 +124,13 @@ CREATE TABLE two_factor (id TEXT PRIMARY KEY, secret TEXT NOT NULL, backup_codes
 		});
 		return verification.identifier.slice('reset-password:'.length);
 	}
+	const protectedLayout = loadTypeScript('src/routes/user/+layout.server.ts', {
+		'@sveltejs/kit': { redirect },
+		'$app/paths': { resolve: (path) => path },
+		'#lib/server/db/index.js': { db },
+		'#lib/server/notifications.js': { getNotificationCounts: () => ({ unread: 0 }) }
+	}).load;
+	const firstLogin = loadTypeScript('src/routes/first-login/+page.server.ts').load;
 	db.insert(schema.user)
 		.values({
 			id: 'student',
@@ -151,6 +158,8 @@ CREATE TABLE two_factor (id TEXT PRIMARY KEY, secret TEXT NOT NULL, backup_codes
 		issueToken,
 		event,
 		cookieHeader,
+		protectedLayout,
+		firstLogin,
 		...commands()
 	};
 }
@@ -283,6 +292,35 @@ test('a sign-in failure reports that the reset succeeded without reusing the tok
 	await assert.rejects(f.resetPasswordAndSignIn({ token, newPassword: 'new-password-123' }), {
 		status: 400
 	});
+	await f.auth.api.signInEmail({
+		body: { email: 'student@example.com', password: 'new-password-123' }
+	});
+	await f.refreshSession();
+	assert.throws(() => f.protectedLayout(f.event), { status: 302, location: '/first-login' });
+	assert.deepEqual(
+		f.firstLogin({ ...f.event, url: new URL('http://localhost:3000/first-login') }),
+		{ resumeSetup: true }
+	);
+	await f.completeFirstLogin();
+	await f.refreshSession();
+	assert.equal(f.event.locals.user.setupComplete, true);
+	assert.equal(f.event.locals.user.emailVerified, true);
+	assert.deepEqual(f.protectedLayout(f.event), { unreadNotifications: 0 });
+});
+
+test('an interrupted first-login session can resume after a page reload', async (t) => {
+	const f = fixture(t);
+	await f.resetPasswordAndSignIn({ token: await f.issueToken(), newPassword: 'new-password-123' });
+	// New request with the saved cookie, without the consumed reset token or client state.
+	await f.refreshSession();
+	assert.throws(() => f.protectedLayout(f.event), { status: 302, location: '/first-login' });
+	assert.deepEqual(
+		f.firstLogin({ ...f.event, url: new URL('http://localhost:3000/first-login') }),
+		{ resumeSetup: true }
+	);
+	await f.completeFirstLogin();
+	await f.refreshSession();
+	assert.deepEqual(f.protectedLayout(f.event), { unreadNotifications: 0 });
 });
 
 test('automatic sign-in respects two-factor authentication and cannot complete setup early', async (t) => {
@@ -457,11 +495,24 @@ for (const role of Object.values(Role)) {
 		});
 		assert.equal(challenge.twoFactorRedirect, true);
 		assert.equal(await f.refreshSession(), null);
+		assert.deepEqual(
+			f.firstLogin({ ...f.event, url: new URL('http://localhost:3000/first-login') }),
+			{ resumeSetup: false }
+		);
+		await assert.rejects(f.completeFirstLogin(), { status: 401 });
 		await f.auth.api.verifyTOTP({
 			headers: headers(),
 			body: { code: authenticatorCode(setup.totpURI), trustDevice: false }
 		});
 		assert.ok(await f.refreshSession());
+		assert.throws(() => f.protectedLayout(f.event), { status: 302, location: '/first-login' });
+		assert.deepEqual(
+			f.firstLogin({ ...f.event, url: new URL('http://localhost:3000/first-login') }),
+			{ resumeSetup: true }
+		);
+		await f.completeFirstLogin();
+		await f.refreshSession();
+		assert.deepEqual(f.protectedLayout(f.event), { unreadNotifications: 0 });
 		await f.auth.api.signOut({ headers: headers() });
 		await f.refreshSession();
 		await f.auth.api.signInEmail({

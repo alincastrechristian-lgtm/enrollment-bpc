@@ -7,11 +7,19 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Check, Eye, EyeOff, LockKeyhole, ShieldCheck } from '@lucide/svelte';
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
 
 	const token = $derived(page.url.searchParams.get('token'));
 	const tokenError = $derived(page.url.searchParams.get('error'));
 
 	onMount(() => {
+		if (data.resumeSetup) {
+			signedIn = true;
+			void handleSubmit();
+			return;
+		}
 		if (tokenError || !token) {
 			showError(
 				'Invalid or missing reset token. Please request a new password reset email.',
@@ -34,8 +42,8 @@
 	const passwordsMatch = $derived(password.length > 0 && password === confirmation);
 	const mismatch = $derived(confirmation.length > 0 && !passwordsMatch);
 
-	async function handleSubmit(event: SubmitEvent) {
-		event.preventDefault();
+	async function handleSubmit(event?: SubmitEvent) {
+		event?.preventDefault();
 		if (busy) return;
 		if (!signedIn) {
 			submitted = true;
@@ -78,7 +86,7 @@
 			}
 			showLoading('Completing account setup...');
 			await completeFirstLogin();
-			window.location.href = '/user/dashboard';
+			window.location.href = resolve('/user/dashboard');
 		} catch (error) {
 			showError(getErrorMessage(error, 'Failed to update your account. Please try again.'));
 		} finally {
@@ -94,7 +102,9 @@
 
 <AuthLayout
 	title="Set up your account"
-	description="Choose a password to finish setting up your BPC Enrollment Portal account."
+	description={data.resumeSetup
+		? 'Your password is saved. Finish setting up your BPC Enrollment Portal account.'
+		: 'Choose a password to finish setting up your BPC Enrollment Portal account.'}
 	eyebrow="Your first step"
 >
 	<form
@@ -105,7 +115,7 @@
 			submitted = false;
 		}}
 	>
-		<fieldset disabled={busy || signedIn} class="space-y-5">
+		<fieldset hidden={data.resumeSetup} disabled={busy || signedIn} class="space-y-5">
 			<div class="space-y-2">
 				<label for="new-password" class="text-sm font-semibold">New password</label>
 				<div class="input flex h-12 w-full items-center gap-3 border-base-300 bg-base-200">
@@ -204,6 +214,10 @@
 		</button>
 	</form>
 	<p class="mt-6 border-t border-base-300 pt-5 text-xs leading-relaxed text-base-content/55">
-		Choose a password you do not use elsewhere. Never share it with anyone.
+		{#if data.resumeSetup}
+			If setup could not finish, select Finish setup to try again.
+		{:else}
+			Choose a password you do not use elsewhere. Never share it with anyone.
+		{/if}
 	</p>
 </AuthLayout>

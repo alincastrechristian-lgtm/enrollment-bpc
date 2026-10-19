@@ -8,5 +8,8 @@ export const load: LayoutServerLoad = (event) => {
 	if (!event.locals.user) {
 		return redirect(302, resolve('/login'));
 	}
+	if (!event.locals.user.setupComplete) {
+		redirect(302, resolve('/first-login'));
+	}
 	return { unreadNotifications: getNotificationCounts(db, event.locals.user).unread };
 };
