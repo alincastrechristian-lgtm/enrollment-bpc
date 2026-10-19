@@ -12,6 +12,7 @@ import {
 	Layers,
 	Mail,
 	Settings,
+	ShieldCheck,
 	SquareChartGantt,
 	UserRound,
 	Users,
@@ -74,7 +75,8 @@ const items: SidebarItem[] = [
 				icon: HardDrive,
 				roles: [Role.ADMIN]
 			},
-			{ label: 'Profile', href: resolve('/user/settings/profile'), icon: UserRound }
+			{ label: 'Profile', href: resolve('/user/settings/profile'), icon: UserRound },
+			{ label: 'Security', href: resolve('/user/settings/security'), icon: ShieldCheck }
 		]
 	}
 ];

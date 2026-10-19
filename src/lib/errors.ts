@@ -25,6 +25,11 @@ export function getPublicError({ kind, error }: CaughtError): App.Error {
 
 // Auth responses come from a separate API. Translate known codes, never provider messages.
 const authMessages: Record<string, string> = {
+	INVALID_PASSWORD: 'Incorrect current password.',
+	INVALID_CODE: 'Invalid authentication code. Try the latest code from your app.',
+	INVALID_BACKUP_CODE: 'Invalid or already used recovery code.',
+	INVALID_TWO_FACTOR_COOKIE: 'Your verification session expired. Sign in again.',
+	ACCOUNT_TEMPORARILY_LOCKED: 'Too many attempts. Wait before trying again.',
 	INVALID_EMAIL_OR_PASSWORD: 'Incorrect email or password.',
 	BANNED_USER: 'This account is disabled. Contact an administrator.',
 	EMAIL_NOT_VERIFIED: 'Verify your email before signing in.',

@@ -66,9 +66,12 @@ for (const [role, expected] of [
 		const settings = items.find((item) => item.id === 'settings');
 		assert.deepEqual(
 			settings.children.map((item) => item.label),
-			role === 'admin' ? ['Email', 'Clearance', 'Storage', 'Profile'] : ['Profile']
+			role === 'admin'
+				? ['Email', 'Clearance', 'Storage', 'Profile', 'Security']
+				: ['Profile', 'Security']
 		);
 		assert.equal(isActiveItem(settings, '/user/settings/profile/'), true);
+		assert.equal(isActiveItem(settings, '/user/settings/security'), true);
 		assert.equal(isActiveItem(settings, '/user/settings/email'), role === 'admin');
 		assert.equal(isActiveItem(settings, '/user/settings/storage'), role === 'admin');
 		assert.equal(isActiveItem(settings, '/user/settings/clearance'), role === 'admin');
@@ -84,7 +87,7 @@ test('missing or unknown sessions receive no links', () => {
 test('role changes do not mutate the shared menu', () => {
 	getSidebarItems('student');
 	getSidebarItems('registrar');
-	assert.equal(getSidebarItems('admin').find((item) => item.id === 'settings').children.length, 4);
+	assert.equal(getSidebarItems('admin').find((item) => item.id === 'settings').children.length, 5);
 });
 
 test('active links match route boundaries and trailing slashes', () => {

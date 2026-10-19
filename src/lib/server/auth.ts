@@ -60,7 +60,7 @@ export const auth = betterAuth({
 				[Role.STUDENT]: studentRole
 			}
 		}),
-		twoFactor(),
+		twoFactor({ issuer: 'BPC Enrollment Portal' }),
 		sveltekitCookies(getRequestEvent) // make sure this is the last plugin in the array
 	],
 	user: {

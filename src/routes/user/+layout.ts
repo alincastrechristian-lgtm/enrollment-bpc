@@ -88,6 +88,10 @@ const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }
 		pageTitle: 'MY PROFILE',
 		pageDescription: 'View your personal details and account information.'
 	},
+	'/user/settings/security': {
+		pageTitle: 'SECURITY',
+		pageDescription: 'Manage your password and two-factor authentication.'
+	},
 	'/user/settings': {
 		pageTitle: 'SETTINGS',
 		pageDescription: 'Configure system and user settings.'

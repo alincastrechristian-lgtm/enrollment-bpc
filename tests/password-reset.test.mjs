@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
@@ -141,7 +142,17 @@ CREATE TABLE two_factor (id TEXT PRIMARY KEY, secret TEXT NOT NULL, backup_codes
 			email: 'other@example.com'
 		})
 		.run();
-	return { db, auth, commands, refreshSession, issueToken, event, cookieHeader, ...commands() };
+	return {
+		db,
+		auth,
+		validateUser,
+		commands,
+		refreshSession,
+		issueToken,
+		event,
+		cookieHeader,
+		...commands()
+	};
 }
 
 test('first reset creates a credential, sets the browser session, and completes only that account', async (t) => {
@@ -335,3 +346,151 @@ test('failed completion can be retried with the signed-in session after the toke
 		undefined
 	);
 });
+
+// Independently generate an authenticator code from the QR URI (RFC 6238).
+function authenticatorCode(uri) {
+	const secret = new URL(uri).searchParams.get('secret');
+	const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+	const bits = [...secret]
+		.map((char) => alphabet.indexOf(char).toString(2).padStart(5, '0'))
+		.join('');
+	const key = Buffer.from(bits.match(/.{8}/g).map((byte) => parseInt(byte, 2)));
+	const counter = Buffer.alloc(8);
+	counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
+	const hash = createHmac('sha1', key).update(counter).digest();
+	return String((hash.readUInt32BE(hash.at(-1) & 15) & 0x7fffffff) % 1000000).padStart(6, '0');
+}
+
+for (const role of Object.values(Role)) {
+	test(`${role} security: password change, QR enrollment, login challenge and recovery`, async (t) => {
+		const f = fixture(t);
+		f.db.update(schema.user).set({ role }).where(eq(schema.user.id, 'student')).run();
+		await f.resetPasswordAndSignIn({
+			token: await f.issueToken(),
+			newPassword: 'original-password-123'
+		});
+		await f.refreshSession();
+		const headers = () => f.event.request.headers;
+		const { load: loadSecurity } = loadTypeScript(
+			'src/routes/user/settings/security/+page.server.ts',
+			{
+				'#lib/server/auth.js': { validateUser: f.validateUser },
+				'@sveltejs/kit': { error },
+				'#lib/server/db/index.js': { db: f.db },
+				'#lib/schema.js': schema
+			}
+		);
+		const responseHeaders = {};
+		assert.deepEqual(
+			await loadSecurity({
+				locals: f.event.locals,
+				setHeaders: (values) => Object.assign(responseHeaders, values)
+			}),
+			{ twoFactorEnabled: false }
+		);
+		assert.equal(responseHeaders['cache-control'], 'no-store');
+		await assert.rejects(loadSecurity({ locals: {}, setHeaders: () => {} }), { status: 401 });
+		const previousSession = f.event.locals.session;
+		await f.auth.api.signInEmail({
+			body: { email: 'student@example.com', password: 'original-password-123' }
+		});
+		await f.refreshSession();
+		await assert.rejects(
+			f.auth.api.changePassword({
+				headers: headers(),
+				body: {
+					currentPassword: 'wrong',
+					newPassword: 'changed-password-123',
+					revokeOtherSessions: true
+				}
+			})
+		);
+		await f.auth.api.changePassword({
+			headers: headers(),
+			body: {
+				currentPassword: 'original-password-123',
+				newPassword: 'changed-password-123',
+				revokeOtherSessions: true
+			}
+		});
+		await f.refreshSession();
+		assert.equal(
+			await f.db.query.session.findFirst({
+				where: eq(schema.session.token, previousSession.token)
+			}),
+			undefined
+		);
+		await assert.rejects(
+			f.auth.api.signInEmail({
+				body: { email: 'student@example.com', password: 'original-password-123' }
+			})
+		);
+		await assert.rejects(
+			f.auth.api.enableTwoFactor({ body: { password: 'changed-password-123' } }),
+			{ status: 'UNAUTHORIZED' }
+		);
+		await assert.rejects(
+			f.auth.api.enableTwoFactor({ headers: headers(), body: { password: 'wrong' } })
+		);
+		const setup = await f.auth.api.enableTwoFactor({
+			headers: headers(),
+			body: { password: 'changed-password-123', method: 'totp' }
+		});
+		assert.equal(setup.method, 'totp');
+		assert.match(setup.totpURI, /^otpauth:\/\/totp\//);
+		assert.ok(setup.backupCodes.length);
+		assert.equal(
+			(await f.db.query.user.findFirst({ where: eq(schema.user.id, 'student') })).twoFactorEnabled,
+			false
+		);
+		await assert.rejects(f.auth.api.verifyTOTP({ headers: headers(), body: { code: 'bad' } }));
+		await f.auth.api.verifyTOTP({
+			headers: headers(),
+			body: { code: authenticatorCode(setup.totpURI), trustDevice: false }
+		});
+		await f.refreshSession();
+		assert.equal(f.event.locals.user.twoFactorEnabled, true);
+		await f.auth.api.signOut({ headers: headers() });
+		await f.refreshSession();
+		const challenge = await f.auth.api.signInEmail({
+			body: { email: 'student@example.com', password: 'changed-password-123' }
+		});
+		assert.equal(challenge.twoFactorRedirect, true);
+		assert.equal(await f.refreshSession(), null);
+		await f.auth.api.verifyTOTP({
+			headers: headers(),
+			body: { code: authenticatorCode(setup.totpURI), trustDevice: false }
+		});
+		assert.ok(await f.refreshSession());
+		await f.auth.api.signOut({ headers: headers() });
+		await f.refreshSession();
+		await f.auth.api.signInEmail({
+			body: { email: 'student@example.com', password: 'changed-password-123' }
+		});
+		await f.refreshSession();
+		await f.auth.api.verifyBackupCode({
+			headers: headers(),
+			body: { code: setup.backupCodes[0], trustDevice: false }
+		});
+		assert.ok(await f.refreshSession());
+		await assert.rejects(
+			f.auth.api.verifyBackupCode({
+				headers: headers(),
+				body: { code: setup.backupCodes[0], trustDevice: false }
+			})
+		);
+		await assert.rejects(
+			f.auth.api.disableTwoFactor({ headers: headers(), body: { password: 'wrong' } })
+		);
+		await f.auth.api.disableTwoFactor({
+			headers: headers(),
+			body: { password: 'changed-password-123' }
+		});
+		await f.refreshSession();
+		assert.equal(f.event.locals.user.twoFactorEnabled, false);
+		assert.equal(
+			await f.db.query.twoFactor.findFirst({ where: eq(schema.twoFactor.userId, 'student') }),
+			undefined
+		);
+	});
+}
