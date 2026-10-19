@@ -1,5 +1,5 @@
 import { formatHex, parse } from 'culori';
-import layoutCss from '../../routes/layout.css?raw';
+import layoutCss from '../../../routes/layout.css?raw';
 
 // Raw CSS is bundled by Vite, so deployed email rendering needs no source files.
 export function readEmailTheme(css: string) {

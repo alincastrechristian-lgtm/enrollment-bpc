@@ -25,6 +25,13 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 	const failed = subjects.filter((subject) => subject.status === 'Failed');
 	const incomplete = subjects.filter((subject) => subject.status === 'Incomplete');
 	const nextSteps: { id: string; title: string; detail: string }[] = [];
+	if (finalized && current?.status !== 'dropped' && !current?.submittedClearance)
+		nextSteps.push({
+			id: 'clearance',
+			title: 'Upload clearance and request enrollment',
+			detail:
+				'Open Enrollment to upload your clearance. Complete template and office checks, then send your enrollment request for Registrar review.'
+		});
 	const droppedEnrollments = (record?.enrollments ?? [])
 		.filter((entry) => entry.status === 'dropped')
 		.map((entry) => ({

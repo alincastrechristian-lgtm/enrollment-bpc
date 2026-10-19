@@ -2,6 +2,8 @@
 	import EnrollmentRecordActions from './EnrollmentRecordActions.svelte';
 	import CORDownload from '#lib/components/CORDownload.svelte';
 	import { getErrorMessage } from '#lib/errors.js';
+	import { rejectClearance } from '#lib/actions/clearance.remote.js';
+	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
 	import {
 		finalizeEnrollmentGrades,
 		completeEnrollmentFollowUp,
@@ -42,6 +44,7 @@
 	let busy = $state(false);
 	let message = $state('');
 	let success = $state('');
+	let rejectionReason = $state('');
 	let finalizedHere = $state(false);
 	let meetingSentHere = $state<Date | null>(null);
 	const meetingSentAt = $derived(meetingSentHere ?? data.enrollment.meetingRequestSentAt);
@@ -304,7 +307,17 @@
 	}
 
 	async function verifyClearance() {
-		if (busy || editing || dirty || dropped || voided || !finalized || clearanceVerified) return;
+		if (
+			busy ||
+			editing ||
+			dirty ||
+			dropped ||
+			voided ||
+			!finalized ||
+			clearanceVerified ||
+			data.clearance?.status !== 'requested'
+		)
+			return;
 		busy = true;
 		message = '';
 		success = '';
@@ -312,7 +325,7 @@
 			if (
 				!(await showYesNo({
 					title: 'Verify clearance?',
-					message: `Confirm that ${data.student.name} has submitted clearance for this enrollment. Reenrollment also requires a completed Registrar meeting if the current enrollment has failed grades.`,
+					message: `Confirm that you reviewed ${data.student.name}'s uploaded clearance and office marks. Automated checks detect mark presence; personal information verification is deferred. Reenrollment also requires a completed Registrar meeting if the current enrollment has failed grades.`,
 					warning: true,
 					yesText: 'Verify clearance',
 					noText: 'Cancel'
@@ -320,6 +333,7 @@
 			)
 				return;
 			await verifyEnrollmentClearance({
+				submissionId: data.clearance.id,
 				userId: data.student.id,
 				enrollmentId: data.enrollment.id,
 				revision: data.enrollment.revision
@@ -330,6 +344,34 @@
 			await refreshAll();
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Failed to verify clearance. Please try again.');
+		} finally {
+			busy = false;
+		}
+	}
+	async function rejectUploadedClearance() {
+		if (
+			busy ||
+			editing ||
+			dirty ||
+			data.clearance?.status !== 'requested' ||
+			rejectionReason.trim().length < 5
+		)
+			return;
+		busy = true;
+		message = '';
+		try {
+			await rejectClearance({
+				userId: data.student.id,
+				enrollmentId: data.enrollment.id,
+				revision: data.enrollment.revision,
+				submissionId: data.clearance.id,
+				reason: rejectionReason.trim()
+			});
+			rejectionReason = '';
+			showSuccess('Clearance returned for correction.');
+			await refreshAll();
+		} catch (cause) {
+			message = getErrorMessage(cause, 'Could not return clearance for correction.');
 		} finally {
 			busy = false;
 		}
@@ -485,7 +527,9 @@
 						{#if !clearanceVerified}
 							<p class="mt-1 text-xs text-base-content/55">
 								{finalized
-									? 'Verify submitted clearance for this enrollment.'
+									? data.clearance?.status === 'requested'
+										? 'Review the uploaded clearance and student enrollment request below.'
+										: 'Waiting for the student to upload clearance and request enrollment.'
 									: 'Available after grade finalization.'}
 							</p>
 						{/if}
@@ -499,7 +543,14 @@
 					<button
 						type="button"
 						class="btn gap-2 border-base-300 btn-outline btn-sm"
-						disabled={busy || editing || dirty || dropped || voided || !finalized}
+						disabled={busy ||
+							editing ||
+							dirty ||
+							dropped ||
+							voided ||
+							!finalized ||
+							!data.isCurrent ||
+							data.clearance?.status !== 'requested'}
 						onclick={verifyClearance}
 					>
 						Verify clearance
@@ -562,6 +613,60 @@
 				</div>
 			{/if}
 		</div>
+		{#if data.clearance}
+			<details
+				class="space-y-4 border-t border-base-300 p-5 sm:px-6"
+				open={data.clearance.status === 'requested'}
+			>
+				<summary class="cursor-pointer text-sm font-semibold">
+					Uploaded clearance review · {data.clearance.status}
+				</summary>
+				<div class="grid items-start gap-5 lg:grid-cols-2">
+					<a
+						href={resolve('/user/clearance-files/[id]', { id: data.clearance.id })}
+						target="_blank"
+						rel="noreferrer"
+						class="block"
+					>
+						<img
+							class="w-full rounded-lg border border-base-300"
+							src={resolve('/user/clearance-files/[id]', { id: data.clearance.id })}
+							alt={`${data.student.name}'s uploaded clearance`}
+						/>
+						<span class="mt-2 block link text-xs">Open original clearance</span>
+					</a>
+					<div class="space-y-3">
+						<p class="text-sm font-semibold">{data.clearance.filename}</p>
+						<ClearanceFindings report={data.clearance.report} showReference />
+						{#if data.clearance.reviewerName}
+							<p class="text-xs text-base-content/65">Reviewed by {data.clearance.reviewerName}</p>
+						{/if}
+						{#if data.clearance.rejectionReason}
+							<p class="text-sm text-error">{data.clearance.rejectionReason}</p>
+						{/if}
+						{#if data.clearance.status === 'requested' && data.isCurrent && !dropped && !voided}
+							<label class="block text-sm">
+								Reason for correction
+								<textarea
+									class="textarea mt-1 w-full"
+									rows="3"
+									maxlength="1000"
+									bind:value={rejectionReason}
+									disabled={busy || editing || dirty}></textarea>
+							</label>
+							<button
+								type="button"
+								class="btn btn-outline btn-sm"
+								disabled={busy || editing || dirty || rejectionReason.trim().length < 5}
+								onclick={rejectUploadedClearance}
+							>
+								Return for correction
+							</button>
+						{/if}
+					</div>
+				</div>
+			</details>
+		{/if}
 		{#if !voided && data.isCurrent && (dropped || (finalized && clearanceVerified))}
 			<div
 				class="flex flex-wrap items-center justify-between gap-4 border-t border-base-300 bg-base-200/35 px-5 py-4 sm:px-6"

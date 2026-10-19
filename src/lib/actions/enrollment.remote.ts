@@ -4,7 +4,7 @@ import { resolve } from '$app/paths';
 import { Role } from '#lib/Roles.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
-import { sendEmail } from '#lib/server/email.js';
+import { sendEmail } from '#lib/server/email/index.js';
 import {
 	correctEnrollmentSchema,
 	enrollmentChangeSchema,

@@ -134,10 +134,10 @@ test('notification visibility, filters and read commands enforce actor/recipient
 });
 
 test('email metadata covers all notification types and never contains password reset tokens', () => {
-	const templates = load('src/lib/server/email-templates.ts', {
-		'./email-html': load('src/lib/server/email-html.ts'),
-		'./email-theme': load('src/lib/server/email-theme.ts', {
-			'../../routes/layout.css?raw': readFileSync('src/routes/layout.css', 'utf8')
+	const templates = load('src/lib/server/email/templates.ts', {
+		'./html': load('src/lib/server/email/html.ts'),
+		'./theme': load('src/lib/server/email/theme.ts', {
+			'../../../routes/layout.css?raw': readFileSync('src/routes/layout.css', 'utf8')
 		})
 	});
 	const url = 'https://example.com/reset-password?token=SECRET_ONE_TIME_TOKEN';
@@ -188,10 +188,10 @@ test('email metadata covers all notification types and never contains password r
 
 test('auth email events persist safe notifications with the authenticated staff actor', async (t) => {
 	const f = fixture(t);
-	const templates = load('src/lib/server/email-templates.ts', {
-		'./email-html': load('src/lib/server/email-html.ts'),
-		'./email-theme': load('src/lib/server/email-theme.ts', {
-			'../../routes/layout.css?raw': readFileSync('src/routes/layout.css', 'utf8')
+	const templates = load('src/lib/server/email/templates.ts', {
+		'./html': load('src/lib/server/email/html.ts'),
+		'./theme': load('src/lib/server/email/theme.ts', {
+			'../../../routes/layout.css?raw': readFileSync('src/routes/layout.css', 'utf8')
 		})
 	});
 	let actor = registrar;
@@ -210,9 +210,9 @@ test('auth email events persist safe notifications with the authenticated staff 
 		'better-auth/svelte-kit': { sveltekitCookies: plugin },
 		'../auth-permissions': {},
 		'./auth-names': {},
-		'./account-setup-email': load('src/lib/server/account-setup-email.ts'),
-		'./email': { sendEmail: async () => false },
-		'./email-templates': templates
+		'./email/account-setup': load('src/lib/server/email/account-setup.ts'),
+		'./email/index': { sendEmail: async () => false },
+		'./email/templates': templates
 	});
 	const request = {
 		user: { id: 's2', name: 'Student', email: 's2@example.com' },

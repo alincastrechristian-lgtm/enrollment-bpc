@@ -23,10 +23,10 @@ const schema = load('src/lib/schema.ts', {
 	'#lib/Roles.js': roles,
 	'./email': load('src/lib/email.ts')
 });
-const templates = load('src/lib/server/email-templates.ts', {
-	'./email-html': load('src/lib/server/email-html.ts'),
-	'./email-theme': load('src/lib/server/email-theme.ts', {
-		'../../routes/layout.css?raw': readFileSync('src/routes/layout.css', 'utf8')
+const templates = load('src/lib/server/email/templates.ts', {
+	'./html': load('src/lib/server/email/html.ts'),
+	'./theme': load('src/lib/server/email/theme.ts', {
+		'../../../routes/layout.css?raw': readFileSync('src/routes/layout.css', 'utf8')
 	})
 });
 const admin = { id: 'admin', name: 'Administrator', role: 'admin' };
@@ -44,12 +44,29 @@ function fixture(t, proveMigration = false) {
 	sqlite.pragma('foreign_keys=OFF');
 	migrate(db, proveMigration ? migrationConfigThrough(t, 29) : { migrationsFolder: 'drizzle' });
 	sqlite.pragma('foreign_keys=ON');
+	for (const [id, name, email, role, first, last] of [
+		['admin', 'Administrator', 'admin@example.com', 'admin', 'Administrator', ''],
+		['registrar', 'Registrar', 'registrar@example.com', 'registrar', 'Registrar', ''],
+		['student', 'Alice Student', 'alice@example.com', 'student', 'Alice', 'Student'],
+		['other', 'Other Student', 'other@example.com', 'student', 'Other', 'Student']
+	]) {
+		if (proveMigration)
+			sqlite
+				.prepare('INSERT INTO user(id,name,email,role,setup_complete) VALUES (?,?,?,?,1)')
+				.run(id, name, email, role);
+		else
+			sqlite
+				.prepare(
+					'INSERT INTO user(id,name,email,role,setup_complete,first_name,last_name) VALUES (?,?,?,?,1,?,?)'
+				)
+				.run(id, name, email, role, first, last);
+	}
+	sqlite.exec(
+		proveMigration
+			? "INSERT INTO student(id,user_id) VALUES ('MA-001','student'),('MA-002','other')"
+			: "INSERT INTO student(id,user_id,birth_date,sex) VALUES ('MA-001','student','2000-01-01','female'),('MA-002','other','2000-01-01','female')"
+	);
 	sqlite.exec(`
-		INSERT INTO user(id,name,email,role,setup_complete,first_name,last_name) VALUES ('admin','Administrator','admin@example.com','admin',1,'Administrator',''),
-		('registrar','Registrar','registrar@example.com','registrar',1,'Registrar',''),
-		('student','Alice Student','alice@example.com','student',1,'Alice','Student'),
-		('other','Other Student','other@example.com','student',1,'Other','Student');
-		INSERT INTO student(id,user_id,birth_date,sex) VALUES ('MA-001','student','2000-01-01','female'),('MA-002','other','2000-01-01','female');
 		INSERT INTO program(id,code,name,is_active) VALUES
 		('p1','BSIS','Information Systems',1),('p2','BSA','Accountancy',1);
 		INSERT INTO curriculum(id,program_code,name,year_levels,semesters,published_at) VALUES
@@ -82,7 +99,7 @@ function fixture(t, proveMigration = false) {
 		};
 		// Exercise the actual migrator's outer transaction with foreign keys enabled.
 		assert.equal(sqlite.pragma('foreign_keys', { simple: true }), 1);
-		migrate(db, { migrationsFolder: 'drizzle' });
+		migrate(db, migrationConfigThrough(t, 30));
 		assert.deepEqual(sqlite.prepare('SELECT * FROM enrollment').get(), {
 			...before.enrollment,
 			revision: 0
@@ -114,8 +131,10 @@ function fixture(t, proveMigration = false) {
 			sqlite.prepare("SELECT * FROM notification WHERE id='legacy-notice'").get(),
 			before.notification
 		);
-		migrate(db, { migrationsFolder: 'drizzle' });
+		// This populated proof targets 0030. Later required-personal-details migration
+		// deliberately requires an empty database; exercise current commands in a fresh fixture.
 		assert.deepEqual(sqlite.pragma('foreign_key_check'), []);
+		return;
 	}
 	const dependencies = {
 		'#lib/Roles.js': roles,
@@ -130,7 +149,7 @@ function fixture(t, proveMigration = false) {
 		...dependencies,
 		'./enrollment': enrollment,
 		'./student-enrollment': guards,
-		'./email-templates': templates,
+		'./email/templates': templates,
 		'./notifications': load('src/lib/server/notifications.ts', dependencies)
 	});
 	const input = (overrides = {}) => ({
@@ -275,7 +294,8 @@ test('finalized enrollments stay locked until admin reopens; reopening resets re
 });
 
 test('populated migration preserves grades and links; historical corrections and reopening remain admin-only', (t) => {
-	const f = fixture(t, true);
+	fixture(t, true);
+	const f = fixture(t);
 	f.sqlite.exec(
 		"INSERT INTO enrollment(id,student_id,curriculum_id,section,school_year_start,semester,year_level,status,finalized_grades,submitted_clearance) VALUES('old','MA-001','c1','A',2025,2,1,'completed',1,1)"
 	);

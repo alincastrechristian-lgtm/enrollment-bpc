@@ -232,6 +232,34 @@
       "when": 1792211273103,
       "tag": "0032_required_personal_details",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1792338454943,
+      "tag": "0033_garage_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1792347339819,
+      "tag": "0034_clearance_template",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1792349357178,
+      "tag": "0035_clearance_areas",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1792362823054,
+      "tag": "0036_clearance_submission",
+      "breakpoints": true
     }
   ]
 }

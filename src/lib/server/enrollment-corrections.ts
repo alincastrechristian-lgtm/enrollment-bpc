@@ -1,6 +1,7 @@
 import { Role } from '#lib/Roles.js';
 import {
 	curriculum,
+	clearanceSubmission,
 	enrollment,
 	enrollmentAudit,
 	enrollmentSubject,
@@ -9,7 +10,7 @@ import {
 import type { db, Transaction } from './db/index';
 import { enrollStudentSchema, getEnrollmentContext, getEnrollmentSubjects } from './enrollment';
 import { getStudentEnrollment } from './student-enrollment';
-import { createEnrollmentChangeEmail } from './email-templates';
+import { createEnrollmentChangeEmail } from './email/templates';
 import { recordNotification } from './notifications';
 import { error } from '@sveltejs/kit';
 import { and, desc, eq, ne, notInArray } from 'drizzle-orm';
@@ -280,6 +281,10 @@ export function reopenStudentEnrollment(
 				error(403, 'Only administrators can reopen a finalized enrollment.');
 			checkRevision(record, data.revision);
 			const before = snapshot(tx, record.enrollment.id);
+			tx.update(clearanceSubmission)
+				.set({ status: 'invalidated' })
+				.where(eq(clearanceSubmission.enrollmentId, record.enrollment.id))
+				.run();
 			tx.update(enrollment)
 				.set({
 					finalizedGrades: false,

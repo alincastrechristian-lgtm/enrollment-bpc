@@ -21,14 +21,14 @@ function loadTypeScript(file, dependencies = {}) {
 	return exports;
 }
 
-const htmlHelpers = loadTypeScript('email-html.ts');
+const htmlHelpers = loadTypeScript('email/html.ts');
 function templatesFor(styles = css) {
-	const theme = loadTypeScript('email-theme.ts', {
-		'../../routes/layout.css?raw': { default: styles }
+	const theme = loadTypeScript('email/theme.ts', {
+		'../../../routes/layout.css?raw': { default: styles }
 	});
-	const templates = loadTypeScript('email-templates.ts', {
-		'./email-theme': theme,
-		'./email-html': htmlHelpers
+	const templates = loadTypeScript('email/templates.ts', {
+		'./theme': theme,
+		'./html': htmlHelpers
 	});
 	return { ...templates, ...theme };
 }
@@ -175,15 +175,15 @@ test('auth callbacks send templates with the expiration configured in Better Aut
 		'better-auth/svelte-kit': { sveltekitCookies: () => ({}) },
 		'../auth-permissions': {},
 		'./auth-names': {},
-		'./account-setup-email': loadTypeScript('account-setup-email.ts'),
+		'./email/account-setup': loadTypeScript('email/account-setup.ts'),
 		'./notifications': { recordNotification: () => {} },
-		'./email': {
+		'./email/index': {
 			sendEmail: async (...message) => {
 				sent.push(message);
 				return true;
 			}
 		},
-		'./email-templates': templates
+		'./email/templates': templates
 	});
 	await auth.emailAndPassword.sendResetPassword({
 		user: { id: 'student', email: 'student@example.com', name: 'Student' },
@@ -207,7 +207,7 @@ test('auth callbacks send templates with the expiration configured in Better Aut
 
 test('SMTP sends supplied HTML and preserves plain email compatibility', async () => {
 	const sent = [];
-	const { sendEmail } = loadTypeScript('email.ts', {
+	const { sendEmail } = loadTypeScript('email/index.ts', {
 		nodemailer: {
 			default: {
 				createTransport: () => ({
@@ -219,9 +219,9 @@ test('SMTP sends supplied HTML and preserves plain email compatibility', async (
 				getTestMessageUrl: () => false
 			}
 		},
-		'./email-html': htmlHelpers,
-		'../email': { EmailApiType: { SMTP: 'smtp', RESEND: 'resend' } },
-		'./settings': {
+		'./html': htmlHelpers,
+		'../../email': { EmailApiType: { SMTP: 'smtp', RESEND: 'resend' } },
+		'../settings': {
 			getSystemSettings: async () => ({
 				smtpHost: 'smtp.example.com',
 				smtpPort: 465,

@@ -1,6 +1,6 @@
-import { escapeHtml } from './email-html';
-import { emailTheme as colors } from './email-theme';
-import type { EmailEventType } from '../email';
+import { escapeHtml } from './html';
+import { emailTheme as colors } from './theme';
+import type { EmailEventType } from '../../email';
 
 const brand = 'BPC Enrollment System';
 
@@ -292,6 +292,7 @@ export function createGradesFinalizedEmail(
 			'Your grades for this enrollment have been finalized and are now available in your student portal.',
 		steps: [
 			'Sign in and open your enrollment record to review your subject grades.',
+			'For your next enrollment, open Enrollment, upload your completed clearance, pass the template and office checks, then send your enrollment request for Registrar review.',
 			"If you have questions about a grade or an outstanding requirement, contact your instructor or the Registrar's Office."
 		],
 		note: 'INC means Incomplete. Review any outstanding subject requirements with your instructor.'

@@ -14,6 +14,9 @@ import {
 import { createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import z from 'zod';
 import { EmailApiType, emailEventTypes } from './email';
+import type { TemplateDefinition } from './clearance/definition';
+import type { ClearanceReport } from './clearance/report';
+import type { Corners } from './clearance/clearance';
 
 const uuid = () =>
 	text('id')
@@ -34,6 +37,31 @@ export const systemSettings = sqliteTable('system_settings', {
 	),
 	resendApiKey: text('resend_api_key')
 });
+
+// Private provisioning metadata. S3 secrets are fetched from Garage into memory.
+export const garageStorage = sqliteTable('garage_storage', {
+	endpoint: text('endpoint').primaryKey(),
+	keyName: text('key_name').notNull(),
+	accessKeyId: text('access_key_id'),
+	leaseToken: text('lease_token'),
+	leaseExpiresAt: integer('lease_expires_at').notNull().default(0)
+});
+
+export const clearanceTemplate = sqliteTable(
+	'clearance_template',
+	{
+		id: integer('id').primaryKey().default(1),
+		revision: text('revision').notNull(),
+		objectKey: text('object_key').notNull().unique(),
+		filename: text('filename').notNull(),
+		contentType: text('content_type').notNull(),
+		size: integer('size').notNull(),
+		definition: text('definition', { mode: 'json' }).$type<TemplateDefinition>(),
+		uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+		uploadedAt: integer('uploaded_at', { mode: 'timestamp_ms' }).notNull()
+	},
+	(table) => [check('clearance_template_singleton', sql`${table.id} = 1`)]
+);
 
 export const program = sqliteTable('program', {
 	id: uuid(),
@@ -243,6 +271,40 @@ export const enrollmentRelations = relations(enrollment, ({ one, many }) => ({
 	}),
 	subjects: many(enrollmentSubject)
 }));
+
+export const clearanceSubmission = sqliteTable(
+	'clearance_submission',
+	{
+		id: uuid(),
+		enrollmentId: text('enrollment_id')
+			.notNull()
+			.unique()
+			.references(() => enrollment.id, { onDelete: 'restrict' }),
+		objectKey: text('object_key').notNull().unique(),
+		filename: text('filename').notNull(),
+		contentType: text('content_type').notNull(),
+		size: integer('size').notNull(),
+		templateRevision: text('template_revision').notNull(),
+		definition: text('definition', { mode: 'json' }).$type<TemplateDefinition>().notNull(),
+		corners: text('corners', { mode: 'json' }).$type<Corners>().notNull(),
+		report: text('report', { mode: 'json' }).$type<ClearanceReport>().notNull(),
+		status: text('status', {
+			enum: ['ready', 'requested', 'verified', 'rejected', 'invalidated']
+		}).notNull(),
+		uploadedAt: integer('uploaded_at', { mode: 'timestamp_ms' }).notNull(),
+		requestedAt: integer('requested_at', { mode: 'timestamp_ms' }),
+		reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
+		reviewedBy: text('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
+		reviewerName: text('reviewer_name'),
+		rejectionReason: text('rejection_reason')
+	},
+	(table) => [
+		check(
+			'clearance_submission_status_valid',
+			sql`${table.status} IN ('ready','requested','verified','rejected','invalidated')`
+		)
+	]
+);
 
 // Append-only snapshots retain removed subjects/grades and staff identity after account deletion.
 export const enrollmentAudit = sqliteTable(

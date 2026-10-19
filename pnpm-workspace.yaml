@@ -1,8 +1,13 @@
 allowBuilds:
+  garage_administration_api@git+https://git.deuxfleurs.fr/garage-sdk/garage-admin-sdk-js.git#54a1f6db76c52eb2bb722ff6103bba0b4a03b467: true
   better-sqlite3: true
   esbuild: true
+  tesseract.js: false
 minimumReleaseAgeExclude:
   - '@sveltejs/adapter-auto@8.0.0'
   - '@sveltejs/adapter-node@6.0.0'
   - '@sveltejs/kit@3.0.0'
   - vite@8.3.2
+overrides:
+  # Git preparation builds dist first; Babel CLI is unused by the runtime SDK.
+  garage_administration_api>@babel/cli: '-'

@@ -2,6 +2,10 @@ import type { LayoutLoad } from './$types';
 import { resolve } from '$app/paths';
 
 const routeMeta: Record<string, { pageTitle?: string; pageDescription?: string }> = {
+	'/user/clearances': {
+		pageTitle: 'ENROLLMENT REQUESTS',
+		pageDescription: 'Review uploaded clearances before enrolling students.'
+	},
 	'/user/dashboard': {
 		pageTitle: 'DASHBOARD',
 		pageDescription: 'View an overview of your enrollment system.'

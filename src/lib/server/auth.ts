@@ -9,11 +9,11 @@ import { admin } from 'better-auth/plugins/admin';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { ac, adminRole, registrarRole, studentRole } from '../auth-permissions';
-import { sendEmail } from './email';
-import { createFirstLoginEmail, createResetPasswordEmail } from './email-templates';
+import { sendEmail } from './email/index';
+import { createFirstLoginEmail, createResetPasswordEmail } from './email/templates';
 import { recordNotification } from './notifications';
 import { nameFields, nameHooks } from './auth-names';
-import { accountSetupEmailDelivery } from './account-setup-email';
+import { accountSetupEmailDelivery } from './email/account-setup';
 
 const RESET_PASSWORD_EXPIRY_SECONDS = 24 * 60 * 60;
 

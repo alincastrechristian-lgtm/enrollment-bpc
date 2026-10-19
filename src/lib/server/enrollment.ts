@@ -6,6 +6,7 @@ import {
 } from '#lib/enrollment-grades.js';
 import {
 	user,
+	clearanceSubmission,
 	enrollment,
 	curriculum,
 	curriculumSubject,
@@ -186,6 +187,20 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 			)
 			.get();
 		if (!current) error(409, 'Current enrollment is unavailable. Refresh and try again.');
+		const clearance = database
+			.select()
+			.from(clearanceSubmission)
+			.where(eq(clearanceSubmission.enrollmentId, current.id))
+			.get();
+		if (
+			current.status !== 'dropped' &&
+			clearance &&
+			(clearance.status !== 'verified' || !clearance.requestedAt)
+		)
+			error(
+				409,
+				'The student must request enrollment and staff must verify the uploaded clearance first.'
+			);
 		const concerns = getGradeConcerns(
 			database
 				.select({ grade: enrollmentSubject.grade })

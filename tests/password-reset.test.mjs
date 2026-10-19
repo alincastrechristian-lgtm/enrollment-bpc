@@ -83,10 +83,10 @@ CREATE TABLE two_factor (id TEXT PRIMARY KEY, secret TEXT NOT NULL, backup_codes
 		'./auth-names': loadTypeScript('src/lib/server/auth-names.ts', {
 			'../person-name': loadTypeScript('src/lib/person-name.ts')
 		}),
-		'./account-setup-email': loadTypeScript('src/lib/server/account-setup-email.ts'),
+		'./email/account-setup': loadTypeScript('src/lib/server/email/account-setup.ts'),
 		'./notifications': { recordNotification: () => {} },
-		'./email': { sendEmail: async () => true },
-		'./email-templates': {
+		'./email/index': { sendEmail: async () => true },
+		'./email/templates': {
 			createFirstLoginEmail: () => ({ subject: 'Setup', text: 'Setup', html: '<p>Setup</p>' }),
 			createResetPasswordEmail: () => ({ subject: 'Reset', text: 'Reset', html: '<p>Reset</p>' })
 		}

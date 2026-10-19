@@ -2,9 +2,9 @@
 
 import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
-import { EmailApiType } from '../email';
-import { escapeHtml } from './email-html';
-import { getSystemSettings } from './settings';
+import { EmailApiType } from '../../email';
+import { escapeHtml } from './html';
+import { getSystemSettings } from '../settings';
 
 async function sendSmtpEmail(
 	settings: Awaited<ReturnType<typeof getSystemSettings>>,

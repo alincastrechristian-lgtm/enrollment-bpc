@@ -1,0 +1,1 @@
+ALTER TABLE `clearance_template` ADD `definition` text;

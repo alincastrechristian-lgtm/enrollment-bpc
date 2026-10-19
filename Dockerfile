@@ -4,7 +4,7 @@ ENV DATABASE_URL=/tmp/build.db \
     BETTER_AUTH_SECRET=build-only-placeholder-secret-do-not-use-in-production \
     ORIGIN=http://localhost:3000
 
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ git
 RUN corepack enable
 RUN corepack prepare pnpm@11.9.0 --activate
 

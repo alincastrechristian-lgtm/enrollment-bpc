@@ -18,15 +18,15 @@ function load(file, deps = {}, source) {
 	return exports;
 }
 const { Role } = load('src/lib/Roles.ts');
-const deliveryModule = load('src/lib/server/account-setup-email.ts');
+const deliveryModule = load('src/lib/server/email/account-setup.ts');
 const schema = load('src/lib/schema.ts', {
 	'#lib/Roles.js': { Role },
 	'./email': load('src/lib/email.ts')
 });
-const emailTemplates = load('src/lib/server/email-templates.ts', {
-	'./email-html': load('src/lib/server/email-html.ts'),
-	'./email-theme': load('src/lib/server/email-theme.ts', {
-		'../../routes/layout.css?raw': readFileSync('src/routes/layout.css', 'utf8')
+const emailTemplates = load('src/lib/server/email/templates.ts', {
+	'./html': load('src/lib/server/email/html.ts'),
+	'./theme': load('src/lib/server/email/theme.ts', {
+		'../../../routes/layout.css?raw': readFileSync('src/routes/layout.css', 'utf8')
 	})
 });
 const guard = ts
@@ -205,8 +205,8 @@ function fixture(t) {
 	};
 	const deps = {
 		'#lib/enrollment-grades.js': load('src/lib/enrollment-grades.ts'),
-		'#lib/server/email-templates.js': emailTemplates,
-		'#lib/server/email.js': {
+		'#lib/server/email/templates.js': emailTemplates,
+		'#lib/server/email/index.js': {
 			sendEmail: async (...args) => {
 				if (args[1].includes('enrollment has been dropped')) {
 					state.dropEmails.push(args);
@@ -235,7 +235,7 @@ function fixture(t) {
 			'./student-demographics': load('src/lib/student-demographics.ts')
 		}),
 		'#lib/server/auth.js': { auth, validateUser },
-		'#lib/server/account-setup-email.js': deliveryModule,
+		'#lib/server/email/account-setup.js': deliveryModule,
 		'../server/db': { db },
 		'#lib/server/db/index.js': { db },
 		'@sveltejs/kit': { error, isHttpError },
@@ -255,6 +255,13 @@ function fixture(t) {
 	deps['#lib/server/notifications.js'] = load('src/lib/server/notifications.ts', deps);
 	deps['#lib/server/enrollment.js'] = load('src/lib/server/enrollment.ts', deps);
 	deps['#lib/server/student-enrollment.js'] = load('src/lib/server/student-enrollment.ts', deps);
+	const core = load('src/lib/clearance/clearance.ts');
+	const workflow = load('src/lib/server/clearance-workflow.ts', {
+		...deps,
+		'./student-enrollment': deps['#lib/server/student-enrollment.js'],
+		'#lib/clearance/report.js': load('src/lib/clearance/report.ts', { './clearance': core })
+	});
+	deps['#lib/server/clearance-workflow.js'] = workflow;
 	deps['#lib/server/enrollment-editor.js'] = load('src/lib/server/enrollment-editor.ts', {
 		...deps,
 		'./student-enrollment': deps['#lib/server/student-enrollment.js'],
@@ -262,7 +269,7 @@ function fixture(t) {
 			...deps,
 			'./enrollment': deps['#lib/server/enrollment.js'],
 			'./student-enrollment': deps['#lib/server/student-enrollment.js'],
-			'./email-templates': emailTemplates,
+			'./email/templates': emailTemplates,
 			'./notifications': deps['#lib/server/notifications.js']
 		})
 	});
@@ -721,6 +728,39 @@ test('clearance verification enforces staff access, ownership and grade finaliza
 	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
 		f.state.role = role;
 		f.sqlite.exec('UPDATE enrollment SET submitted_clearance=0');
+		const submissionId = crypto.randomUUID();
+		f.db
+			.insert(schema.clearanceSubmission)
+			.values({
+				id: submissionId,
+				enrollmentId: first.enrollmentId,
+				objectKey: `clearance/${submissionId}`,
+				filename: 'clearance.jpg',
+				contentType: 'image/jpeg',
+				size: 100,
+				templateRevision: crypto.randomUUID(),
+				definition: {},
+				corners: [
+					{ x: 0, y: 0 },
+					{ x: 1, y: 0 },
+					{ x: 1, y: 1 },
+					{ x: 0, y: 1 }
+				],
+				report: {
+					template: [{ label: 'Template', verdict: 'pass', detail: 'Matched' }],
+					offices: [{ label: 'Office marks', verdict: 'pass', detail: 'Present' }],
+					identity: 'deferred'
+				},
+				status: 'requested',
+				uploadedAt: new Date(),
+				requestedAt: new Date()
+			})
+			.onConflictDoUpdate({
+				target: schema.clearanceSubmission.enrollmentId,
+				set: { id: submissionId, status: 'requested' }
+			})
+			.run();
+		reference.submissionId = submissionId;
 		assert.equal((await f.verifyEnrollmentClearance(reference)).submittedClearance, true);
 		assert.equal(f.db.select().from(schema.enrollment).get().submittedClearance, true);
 		assert.equal(f.db.select().from(schema.enrollment).get().status, 'completed');
@@ -850,22 +890,20 @@ test('meeting requests validate concerns and ownership, retry failed email, and 
 	f.sqlite.exec('UPDATE enrollment SET meeting_request_sent_at=NULL,meeting_request_started_at=1');
 	await f.sendEnrollmentMeetingRequest(reference);
 	assert.equal(f.state.meetingEmails.length, 3);
-	// The additive migration and rollback preserve student, enrollment and grade records.
+	// Newer migrations must prevent an out-of-order rollback from discarding dependent data.
 	const grades = f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all();
-	f.sqlite.exec(readFileSync('drizzle/rollback/0031_student_demographics.sql', 'utf8'));
-	f.sqlite.exec(readFileSync('drizzle/rollback/0030_enrollment_corrections.sql', 'utf8'));
-	f.sqlite.exec(readFileSync('drizzle/rollback/0029_registrar_deletion.sql', 'utf8'));
-	f.sqlite.exec(readFileSync('drizzle/rollback/0028_notifications.sql', 'utf8'));
-	f.sqlite.exec(readFileSync('drizzle/rollback/0027_complete_enrollment_follow_up.sql', 'utf8'));
-	f.sqlite.exec(readFileSync('drizzle/rollback/0026_enrollment_lifecycle.sql', 'utf8'));
-	f.sqlite.exec(readFileSync('drizzle/rollback/0025_enrollment_meeting_request.sql', 'utf8'));
+	assert.throws(
+		() => f.sqlite.exec(readFileSync('drizzle/rollback/0031_student_demographics.sql', 'utf8')),
+		/CHECK constraint failed/
+	);
+	f.sqlite.exec('ROLLBACK');
 	assert.equal(f.sqlite.prepare('SELECT count(*) n FROM enrollment').get().n, 1);
 	assert.deepEqual(
 		f.sqlite.prepare('SELECT id,grade FROM enrollment_subject ORDER BY id').all(),
 		grades
 	);
 	migrate(f.db, { migrationsFolder: 'drizzle' });
-	assert.equal(f.db.select().from(schema.enrollment).get().meetingRequestSentAt, null);
+	assert.ok(f.db.select().from(schema.enrollment).get().meetingRequestSentAt instanceof Date);
 });
 test('enrollment rejects invalid curricula, units, duplicate subjects, and wrong student accounts without writes', async (t) => {
 	const f = fixture(t);
@@ -1083,7 +1121,7 @@ test('enrollment page resolves existing student, program selection, and active c
 test('migration creates student records for older student accounts without applicants', (t) => {
 	const f = legacy(t);
 	f.sqlite.exec(
-		"INSERT INTO user(id,name,first_name,last_name,email,role)VALUES('orphan','Older Student','Older','Student','orphan@example.com','student')"
+		"INSERT INTO user(id,name,email,role)VALUES('orphan','Older Student','orphan@example.com','student')"
 	);
 	f.apply();
 	const record = f.sqlite.prepare("SELECT * FROM student WHERE user_id='orphan'").get();

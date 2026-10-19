@@ -26,13 +26,14 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			window.attemptNavigation=(url)=>{let cancelled=false;for(const hook of hooks)hook({to:{url:new URL(url,window.location.href)},willUnload:false,cancel:()=>cancelled=true});return !cancelled;};
 			export async function goto(url){const target=String(url);if(window.failNavigation)throw new Error('Navigation failed');if(window.attemptNavigation(target)){window.navigation.push(target);if(target.endsWith('/students/u'))window.show('student');}}
 			export async function refreshAll(){}`,
-		'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';export async function deleteRegistrar(){throw Error('Unexpected registrar deletion');}export async function revokeAccountSessions(){throw Error('Unexpected session revocation');}export async function deleteStudent(){throw Error('Unexpected deletion');}export async function setRegistrarDisabled(){throw Error('Unexpected access change');}window.accountCalls=[];window.mailCalls=[];window.questions=[];window.messages=[];window.confirm=true;
+		'actions.js': `import {HandledHttpError} from '@sveltejs/kit/internal';export async function updateRegistrar(){throw Error('Unexpected registrar edit');}export async function deleteRegistrar(){throw Error('Unexpected registrar deletion');}export async function revokeAccountSessions(){throw Error('Unexpected session revocation');}export async function deleteStudent(){throw Error('Unexpected deletion');}export async function setRegistrarDisabled(){throw Error('Unexpected access change');}window.accountCalls=[];window.mailCalls=[];window.questions=[];window.messages=[];window.confirm=true;
 			export async function enrollStudent(data){window.accountCalls.push(data);if(window.duplicateEmail)throw new HandledHttpError({status:409,message:'A student account already exists with this email.'});if(window.failAccount)throw new HandledHttpError({status:409,message:'Enrollment changed'});if(window.deferAccount)await new Promise(resolve=>window.finishAccount=resolve);return {success:true,userId:'u',studentId:'MA-202610-000001',enrollmentId:'current',notificationSent:true,invitationSent:window.invitationSent!==false};}
 			export async function resendMagicLink(data){window.mailCalls.push(data);if(window.failMail)throw new Error('Mail failed');}
 			export async function updateStudent(){throw Error('Unexpected student edit');}export async function createStudent(data){(window.createdStudents??=[]).push(data);return {userId:'u',invitationSent:true};}export async function createRegistrar(){throw new HandledHttpError({status:409,message:window.existingRole==='registrar'?'A registrar account already exists with this email.':'A student account already exists with this email.'});}export async function deleteApplicant(){};export async function createApplicant(){};export async function updateApplicant(){}`,
 		'popup.js': `export async function showYesNo(props){window.questions.push(props);return window.confirm;}
 			export function showLoading(){};export function showError(props){window.messages.push({type:'error',...(typeof props==='string'?{message:props}:props)});}export function showSuccess(message){window.messages.push({type:'success',message});}`,
 		'enrollment-actions.js': `export async function correctEnrollment(){throw Error('Unexpected correction');}export async function voidEnrollment(){throw Error('Unexpected void');}export async function reopenEnrollment(){throw Error('Unexpected reopen');}`,
+		'clearance-actions.js': `export function getStudentClearance(){return {current:{current:null,submission:null,template:null}};}export const uploadClearance={};export async function requestEnrollment(){throw Error('Unexpected request');}export async function rejectClearance(){throw Error('Unexpected rejection');}`,
 		'grades.js': `import {HandledHttpError} from '@sveltejs/kit/internal';window.gradeCalls=[];window.finalizeCalls=[];
 			export async function dropEnrollment(){return {success:true,status:'dropped',notificationSent:true};}
 			export async function completeEnrollmentFollowUp(){return {success:true,followUpCompletedAt:new Date()};}
@@ -100,6 +101,10 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 					{ find: '#lib/auth-client.js', replacement: path.join(root, 'auth-client.js') },
 					{ find: '#lib/actions/user.remote.js', replacement: path.join(root, 'actions.js') },
 					{ find: '#lib/actions/grades.remote.js', replacement: path.join(root, 'grades.js') },
+					{
+						find: '#lib/actions/clearance.remote.js',
+						replacement: path.join(root, 'clearance-actions.js')
+					},
 					{
 						find: '#lib/actions/enrollment.remote.js',
 						replacement: path.join(root, 'enrollment-actions.js')
@@ -226,6 +231,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await page.evaluate(() => window.finishAccount());
 		await expect(page.getByRole('heading', { level: 1, name: 'Test Student' })).toBeVisible();
 		await expect(page.getByRole('heading', { name: 'STUDENT DETAILS', exact: true })).toBeVisible();
+		await page.setViewportSize({ width: 1360, height: 960 });
 		await expect(
 			page.getByText('Review student information, account status, and enrollment history.', {
 				exact: true
@@ -329,10 +335,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await page.evaluate(() => window.show('grade-current'));
 		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toBeEnabled();
 		await expect(page.getByRole('link', { name: 'ENROLLMENTS', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('link', { name: 'U', exact: true })).toHaveAttribute(
-			'href',
-			'/portal/user/students/u'
-		);
+		await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
 		await expect(
 			page.getByRole('heading', { name: 'ENROLLMENT DETAILS', exact: true })
 		).toBeVisible();
@@ -495,6 +498,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		]);
 		await page.evaluate(() => window.show('student-inc'));
 		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
+		await page.setViewportSize({ width: 1360, height: 960 });
 		await page.evaluate(() => window.show('my-enrollment'));
 		await expect(page.getByRole('heading', { name: 'ENROLLMENT', exact: true })).toBeVisible();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
@@ -547,11 +551,12 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await page.evaluate(() => window.show('registrars'));
 		await page.getByRole('button', { name: 'New Registrar', exact: true }).click();
 		const newRegistrarDialog = page.getByRole('dialog');
-		await newRegistrarDialog.getByLabel('Name', { exact: true }).fill('New Registrar');
+		await newRegistrarDialog.getByLabel('First name', { exact: true }).fill('New');
+		await newRegistrarDialog.getByLabel('Last name', { exact: true }).fill('Registrar');
 		await newRegistrarDialog.getByLabel('Email', { exact: true }).fill('taken@example.com');
 		for (const role of ['student', 'registrar']) {
 			await page.evaluate((role) => (window.existingRole = role), role);
-			await page.getByRole('button', { name: 'Create Registrar', exact: true }).click();
+			await page.getByRole('button', { name: 'Create registrar', exact: true }).click();
 			await expect
 				.poll(() => page.evaluate(() => window.messages.at(-1)?.message))
 				.toBe(`A ${role} account already exists with this email.`);
@@ -565,11 +570,14 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await page.evaluate(() => window.show('list'));
 		await page.getByRole('button', { name: 'Create student', exact: true }).click();
 		let createForm = page.getByRole('dialog', { name: 'Create student', exact: true });
-		await createForm.getByLabel('Full name', { exact: true }).fill('New Student');
+		await createForm.getByLabel('First name', { exact: true }).fill('New');
+		await createForm.getByLabel('Last name', { exact: true }).fill('Student');
+		await createForm.getByLabel('Birth date', { exact: true }).fill('2000-01-01');
+		await createForm.getByRole('combobox').selectOption('female');
 		await createForm.getByLabel('Email', { exact: true }).fill('new@example.com');
 		await createForm.getByLabel('Contact number', { exact: true }).fill('09171234567');
 		await createForm.getByLabel('Address', { exact: true }).fill('Bulacan');
-		await expect(createForm.getByRole('combobox')).toHaveCount(0);
+		await expect(createForm.getByRole('combobox')).toHaveCount(1);
 		await expect(createForm.getByText('Birth certificate', { exact: true })).toHaveCount(0);
 		await createForm.getByRole('button', { name: 'Create & enroll', exact: true }).click();
 		await expect
@@ -577,7 +585,10 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			.toBe('/portal/user/students/u/enroll');
 		await page.getByRole('button', { name: 'Create student', exact: true }).click();
 		createForm = page.getByRole('dialog', { name: 'Create student', exact: true });
-		await createForm.getByLabel('Full name', { exact: true }).fill('Later Student');
+		await createForm.getByLabel('First name', { exact: true }).fill('Later');
+		await createForm.getByLabel('Last name', { exact: true }).fill('Student');
+		await createForm.getByLabel('Birth date', { exact: true }).fill('2000-01-01');
+		await createForm.getByRole('combobox').selectOption('female');
 		await createForm.getByLabel('Email', { exact: true }).fill('later@example.com');
 		await createForm.getByLabel('Contact number', { exact: true }).fill('09171234567');
 		await createForm.getByLabel('Address', { exact: true }).fill('Bulacan');

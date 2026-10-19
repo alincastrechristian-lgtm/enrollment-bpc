@@ -1,15 +1,22 @@
 import { Role } from '#lib/Roles.js';
 import { getGradeConcerns } from '#lib/enrollment-grades.js';
-import { curriculum, enrollment, enrollmentSubject, program } from '#lib/schema.js';
+import {
+	clearanceSubmission,
+	curriculum,
+	enrollment,
+	enrollmentSubject,
+	program
+} from '#lib/schema.js';
+import { verifyClearanceSubmission } from '#lib/server/clearance-workflow.js';
 import { validateUser } from '#lib/server/auth.js';
 import { db } from '#lib/server/db/index.js';
-import { sendEmail } from '#lib/server/email.js';
+import { sendEmail } from '#lib/server/email/index.js';
 import { recordNotification } from '#lib/server/notifications.js';
 import {
 	createGradesFinalizedEmail,
 	createEnrollmentDroppedEmail,
 	createMeetingRequestEmail
-} from '#lib/server/email-templates.js';
+} from '#lib/server/email/templates.js';
 import {
 	canEditEnrollmentGrades,
 	canDropEnrollment,
@@ -50,6 +57,10 @@ export const dropEnrollment = command(enrollmentReferenceSchema, async (data) =>
 				error(409, 'A meeting request is being sent. Try again after it finishes.');
 			if (!canDropEnrollment(locals.user.role, record))
 				error(409, 'Only the current, active enrollment can be dropped.');
+			tx.update(clearanceSubmission)
+				.set({ status: 'invalidated' })
+				.where(eq(clearanceSubmission.enrollmentId, record.enrollment.id))
+				.run();
 			tx.update(enrollment)
 				.set({
 					status: 'dropped',
@@ -181,33 +192,39 @@ export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, a
 	return { success: true, meetingRequestSentAt: sentAt };
 });
 
-export const verifyEnrollmentClearance = command(enrollmentReferenceSchema, (data) => {
-	const { locals } = getRequestEvent();
-	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
-	return db.transaction(
-		(tx) => {
-			const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
-			if (record.enrollment.revision !== data.revision)
-				error(409, 'Enrollment changed. Reload and review before continuing.');
-			if (!record.enrollment.finalizedGrades)
-				error(409, 'Finalize grades before verifying clearance.');
-			if (record.enrollment.status === 'dropped' || record.enrollment.status === 'voided')
-				error(409, 'Dropped or voided enrollments cannot be changed.');
-			if (record.enrollment.submittedClearance)
-				error(409, 'Clearance has already been verified. Refresh the page.');
-			tx.update(enrollment)
-				.set({
-					submittedClearance: true,
-					status: 'completed',
-					revision: sql`${enrollment.revision} + 1`
-				})
-				.where(eq(enrollment.id, record.enrollment.id))
-				.run();
-			return { success: true, submittedClearance: true, status: 'completed' as const };
-		},
-		{ behavior: 'immediate' }
-	);
-});
+export const verifyEnrollmentClearance = command(
+	enrollmentReferenceSchema.extend({ submissionId: z.string().uuid().optional() }),
+	(data) => {
+		const { locals } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+		return db.transaction(
+			(tx) => {
+				const record = getStudentEnrollment(tx, data.userId, data.enrollmentId);
+				if (record.enrollment.revision !== data.revision)
+					error(409, 'Enrollment changed. Reload and review before continuing.');
+				if (!record.enrollment.finalizedGrades)
+					error(409, 'Finalize grades before verifying clearance.');
+				if (record.enrollment.status === 'dropped' || record.enrollment.status === 'voided')
+					error(409, 'Dropped or voided enrollments cannot be changed.');
+				if (record.enrollment.submittedClearance)
+					error(409, 'Clearance has already been verified. Refresh the page.');
+				if (record.student.currentEnrollmentId !== record.enrollment.id)
+					error(409, 'Only the current enrollment clearance can be verified.');
+				verifyClearanceSubmission(tx, record.enrollment.id, data.submissionId, locals.user);
+				tx.update(enrollment)
+					.set({
+						submittedClearance: true,
+						status: 'completed',
+						revision: sql`${enrollment.revision} + 1`
+					})
+					.where(eq(enrollment.id, record.enrollment.id))
+					.run();
+				return { success: true, submittedClearance: true, status: 'completed' as const };
+			},
+			{ behavior: 'immediate' }
+		);
+	}
+);
 
 export const completeEnrollmentFollowUp = command(enrollmentReferenceSchema, (data) => {
 	const { locals } = getRequestEvent();

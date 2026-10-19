@@ -15,10 +15,10 @@ import {
 	verification
 } from '#lib/schema.js';
 import { auth, validateUser } from '#lib/server/auth.js';
-import { accountSetupEmailDelivery } from '#lib/server/account-setup-email.js';
+import { accountSetupEmailDelivery } from '#lib/server/email/account-setup.js';
 import { enrollStudentSchema, getEnrollmentPlan } from '#lib/server/enrollment.js';
-import { sendEmail } from '#lib/server/email.js';
-import { createEnrollmentConfirmationEmail } from '#lib/server/email-templates.js';
+import { sendEmail } from '#lib/server/email/index.js';
+import { createEnrollmentConfirmationEmail } from '#lib/server/email/templates.js';
 import { recordNotification } from '#lib/server/notifications.js';
 import { command, getRequestEvent } from '$app/server';
 import { ORIGIN } from '$app/env/private';

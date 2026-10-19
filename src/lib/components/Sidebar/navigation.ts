@@ -7,6 +7,7 @@ import {
 	ClipboardCheck,
 	ClipboardList,
 	Gauge,
+	HardDrive,
 	GraduationCap,
 	Layers,
 	Mail,
@@ -32,6 +33,12 @@ const items: SidebarItem[] = [
 	{ label: 'Dashboard', href: resolve('/user/dashboard'), icon: Gauge },
 	{ label: 'Registrars', href: resolve('/user/registrars'), icon: UserShield, roles: [Role.ADMIN] },
 	{ label: 'Students', href: resolve('/user/students'), icon: Users, roles: staff },
+	{
+		label: 'Enrollment requests',
+		href: resolve('/user/clearances'),
+		icon: ClipboardCheck,
+		roles: staff
+	},
 	{ label: 'Masterlist', href: resolve('/user/masterlist'), icon: ClipboardList, roles: staff },
 	{
 		label: 'Enrollment',
@@ -55,6 +62,18 @@ const items: SidebarItem[] = [
 		icon: Settings,
 		children: [
 			{ label: 'Email', href: resolve('/user/settings/email'), icon: Mail, roles: [Role.ADMIN] },
+			{
+				label: 'Clearance',
+				href: resolve('/user/settings/clearance'),
+				icon: ClipboardCheck,
+				roles: [Role.ADMIN]
+			},
+			{
+				label: 'Storage',
+				href: resolve('/user/settings/storage'),
+				icon: HardDrive,
+				roles: [Role.ADMIN]
+			},
 			{ label: 'Profile', href: resolve('/user/settings/profile'), icon: UserRound }
 		]
 	}

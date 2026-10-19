@@ -28,4 +28,3 @@ vite.config.ts.timestamp-*
 .pnpm-store
 
 /src/routes/demo
-/src/routes/test

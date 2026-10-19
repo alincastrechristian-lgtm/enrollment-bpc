@@ -36,10 +36,10 @@ test('Resend reports API success, rejects failures, validates settings, and pres
 	const sent = [];
 	let response = { data: { id: 'email-id' }, error: null };
 	let throws = false;
-	const { sendEmail } = loadTypeScript('lib/server/email.ts', {
-		'../email': email,
-		'./settings': { getSystemSettings: async () => settings },
-		'./email-html': loadTypeScript('lib/server/email-html.ts'),
+	const { sendEmail } = loadTypeScript('lib/server/email/index.ts', {
+		'../../email': email,
+		'../settings': { getSystemSettings: async () => settings },
+		'./html': loadTypeScript('lib/server/email/html.ts'),
 		resend: {
 			Resend: class {
 				constructor(key) {

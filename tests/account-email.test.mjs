@@ -24,7 +24,7 @@ function loadModule(filename, dependencies = {}, sourceOverride) {
 	return exports;
 }
 const { Role } = loadModule('src/lib/Roles.ts');
-const deliveryModule = loadModule('src/lib/server/account-setup-email.ts');
+const deliveryModule = loadModule('src/lib/server/email/account-setup.ts');
 const errorHelpers = loadModule('src/lib/errors.ts', { '@sveltejs/kit': { isHttpError } });
 const schema = loadModule('src/lib/schema.ts', {
 	'#lib/Roles.js': { Role },
@@ -110,8 +110,8 @@ function fixture(
 	};
 	const dependencies = {
 		'#lib/server/notifications.js': { recordNotification: () => {} },
-		'#lib/server/email.js': { sendEmail: async () => true },
-		'#lib/server/email-templates.js': {
+		'#lib/server/email/index.js': { sendEmail: async () => true },
+		'#lib/server/email/templates.js': {
 			createEnrollmentConfirmationEmail: () => ({
 				subject: 'Enrollment confirmed',
 				text: 'Enrollment confirmed'
@@ -124,7 +124,7 @@ function fixture(
 		'#lib/schema.js': schema,
 		'#lib/errors.js': errorHelpers,
 		'#lib/server/auth.js': { auth, validateUser },
-		'#lib/server/account-setup-email.js': deliveryModule,
+		'#lib/server/email/account-setup.js': deliveryModule,
 		'../server/db': { db },
 		'#lib/person-name.js': loadModule('src/lib/person-name.ts'),
 		'#lib/students.js': loadModule('src/lib/students.ts', {
@@ -244,10 +244,10 @@ test('staff receive actual mail results even when Better Auth suppresses deliver
 		'better-auth/svelte-kit': { sveltekitCookies: () => ({ id: 'test-cookies' }) },
 		'../auth-permissions': loadModule('src/lib/auth-permissions.ts'),
 		'./auth-names': loadModule('src/lib/server/auth-names.ts', { '../person-name': names }),
-		'./account-setup-email': deliveryModule,
+		'./email/account-setup': deliveryModule,
 		'./notifications': { recordNotification: () => {} },
-		'./email': { sendEmail: (email) => deliveries.get(email) ?? Promise.resolve(false) },
-		'./email-templates': {
+		'./email/index': { sendEmail: (email) => deliveries.get(email) ?? Promise.resolve(false) },
+		'./email/templates': {
 			createFirstLoginEmail: () => ({ subject: 'Setup', text: 'Setup' }),
 			createResetPasswordEmail: () => ({ subject: 'Reset', text: 'Reset' })
 		}

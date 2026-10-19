@@ -13,6 +13,11 @@ services:
       DATABASE_URL: /app/data/local.db
       ORIGIN: ${ORIGIN:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+      GARAGE_ADMIN_ENDPOINT: ${GARAGE_ADMIN_ENDPOINT:-}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+      GARAGE_API_ENDPOINT: ${GARAGE_API_ENDPOINT:-}
+      GARAGE_REGION: ${GARAGE_REGION:-garage}
+      BODY_SIZE_LIMIT: 12M
     volumes:
       - ./data:/app/data
     restart: unless-stopped
