@@ -1,14 +1,15 @@
 import type { Worker } from 'tesseract.js';
 import { findBorder } from './border';
+import { alignPrintedAnchors } from './anchors';
 import { comparePrintedLayout } from './template';
 import { suggestPrintedAreas, suggestGraphicAreas, type AreaSuggestions } from './suggestions';
 import { suggestPersonalFields, type PersonalFieldSuggestions } from './personal-suggestions';
 import { suggestOfficeRows, type OfficeSuggestions } from './office-suggestions';
 import { threshold } from './report';
-import { enhancePrintedContrast, academicYearReading } from './printed';
+import { enhancePrintedContrast, academicYearReading, printedAreaReading } from './printed';
 import {
 	checkAreaText,
-	printedAreaBox,
+	printedSearchBox,
 	compareVisual,
 	type TemplateArea,
 	type TemplateDefinition,
@@ -282,6 +283,7 @@ async function recognizeJobs<K extends string>(
 		label: string;
 		multiline: boolean;
 		academicYear?: boolean;
+		area?: TemplateArea;
 		image: () => HTMLCanvasElement;
 	}[],
 	onProgress: (text: string) => void,
@@ -295,17 +297,23 @@ async function recognizeJobs<K extends string>(
 			onProgress(`Reading ${job.label}…`);
 			await Promise.race([
 				worker.setParameters({
-					tessedit_pageseg_mode: job.multiline ? PSM.SINGLE_BLOCK : PSM.SINGLE_LINE
+					tessedit_pageseg_mode: job.area
+						? PSM.SPARSE_TEXT
+						: job.multiline
+							? PSM.SINGLE_BLOCK
+							: PSM.SINGLE_LINE
 				}),
 				stopped
 			]);
 			const { data } = await Promise.race([
-				worker.recognize(job.image(), {}, { blocks: !!job.academicYear }),
+				worker.recognize(job.image(), {}, { blocks: !!job.academicYear || !!job.area }),
 				stopped
 			]);
-			result[job.key] = job.academicYear
-				? academicYearReading(data)
-				: { text: data.text.trim(), confidence: data.confidence };
+			result[job.key] = job.area
+				? printedAreaReading(job.area, data)
+				: job.academicYear
+					? academicYearReading(data)
+					: { text: data.text.trim(), confidence: data.confidence };
 		}
 		return result;
 	});
@@ -387,9 +395,18 @@ async function readTemplateLines(
 	onProgress: (text: string) => void,
 	signal: AbortSignal
 ) {
-	const { PSM } = await import('tesseract.js');
 	const size = templateSize(source, corners);
 	const image = rectifiedRegion(source, corners, { x: 0, y: 0, ...size }, 2, size);
+	const lines = await readPrintedLines(image, onProgress, signal);
+	return { lines, image };
+}
+
+async function readPrintedLines(
+	image: HTMLCanvasElement,
+	onProgress: (text: string) => void,
+	signal: AbortSignal
+) {
+	const { PSM } = await import('tesseract.js');
 	const lines = await withOcrWorker(onProgress, signal, async (worker, stopped) => {
 		await Promise.race([worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT }), stopped]);
 		onProgress('Finding printed text and its positions…');
@@ -402,7 +419,49 @@ async function readTemplateLines(
 		);
 	});
 	if (signal.aborted) throw new Error('Area detection cancelled.');
-	return { lines, image };
+	return lines;
+}
+
+export async function detectFormOutline(
+	source: HTMLCanvasElement,
+	alignment: { definition: TemplateDefinition; referenceUrl: string } | undefined,
+	onProgress: (text: string) => void,
+	signal: AbortSignal
+) {
+	onProgress('Looking for the form border...');
+	const corners = detectBorder(source);
+	if (signal.aborted) throw new Error('Alignment cancelled.');
+	if (corners)
+		return {
+			corners,
+			method: 'border' as const,
+			detail: 'Form border found automatically. Check all four corners.'
+		};
+	if (!alignment)
+		return {
+			corners: null,
+			method: null,
+			detail: 'No clear border found. Draw the form outline manually.'
+		};
+	onProgress('Border not found. Matching permanent printed anchors...');
+	const reference = await loadImage(alignment.referenceUrl, signal);
+	const blank = await readTemplateLines(
+		reference,
+		alignment.definition.corners,
+		onProgress,
+		signal
+	);
+	const scale = Math.min(2, 2400 / Math.max(source.width, source.height));
+	const image = canvas(Math.round(source.width * scale), Math.round(source.height * scale));
+	context(image).drawImage(source, 0, 0, image.width, image.height);
+	// OCR the original photograph: no border or manual crop is needed for this pass.
+	const lines = await readPrintedLines(image, onProgress, signal);
+	const result = alignPrintedAnchors(
+		{ lines: blank.lines, width: blank.image.width, height: blank.image.height },
+		{ lines, width: image.width, height: image.height },
+		alignment.definition
+	);
+	return { ...result, method: result.corners ? ('anchors' as const) : null };
 }
 
 export async function detectPersonalFields(
@@ -454,7 +513,7 @@ export async function detectTemplateAreas(
 		});
 	if (!graphics.length)
 		result.hints.push(
-			'No reliable graphic candidate found. Mark the logo or a permanent printed structure manually.'
+			'No reliable graphic candidate found. A logo or printed structure area is optional.'
 		);
 	result.hints.unshift(
 		'Review every box, area type and text reading before saving. Graphics are suggestions, not confirmed school logos.'
@@ -463,7 +522,7 @@ export async function detectTemplateAreas(
 }
 
 function areaRegion(area: TemplateArea, page: { width: number; height: number }): Region {
-	const box = printedAreaBox(area);
+	const box = printedSearchBox(area);
 	return {
 		x: box.x * page.width,
 		y: box.y * page.height,
@@ -500,7 +559,7 @@ export async function compareDefinedTemplate(
 		checks.push({
 			label: area.label,
 			verdict: comparison.verdict,
-			detail: `${Math.round(comparison.score * 100)}% visual similarity in the marked position. Empty or unclear areas require review.`
+			detail: `${Math.round(comparison.score * 100)}% black-and-white shape similarity near the marked position; 65% required. Empty or unclear areas require review.`
 		});
 	}
 	const textAreas = definition.areas.filter((a) => a.kind !== 'image');
@@ -510,6 +569,7 @@ export async function compareDefinedTemplate(
 				.filter((area) => prefix !== 'Reference' || area.kind === 'text')
 				.map((area) => ({
 					key: area.id,
+					area,
 					label: area.label,
 					multiline: area.kind === 'text' && /\n/.test(area.expected),
 					academicYear: area.kind === 'academicYear',

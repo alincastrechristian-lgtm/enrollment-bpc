@@ -4,7 +4,7 @@ export const variables = defineEnvVars({
 	DATABASE_URL: {},
 	ORIGIN: {},
 	BETTER_AUTH_SECRET: {},
-	OLLAMA_BASE_URL: { schema: (value) => value || 'http://192.168.254.63:11434' },
+	GEMINI_API_KEY: { schema: (value) => value?.trim() || undefined },
 	GARAGE_ADMIN_ENDPOINT: { schema: (value) => value?.trim() || undefined },
 	GARAGE_ADMIN_TOKEN: { schema: (value) => value?.trim() || undefined },
 	GARAGE_API_ENDPOINT: { schema: (value) => value?.trim() || undefined },

@@ -18,7 +18,8 @@ const {
 	checkAreaText,
 	compareVisual,
 	clearanceTermFromEnrollment,
-	printedAreaBox
+	printedAreaBox,
+	printedSearchBox
 } = load('src/lib/clearance/definition.ts', {
 	'./clearance': core
 });
@@ -125,11 +126,14 @@ test('enrollment owns the expected term; canonical templates keep locations and 
 	);
 });
 
-test('custom layout requires distinct text, visual and term evidence with bounded in-page areas', () => {
+test('custom layout requires distinct printed text and term evidence; logos are optional with bounded in-page areas', () => {
 	assert(definitionSchema.safeParse(definition()).success);
+	const withoutLogo = definition();
+	withoutLogo.areas = withoutLogo.areas.filter((area) => area.kind !== 'image');
+	assert(definitionSchema.safeParse(withoutLogo).success);
 	for (const change of [
 		(d) => {
-			d.areas.splice(2, 1);
+			d.areas.splice(0, 1);
 		},
 		(d) => {
 			d.areas[0].expected = '';
@@ -189,6 +193,81 @@ test('text follows administrator wording; unreadable text and wrong terms cannot
 	}
 });
 
+test('nearby search expands bounded boxes without changing the saved layout', () => {
+	const area = { ...definition().areas[0], box: { x: 0.2, y: 0.3, width: 0.4, height: 0.05 } };
+	const before = structuredClone(area.box),
+		box = printedSearchBox(area);
+	assert(Math.abs(box.x - 0.15) < 1e-9);
+	assert(Math.abs(box.y - 0.265) < 1e-9);
+	assert(Math.abs(box.width - 0.5) < 1e-9);
+	assert(Math.abs(box.height - 0.12) < 1e-9);
+	assert.deepEqual(area.box, before);
+	assert.deepEqual(printedSearchBox({ ...area, kind: 'image' }), before);
+	assert.deepEqual(printedSearchBox({ ...area, box: { x: 0, y: 0, width: 1, height: 1 } }), {
+		x: 0,
+		y: 0,
+		width: 1,
+		height: 1
+	});
+});
+
+test('printed phrases may appear among nearby labels; wrong or ambiguous enrollment terms cannot pass', () => {
+	const { printedAreaReading } = load('src/lib/clearance/printed.ts');
+	const area = { ...definition().areas[0], expected: 'Example Polytechnic College' },
+		term = definition();
+	const data = {
+		text: 'Header\nExample Polytechnic College\nStudent Clearance Form',
+		confidence: 40,
+		blocks: [
+			{
+				paragraphs: [
+					{
+						lines: [
+							{
+								words: [
+									{ text: 'Header', confidence: 20 },
+									{ text: 'Example', confidence: 96 },
+									{ text: 'Polytechnic', confidence: 95 },
+									{ text: 'College', confidence: 94 },
+									{ text: 'Footer', confidence: 20 }
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	};
+	const reading = printedAreaReading(area, data);
+	assert.equal(reading.text, 'Example Polytechnic College');
+	assert.equal(reading.confidence, 95);
+	assert.equal(checkAreaText(area, reading, term).verdict, 'pass');
+	assert.equal(checkAreaText(area, { text: data.text, confidence: 95 }, term).verdict, 'pass');
+	assert.equal(
+		checkAreaText(area, { text: 'Other Polytechnic College', confidence: 95 }, term).verdict,
+		'fail'
+	);
+	assert.notEqual(checkAreaText({ ...area, expected: '---' }, reading, term).verdict, 'pass');
+	assert.equal(
+		checkAreaText(
+			{ ...area, kind: 'semester' },
+			{ text: 'Student Clearance Form\n2nd Semester, A.Y. 2025-2026', confidence: 95 },
+			term
+		).verdict,
+		'pass'
+	);
+	for (const [kind, text] of [
+		['semester', '1st Semester'],
+		['semester', '1st Semester 2nd Semester'],
+		['academicYear', '2026-2027'],
+		['academicYear', '2025-2026 or 2026-2027']
+	])
+		assert.notEqual(
+			checkAreaText({ ...area, kind }, { text, confidence: 95 }, term).verdict,
+			'pass'
+		);
+});
+
 test('visual comparison requires corresponding shapes; exposure changes pass, empty and unrelated patches do not', () => {
 	const size = 64;
 	const logo = Uint8Array.from({ length: size * size }, (_, i) => {
@@ -225,4 +304,14 @@ test('visual comparison requires corresponding shapes; exposure changes pass, em
 		compareVisual(logo, new Uint8Array(size * size).fill(220), size, size).verdict,
 		'pass'
 	);
+	let seed = 12345;
+	const noisy = Uint8Array.from(logo, (value) => {
+		seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+		return seed % 100 < 12 ? 260 - value : value;
+	});
+	const tolerant = compareVisual(logo, noisy, size, size);
+	assert(tolerant.score >= 0.65 && tolerant.score < 0.8);
+	assert.equal(tolerant.verdict, 'pass', 'A readable shape near 70% must pass the 65% threshold.');
+	const faintPaper = Uint8Array.from(logo, (value) => (value < 100 ? 220 : 230));
+	assert.notEqual(compareVisual(logo, faintPaper, size, size).verdict, 'pass');
 });

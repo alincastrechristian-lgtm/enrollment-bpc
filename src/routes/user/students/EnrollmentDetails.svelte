@@ -4,7 +4,7 @@
 	import { getErrorMessage } from '#lib/errors.js';
 	import { rejectClearance } from '#lib/actions/clearance.remote.js';
 	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
-	import { clearancePassed } from '#lib/clearance/report.js';
+	import { clearanceCanSubmit, clearanceNeedsIdentityReview } from '#lib/clearance/report.js';
 	import {
 		finalizeEnrollmentGrades,
 		completeEnrollmentFollowUp,
@@ -50,6 +50,12 @@
 	let message = $state('');
 	let success = $state('');
 	let rejectionReason = $state('');
+	let identityConfirmed = $state(false);
+	$effect(() => {
+		void data.clearance?.id;
+		void data.enrollment.revision;
+		identityConfirmed = false;
+	});
 	let finalizedHere = $state(false);
 	let meetingSentHere = $state<Date | null>(null);
 	const meetingSentAt = $derived(meetingSentHere ?? data.enrollment.meetingRequestSentAt);
@@ -60,8 +66,11 @@
 	let clearanceVerifiedHere = $state(false);
 	let droppedHere = $state(false);
 	const clearanceVerified = $derived(clearanceVerifiedHere || data.enrollment.submittedClearance);
-	const clearanceChecksPassed = $derived(
-		!!data.clearance && clearancePassed(data.clearance.report)
+	const clearanceReviewable = $derived(
+		!!data.clearance && clearanceCanSubmit(data.clearance.report)
+	);
+	const identityReviewNeeded = $derived(
+		!!data.clearance && clearanceNeedsIdentityReview(data.clearance.report)
 	);
 	const finalized = $derived(finalizedHere || data.enrollment.finalizedGrades);
 	const voided = $derived(data.enrollment.status === 'voided');
@@ -324,7 +333,8 @@
 			!finalized ||
 			clearanceVerified ||
 			data.clearance?.status !== 'requested' ||
-			!clearanceChecksPassed
+			!clearanceReviewable ||
+			(identityReviewNeeded && !identityConfirmed)
 		)
 			return;
 		busy = true;
@@ -334,7 +344,7 @@
 			if (
 				!(await showYesNo({
 					title: 'Verify clearance?',
-					message: `Confirm that you reviewed ${data.student.name}'s uploaded clearance and office marks. Automated checks detect mark presence; personal information verification is deferred. Reenrollment also requires a completed Registrar meeting if the current enrollment has failed grades.`,
+					message: `Confirm that you reviewed ${data.student.name}'s uploaded clearance and office marks. ${identityReviewNeeded ? 'Automated identity reading needs review. Your verification confirms that you checked the student name and number against the original document and student record.' : 'Automated checks compare the template, office marks, and student name/number.'} Confirm the document and office authorizations yourself. Reenrollment also requires a completed Registrar meeting if the current enrollment has failed grades.`,
 					warning: true,
 					yesText: 'Verify clearance',
 					noText: 'Cancel'
@@ -343,6 +353,7 @@
 				return;
 			await verifyEnrollmentClearance({
 				submissionId: data.clearance.id,
+				identityConfirmed: identityReviewNeeded && identityConfirmed,
 				userId: data.student.id,
 				enrollmentId: data.enrollment.id,
 				revision: data.enrollment.revision
@@ -560,7 +571,8 @@
 							!finalized ||
 							!data.isCurrent ||
 							data.clearance?.status !== 'requested' ||
-							!clearanceChecksPassed}
+							!clearanceReviewable ||
+							(identityReviewNeeded && !identityConfirmed)}
 						onclick={verifyClearance}
 					>
 						Verify clearance
@@ -647,7 +659,11 @@
 					</a>
 					<div class="space-y-3">
 						<p class="text-sm font-semibold">{data.clearance.filename}</p>
-						<ClearanceFindings report={data.clearance.report} showReference />
+						<ClearanceFindings
+							report={data.clearance.report}
+							showReference
+							staffVerified={clearanceVerified}
+						/>
 						{#if data.clearance.reviewerName}
 							<p class="text-xs text-base-content/65">Reviewed by {data.clearance.reviewerName}</p>
 						{/if}
@@ -655,6 +671,28 @@
 							<p class="text-sm text-error">{data.clearance.rejectionReason}</p>
 						{/if}
 						{#if data.clearance.status === 'requested' && data.isCurrent && !dropped && !voided}
+							{#if identityReviewNeeded}
+								<div class="space-y-3 rounded-lg border border-warning/30 bg-warning/10 p-3">
+									<p class="text-sm font-semibold">Manual identity verification required</p>
+									<p class="text-xs">
+										Compare the original clearance with the student record below. If you cannot
+										confirm the name and student number, request another upload.
+									</p>
+									<p class="text-xs font-semibold">
+										Student record: {data.student.name} · {data.student.studentId}
+									</p>
+									<label class="flex items-start gap-2 text-sm">
+										<input
+											type="checkbox"
+											class="checkbox mt-0.5 checkbox-sm"
+											bind:checked={identityConfirmed}
+											disabled={busy || editing || dirty}
+										/>
+										I checked the original clearance and confirm the student name and number match this
+										record.
+									</label>
+								</div>
+							{/if}
 							<label class="block text-sm">
 								Reason for correction
 								<textarea
@@ -670,7 +708,7 @@
 								disabled={busy || editing || dirty || rejectionReason.trim().length < 5}
 								onclick={rejectUploadedClearance}
 							>
-								Return for correction
+								Request another upload
 							</button>
 						{/if}
 					</div>

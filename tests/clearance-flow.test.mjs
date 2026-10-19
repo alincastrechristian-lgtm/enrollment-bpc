@@ -17,6 +17,8 @@ function load(file, deps = {}) {
 	return exports;
 }
 const core = load('src/lib/clearance/clearance.ts');
+const identities = load('src/lib/clearance/identity.ts');
+const studentIdentity = { name: 'Student', studentNumber: 'MA-001' };
 const definitions = load('src/lib/clearance/definition.ts', { './clearance': core });
 const reports = load('src/lib/clearance/report.ts', {
 	'./clearance': core,
@@ -32,8 +34,10 @@ const check = (verdict) => ({ label: 'Evidence', verdict, detail: 'Test evidence
 const passed = () => ({
 	template: [check('pass')],
 	offices: [check('pass')],
-	identity: 'deferred',
-	officeCheckVersion: 2
+	identity: identities.matchIdentity(studentIdentity, studentIdentity),
+	officeCheckVersion: 2,
+	identityCheckVersion: 1,
+	identityPresence: { name: check('pass'), studentNumber: check('pass') }
 });
 const bytes = readFileSync('static/clearance-reference.jpg');
 const image = () => new File([bytes], 'clearance.jpg', { type: 'image/jpeg' });
@@ -48,6 +52,11 @@ function definition() {
 			label: `Area ${i}`,
 			kind,
 			expected: kind === 'text' ? 'Printed words' : '',
+			box
+		})),
+		personalFields: ['studentName', 'studentNumber'].map((field) => ({
+			id: crypto.randomUUID(),
+			field,
 			box
 		})),
 		officeRows: [
@@ -87,6 +96,8 @@ function fixture(t) {
 		role: 'student',
 		userId: 's',
 		report: passed(),
+		identityReadings: { ...studentIdentity },
+		identityCalls: 0,
 		onCheck: null,
 		puts: 0,
 		reads: 0,
@@ -122,6 +133,7 @@ function fixture(t) {
 		'#lib/server/db/index.js': { db },
 		'@sveltejs/kit': kit,
 		'#lib/clearance/report.js': reports,
+		'#lib/clearance/identity.js': identities,
 		'#lib/clearance/definition.js': definitions,
 		'#lib/clearance/clearance.js': core,
 		'#lib/server/auth.js': {
@@ -160,7 +172,16 @@ function fixture(t) {
 		'./clearance-workflow': workflow,
 		'./garage': { GARAGE_BUCKET: 'bpc' },
 		'./garage/files': files,
+		'./handwriting': {
+			recognizeIdentity: async (crops) => {
+				state.identityCalls++;
+				state.identityCrops = crops;
+				if (state.identityError) throw state.identityError;
+				return state.identityReadings;
+			}
+		},
 		'./clearance-checker': {
+			clearanceIdentityCrops: async () => ({ name: 'name-crop', studentNumber: 'number-crop' }),
 			decodeClearance: async (data, type) => {
 				if (type !== 'image/jpeg' || data[0] !== 255) kit.error(400, 'Bad image');
 				return {};
@@ -168,7 +189,7 @@ function fixture(t) {
 			checkClearance: async (_reference, _image, _corners, definition, term) => {
 				state.checked = { definition, term };
 				await state.onCheck?.();
-				return state.report;
+				return { ...structuredClone(state.report), identity: 'deferred' };
 			}
 		}
 	});
@@ -243,7 +264,8 @@ test('finalize → private checked upload → student request → staff verifica
 	const result = await f.upload();
 	assert(result.success);
 	assert.equal(f.row().status, 'ready');
-	assert.equal(f.row().report.identity, 'deferred');
+	assert.equal(f.row().report.identity.verdict, 'match');
+	assert.equal(f.state.identityCalls, 1);
 	assert(f.objects.has(f.row().objectKey));
 	assert(!Object.hasOwn(result.submission, 'objectKey'));
 	assert.equal(
@@ -291,7 +313,7 @@ test('finalize → private checked upload → student request → staff verifica
 	);
 });
 
-test('failed or uncertain checks never save a file or permit an enrollment request', async (t) => {
+test('failed or uncertain template/office checks never save a file or permit an enrollment request', async (t) => {
 	const f = fixture(t);
 	for (const report of [
 		{ ...passed(), template: [check('fail')], offices: [] },
@@ -394,7 +416,9 @@ test('ownership, roles, stale template, missing office setup, and malformed outl
 
 test('staff return requests for correction; student can replace the private file and request again', async (t) => {
 	const f = fixture(t);
+	f.state.identityReadings = { name: '', studentNumber: '' };
 	const first = await f.upload();
+	assert.equal(first.report.identity.verdict, 'review');
 	const key = f.row().objectKey;
 	f.state.userId = 'other';
 	await assert.rejects(
@@ -414,7 +438,7 @@ test('staff return requests for correction; student can replace the private file
 	f.state.userId = 'staff';
 	await f.remote.rejectClearance({
 		...f.reference(first.submission.id),
-		reason: 'Please upload a clearer signature.'
+		reason: 'Please upload a clearer student name and number.'
 	});
 	assert.equal(f.row().status, 'rejected');
 	assert.match(f.row().rejectionReason, /clearer/);
@@ -424,6 +448,7 @@ test('staff return requests for correction; student can replace the private file
 	);
 	f.state.role = 'student';
 	f.state.userId = 's';
+	f.state.identityReadings = studentIdentity;
 	const result = await f.remote.uploadClearance({
 		file: image(),
 		enrollmentId: 'e',
@@ -501,4 +526,204 @@ test('incorrect uploaded term blocks persistence; client cannot supply its own e
 			schoolYear: '2026-2027'
 		})
 	);
+});
+
+test('personal areas are required before OCR or Gemini; legacy templates remain editable', async (t) => {
+	const f = fixture(t);
+	f.db
+		.update(schema.clearanceTemplate)
+		.set({ definition: { ...f.config, personalFields: [] } })
+		.run();
+	await assert.rejects(f.upload(), status(503));
+	assert.equal(f.state.reads, 0);
+	assert.equal(f.state.identityCalls, 0);
+});
+test('personal verification uses DB identity and blocks mismatch and provider failures without saving', async (t) => {
+	const f = fixture(t);
+	for (const readings of [{ name: 'Someone Else', studentNumber: 'MA-999' }]) {
+		f.state.identityReadings = readings;
+		const result = await f.upload();
+		assert.equal(result.success, false);
+		assert.equal(f.row(), undefined);
+		assert.equal(f.state.puts, 0);
+	}
+	f.state.identityError = Error('Provider unavailable');
+	await assert.rejects(f.upload(), status(503));
+	assert.equal(f.state.puts, 0);
+	f.state.identityError = null;
+	f.state.identityReadings = { ...studentIdentity, studentNumber: '001' };
+	const matched = await f.upload();
+	assert.equal(matched.success, true);
+	assert.equal(matched.report.identity.studentNumber.expected, 'MA-001');
+	assert.deepEqual(f.state.identityCrops, { name: 'name-crop', studentNumber: 'number-crop' });
+});
+
+test('uncertain identity saves for review; only admin/registrar explicit confirmation unlocks enrollment', async (t) => {
+	for (const role of ['admin', 'registrar']) {
+		const f = fixture(t);
+		f.state.identityReadings =
+			role === 'admin'
+				? { name: '', studentNumber: '' }
+				: { ...studentIdentity, warnings: { name: 'Unusable transcription' } };
+		const result = await f.upload();
+		assert.equal(result.success, true);
+		assert.equal(result.report.identity.verdict, 'review');
+		assert.equal(reports.clearancePassed(result.report), false);
+		assert.equal(reports.clearanceCanSubmit(result.report), true);
+		assert.equal(f.row().status, 'ready');
+		assert.equal(f.db.select().from(schema.enrollment).get().submittedClearance, false);
+		assert.throws(() => f.plan.getEnrollmentPlan(f.db, f.next()), status(409));
+		await f.remote.requestEnrollment({ submissionId: result.submission.id });
+		assert.equal(f.row().status, 'requested');
+		assert.equal(f.workflow.clearanceRequests(f.db).length, 1);
+		await assert.rejects(
+			f.grades.verifyEnrollmentClearance({
+				...f.reference(result.submission.id),
+				identityConfirmed: true
+			}),
+			status(403)
+		);
+		f.state.role = role;
+		f.state.userId = 'staff';
+		for (const extra of [{}, { identityConfirmed: false }])
+			await assert.rejects(
+				f.grades.verifyEnrollmentClearance({ ...f.reference(result.submission.id), ...extra }),
+				status(409)
+			);
+		assert.equal(f.row().status, 'requested');
+		assert.throws(() => f.plan.getEnrollmentPlan(f.db, f.next()), status(409));
+		await f.grades.verifyEnrollmentClearance({
+			...f.reference(result.submission.id),
+			identityConfirmed: true
+		});
+		assert.equal(f.row().status, 'verified');
+		assert.equal(f.row().reviewedBy, 'staff');
+		assert(f.row().reviewedAt);
+		assert.equal(
+			f.row().report.identity.verdict,
+			'review',
+			'Keep automated evidence for the staff review record.'
+		);
+		assert.equal(f.db.select().from(schema.enrollment).get().submittedClearance, true);
+		assert(f.plan.getEnrollmentPlan(f.db, f.next()));
+	}
+});
+
+test('manual identity confirmation cannot bypass failed template, office, mismatch or legacy reports', async (t) => {
+	const f = fixture(t),
+		uploaded = await f.upload();
+	await f.remote.requestEnrollment({ submissionId: uploaded.submission.id });
+	f.state.role = 'admin';
+	f.state.userId = 'staff';
+	const mismatch = identities.matchIdentity(
+		{ name: 'Someone Else', studentNumber: '99999999' },
+		studentIdentity
+	);
+	for (const report of [
+		{ ...passed(), template: [check('review')] },
+		{ ...passed(), offices: [check('fail')] },
+		{ ...passed(), identity: mismatch },
+		{ ...passed(), identity: 'deferred' },
+		{ ...passed(), officeCheckVersion: 1 }
+	]) {
+		f.db.update(schema.clearanceSubmission).set({ report }).run();
+		await assert.rejects(
+			f.grades.verifyEnrollmentClearance({
+				...f.reference(uploaded.submission.id),
+				identityConfirmed: true
+			}),
+			status(409)
+		);
+		assert.equal(f.db.select().from(schema.enrollment).get().submittedClearance, false);
+	}
+});
+
+test('empty identity areas fail before Gemini or storage; unchecked reports require another upload', async (t) => {
+	const f = fixture(t);
+	for (const field of ['name', 'studentNumber']) {
+		f.state.report = {
+			...passed(),
+			identityPresence: { ...passed().identityPresence, [field]: check('fail') }
+		};
+		const result = await f.upload();
+		assert.equal(result.success, false);
+		assert.equal(result.report.identity, 'deferred');
+		assert.equal(f.state.identityCalls, 0);
+		assert.equal(f.state.puts, 0);
+		assert.equal(f.row(), undefined);
+	}
+	f.state.report = passed();
+	const saved = await f.upload();
+	const calls = f.state.identityCalls,
+		puts = f.state.puts,
+		key = f.row().objectKey;
+	f.state.report = {
+		...passed(),
+		identityPresence: { name: check('fail'), studentNumber: check('pass') }
+	};
+	assert.equal((await f.upload()).success, false);
+	assert.equal(f.state.identityCalls, calls);
+	assert.equal(f.state.puts, puts);
+	assert.equal(f.row().id, saved.submission.id);
+	assert(f.objects.has(key), 'Blank replacement preserves the saved clearance.');
+	f.state.report = passed();
+	const oldReport = { ...passed() };
+	delete oldReport.identityPresence;
+	delete oldReport.identityCheckVersion;
+	f.db.update(schema.clearanceSubmission).set({ report: oldReport }).run();
+	await assert.rejects(
+		f.remote.requestEnrollment({ submissionId: saved.submission.id }),
+		status(409)
+	);
+	f.db
+		.update(schema.clearanceSubmission)
+		.set({ status: 'requested', requestedAt: new Date() })
+		.run();
+	assert.equal(reports.hasCurrentClearanceChecks(f.row().report), false);
+	assert.equal(
+		(await f.upload()).success,
+		true,
+		'Unverified reports without a presence check can be replaced.'
+	);
+});
+test('legacy deferred identity reports cannot request or verify and can be replaced', async (t) => {
+	const f = fixture(t);
+	const first = await f.upload();
+	f.db
+		.update(schema.clearanceSubmission)
+		.set({ report: { ...passed(), identity: 'deferred' } })
+		.run();
+	await assert.rejects(
+		f.remote.requestEnrollment({ submissionId: first.submission.id }),
+		status(409)
+	);
+	f.db
+		.update(schema.clearanceSubmission)
+		.set({ status: 'requested', requestedAt: new Date() })
+		.run();
+	f.state.role = 'registrar';
+	f.state.userId = 'staff';
+	await assert.rejects(
+		f.grades.verifyEnrollmentClearance(f.reference(first.submission.id)),
+		status(409)
+	);
+	f.state.role = 'student';
+	f.state.userId = 's';
+	assert.equal((await f.upload()).success, true);
+});
+test('failed template or office checks skip Gemini; identity changes during checking reject staged upload', async (t) => {
+	const f = fixture(t);
+	f.state.report = { ...passed(), template: [check('fail')] };
+	assert.equal((await f.upload()).success, false);
+	assert.equal(f.state.identityCalls, 0);
+	f.state.report = passed();
+	f.state.onCheck = () =>
+		f.db
+			.update(schema.user)
+			.set({ name: 'Updated Student' })
+			.where(require('drizzle-orm').eq(schema.user.id, 's'))
+			.run();
+	await assert.rejects(f.upload(), status(409));
+	assert.equal(f.row(), undefined);
+	assert.equal(f.objects.size, 1);
 });

@@ -17,7 +17,7 @@ function load(file, dependencies = {}, override) {
 	new Function('require', 'exports', outputText)((id) => dependencies[id] ?? require(id), exports);
 	return exports;
 }
-const core = load('src/routes/test/identity.ts');
+const core = load('src/lib/clearance/identity.ts');
 const expected = { name: 'Jonnel Mrei Palileo', studentNumber: 'MA-23016578' };
 const compare = (change = {}) => core.matchIdentity({ ...expected, ...change }, expected);
 const status = (code) => (cause) => isHttpError(cause) && cause.status === code;
@@ -32,14 +32,45 @@ test('exact ID identifies record; spacing/case vary, but name conflicts require 
 	assert.equal(compare({ name: 'Maria Santos' }).verdict, 'review');
 });
 
-test('one digit, omitted printed prefix and uncertain characters suggest review, never approval', () => {
-	for (const studentNumber of ['MA-53016578', '23016578', 'MA-2301657?', '53016578']) {
+test('numeric suffix matches with absent, printed, handwritten or repeated MA prefix', () => {
+	for (const studentNumber of [
+		'23016578',
+		'MA-23016578',
+		'ma 23016578',
+		'MA-MA-23016578',
+		'MA- MA 23016578'
+	]) {
+		const result = compare({ studentNumber });
+		assert.equal(result.studentNumber.status, 'exact', studentNumber);
+		assert.equal(result.studentNumber.similarity, 100);
+		assert.equal(result.studentNumber.detected, studentNumber);
+		assert.equal(result.studentNumber.expected, expected.studentNumber);
+		assert.equal(result.verdict, 'match');
+	}
+	assert.equal(
+		core.matchIdentity(
+			{ ...expected, studentNumber: 'MA-MA-02301657' },
+			{ ...expected, studentNumber: 'MA-02301657' }
+		).verdict,
+		'match'
+	);
+	assert.equal(
+		compare({ name: 'James Meet Pattison', studentNumber: '23016578' }).verdict,
+		'review'
+	);
+});
+
+test('one differing or uncertain digit requires review; missing digits and unknown prefixes are not discarded', () => {
+	for (const studentNumber of ['MA-53016578', 'MA-2301657?', '53016578', 'MA-MA-53016578']) {
 		const result = compare({ studentNumber });
 		assert.equal(result.studentNumber.status, 'close', studentNumber);
 		assert.equal(result.verdict, 'review');
 	}
 	assert.equal(compare({ studentNumber: 'MA-2301657' }).studentNumber.status, 'different');
 	assert.equal(compare({ studentNumber: 'MB-23016578' }).studentNumber.status, 'different');
+	assert.equal(compare({ studentNumber: 'MIA-23016578' }).studentNumber.status, 'different');
+	assert.equal(compare({ studentNumber: '230MA16578' }).studentNumber.status, 'different');
+	assert.equal(compare({ studentNumber: '23016O78' }).studentNumber.status, 'different');
 	assert.equal(compare({ studentNumber: 'MA-53116578' }).studentNumber.status, 'different');
 	const leadingZero = core.matchIdentity(
 		{ name: '', studentNumber: 'MA-2301657' },
@@ -91,17 +122,21 @@ function fixture(t) {
 	 INSERT INTO student(id,user_id,birth_date,sex) VALUES
 	 ('MA-23016578','jonnel','2000-01-01','female'),('MA-99999999','other','2000-01-01','female');
 	`);
+	const handwriting = load('src/lib/server/handwriting.ts', {
+		'$app/env/private': { GEMINI_API_KEY: 'test-key' },
+		'@sveltejs/kit': { error }
+	});
 	const service = load('src/routes/test/identity.server.ts', {
 		'#lib/Roles.js': { Role },
 		'#lib/schema.js': schema,
 		'#lib/server/auth.js': { validateUser },
 		'#lib/server/db/index.js': { db },
-		'$app/env/private': { OLLAMA_BASE_URL: 'http://ollama.invalid' },
+		'#lib/server/handwriting.js': handwriting,
 		'@sveltejs/kit': { error }
 	});
 	const endpoint = load('src/routes/test/identity/+server.ts', {
 		'../identity.server': service,
-		'../identity': core,
+		'#lib/clearance/identity.js': core,
 		'@sveltejs/kit': { json, isHttpError }
 	}).POST;
 	const page = load('src/routes/test/+page.server.ts', {
@@ -128,8 +163,12 @@ function mockTranscription(t, fn) {
 	});
 	globalThis.fetch = fn;
 }
-function reply(transcription, done_reason = 'stop') {
-	return Response.json({ message: { content: JSON.stringify({ transcription }) }, done_reason });
+function reply(name = '', studentNumber = '', finishReason = 'STOP') {
+	return Response.json({
+		candidates: [
+			{ finishReason, content: { parts: [{ text: JSON.stringify({ name, studentNumber }) }] } }
+		]
+	});
 }
 
 test('session chooses own student; staff use fixed test record; anonymous access reveals no identity', async (t) => {
@@ -180,18 +219,29 @@ test('crop request rejects extra expected values, malformed images and excessive
 	await assert.rejects(service.readIdentityCrops(text), status(415));
 });
 
-test('endpoint compares against database only; model sees crops and instructions, never expected identity', async (t) => {
-	const f = fixture(t);
+test('Gemini receives two PNG crops and no expected identity; endpoint compares database record', async (t) => {
+	const f = fixture(t),
+		calls = [];
 	const before = f.sqlite.prepare('SELECT total_changes() AS n').get().n;
-	const calls = [];
-	mockTranscription(t, async (_url, options) => {
-		const body = JSON.parse(options.body);
+	mockTranscription(t, async (url, options) => {
+		assert.match(url, /generativelanguage.googleapis.com/);
+		assert.equal(options.headers['x-goog-api-key'], 'test-key');
 		assert(!options.body.includes('Jonnel'));
 		assert(!options.body.includes('23016578'));
-		assert.equal(body.options.num_predict, 2048);
-		assert.deepEqual(body.messages[1].images, [png]);
+		const body = JSON.parse(options.body);
+		assert.match(body.contents[0].parts[0].text, /only the numeric portion/);
+		assert.match(body.contents[0].parts[0].text, /printed, handwritten, or repeated/);
+		assert.match(body.contents[0].parts[0].text, /including leading zeros/);
+		assert.equal(body.generationConfig.responseMimeType, 'application/json');
+		assert.deepEqual(
+			body.contents[0].parts.filter((p) => p.inlineData).map((p) => p.inlineData),
+			[
+				{ mimeType: 'image/png', data: png },
+				{ mimeType: 'image/png', data: png }
+			]
+		);
 		calls.push(body);
-		return reply(calls.length === 1 ? 'MA-99999999' : 'Other Student');
+		return reply('Other Student', '99999999');
 	});
 	const response = await f.endpoint(event(locals()));
 	assert.equal(response.status, 200);
@@ -199,80 +249,87 @@ test('endpoint compares against database only; model sees crops and instructions
 	const result = await response.json();
 	assert.equal(result.verdict, 'match');
 	assert.equal(result.studentNumber.expected, 'MA-99999999');
+	assert.equal(result.studentNumber.detected, '99999999');
 	assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n, before);
-	assert.equal(calls.length, 2);
+	assert.equal(calls.length, 1);
 });
 
-test('name response limit preserves the readable number and forces review, even when number is exact', async (t) => {
+test('unfinished, blocked and invalid Gemini output forces review and never accepts partial text', async (t) => {
 	const { endpoint } = fixture(t);
-	let calls = 0;
-	mockTranscription(t, async () =>
-		++calls === 1 ? reply('MA-23016578') : reply('Jonnel Mrei Palileo', 'length')
-	);
-	const response = await endpoint(event(locals('admin', 'staff')));
-	assert.equal(response.status, 200);
-	const result = await response.json();
+	mockTranscription(t, async () => reply('Jonnel Mrei Palileo', 'MA-23016578', 'MAX_TOKENS'));
+	let result = await (await endpoint(event(locals('admin', 'staff')))).json();
+	assert.equal(result.verdict, 'review');
+	assert.equal(result.studentNumber.detected, '');
+	assert.match(result.warnings.name, /response limit/);
+	for (const response of [
+		Response.json({ candidates: [] }),
+		Response.json({ candidates: [{ finishReason: 'SAFETY' }] }),
+		Response.json({
+			candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'not JSON' }] } }]
+		})
+	]) {
+		globalThis.fetch = async () => response;
+		result = await (await endpoint(event(locals()))).json();
+		assert.equal(result.verdict, 'review');
+		assert.equal(Object.keys(result.warnings).length, 2);
+	}
+});
+
+test('one invalid field preserves the other reading but still forces review', async (t) => {
+	const { endpoint } = fixture(t);
+	mockTranscription(t, async () => reply(123, 'MA-23016578'));
+	const result = await (await endpoint(event(locals('admin', 'staff')))).json();
 	assert.equal(result.verdict, 'review');
 	assert.equal(result.studentNumber.detected, 'MA-23016578');
 	assert.equal(result.name.detected, '');
-	assert.match(result.warnings.name, /response limit/);
-	assert.equal(calls, 2);
+	assert.match(result.warnings.name, /unusable transcription/);
 });
 
-test('invalid transcription does not discard another readable field; unfinished text never becomes evidence', async (t) => {
-	const { endpoint } = fixture(t);
-	let calls = 0;
-	mockTranscription(t, async () =>
-		++calls === 1
-			? Response.json({ message: { content: 'not JSON' }, done_reason: 'stop' })
-			: reply('Other Student')
-	);
-	let response = await endpoint(event(locals()));
-	assert.equal(response.status, 200);
-	let result = await response.json();
-	assert.equal(result.verdict, 'review');
-	assert.equal(result.studentNumber.detected, '');
-	assert.equal(result.name.detected, 'Other Student');
-	assert.match(result.warnings.studentNumber, /unusable transcription/);
-	globalThis.fetch = async () => reply('MA-23016578', 'length');
-	response = await endpoint(event(locals()));
-	result = await response.json();
-	assert.equal(response.status, 200);
-	assert.equal(result.verdict, 'review');
-	assert.equal(result.name.detected, '');
-	assert.equal(result.studentNumber.detected, '');
-	assert.equal(Object.keys(result.warnings).length, 2);
-});
-
-test('transport errors still report 502 without provider details and release the model slot', async (t) => {
+test('provider and transport errors stay private and release the handwriting slot', async (t) => {
 	const { service, endpoint } = fixture(t);
 	mockTranscription(t, async () => {
-		throw new Error('Private provider details');
+		throw Error('Private provider details');
 	});
-	const response = await endpoint(event(locals()));
+	let response = await endpoint(event(locals()));
 	assert.equal(response.status, 502);
 	assert(!(await response.text()).includes('Private provider details'));
-	globalThis.fetch = async () => reply('');
+	globalThis.fetch = async () =>
+		Response.json({ error: { message: 'private quota details' } }, { status: 429 });
+	response = await endpoint(event(locals()));
+	assert.equal(response.status, 502);
+	assert(!(await response.text()).includes('private quota details'));
+	globalThis.fetch = async () => reply();
 	assert.deepEqual(await service.recognizeIdentity(crops, new AbortController().signal), {
 		name: '',
 		studentNumber: ''
 	});
 });
 
-test('concurrent inference is bounded and cancellation releases model slot', async (t) => {
-	const { service } = fixture(t);
-	const abort = new AbortController();
+test('concurrent inference is bounded; cancellation releases the handwriting slot', async (t) => {
+	const { service } = fixture(t),
+		abort = new AbortController();
 	mockTranscription(
 		t,
 		(_url, { signal }) =>
-			new Promise((_, reject) => {
-				signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-			})
+			new Promise((_, reject) =>
+				signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+			)
 	);
 	const active = service.recognizeIdentity(crops, abort.signal);
 	await assert.rejects(service.recognizeIdentity(crops, new AbortController().signal), status(429));
 	abort.abort();
 	await assert.rejects(active);
-	globalThis.fetch = async () => reply('');
+	globalThis.fetch = async () => reply();
 	await service.recognizeIdentity(crops, new AbortController().signal);
+});
+
+test('missing Gemini key fails closed before sending images', async (t) => {
+	const service = load('src/lib/server/handwriting.ts', {
+		'$app/env/private': {},
+		'@sveltejs/kit': { error }
+	});
+	mockTranscription(t, async () => {
+		assert.fail('No provider request without a key');
+	});
+	await assert.rejects(service.recognizeIdentity(crops, new AbortController().signal), status(503));
 });

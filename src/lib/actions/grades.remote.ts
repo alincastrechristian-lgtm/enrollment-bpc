@@ -193,7 +193,10 @@ export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, a
 });
 
 export const verifyEnrollmentClearance = command(
-	enrollmentReferenceSchema.extend({ submissionId: z.string().uuid().optional() }),
+	enrollmentReferenceSchema.extend({
+		submissionId: z.string().uuid().optional(),
+		identityConfirmed: z.boolean().optional()
+	}),
 	(data) => {
 		const { locals } = getRequestEvent();
 		validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
@@ -210,7 +213,13 @@ export const verifyEnrollmentClearance = command(
 					error(409, 'Clearance has already been verified. Refresh the page.');
 				if (record.student.currentEnrollmentId !== record.enrollment.id)
 					error(409, 'Only the current enrollment clearance can be verified.');
-				verifyClearanceSubmission(tx, record.enrollment.id, data.submissionId, locals.user);
+				verifyClearanceSubmission(
+					tx,
+					record.enrollment.id,
+					data.submissionId,
+					locals.user,
+					data.identityConfirmed
+				);
 				tx.update(enrollment)
 					.set({
 						submittedClearance: true,

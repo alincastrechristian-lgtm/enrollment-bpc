@@ -54,9 +54,10 @@
 	let crops = $state<{ label: string; url: string; text: string; confidence: number }[]>([]);
 	let busy = $state(false);
 	let templateBusy = $state(false);
+	let aligning = $state(false);
 	let identityBusy = $state(false);
 	let templateApproval = $state<TemplateApproval>();
-	const locked = $derived(busy || templateBusy || identityBusy);
+	const locked = $derived(busy || templateBusy || identityBusy || aligning);
 	let error = $state('');
 	let progress = $state('');
 	let overlay = $state(true);
@@ -226,8 +227,8 @@
 		<p class="max-w-3xl text-sm text-base-content/75">
 			Upload a blank template and compare the submitted clearance’s printed form first. Once it
 			matches, check the student name and number against a student record. The identity check sends
-			only those two crops to your local handwriting server. Full template inspection runs in this
-			browser and downloads OCR language data on first use.
+			only those two crops to Google Gemini. Full template inspection runs in this browser and
+			downloads OCR language data on first use.
 		</p>
 		{#if error}
 			<div role="alert" class="alert text-sm alert-error">{error}</div>
@@ -290,6 +291,8 @@
 							{#key source}
 								<BorderEditor
 									src={sourceUrl}
+									template={data.savedTemplate}
+									bind:detecting={aligning}
 									bind:corners
 									bind:drawing={selecting}
 									bind:dragging={adjusting}
@@ -366,7 +369,12 @@
 					savedTemplate={data.savedTemplate}
 					{source}
 					{corners}
-					disabled={busy || identityBusy || selecting || adjusting || !validCorners(corners)}
+					disabled={busy ||
+						identityBusy ||
+						aligning ||
+						selecting ||
+						adjusting ||
+						!validCorners(corners)}
 					bind:semester={expected.semester}
 					bind:schoolYear={expected.schoolYear}
 					onbusychange={(value) => {

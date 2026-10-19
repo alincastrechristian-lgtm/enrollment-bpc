@@ -123,7 +123,7 @@ export const definitionSchema = z
 		schoolYear: clearanceTermSchema.shape.schoolYear.optional(),
 		areas: z
 			.array(areaSchema)
-			.min(5, 'Add school name, form title, logo or structure, semester and academic year areas.')
+			.min(4, 'Add school name, form title, semester and academic year areas.')
 			.max(20),
 		personalFields: personalFieldsSchema.optional(),
 		officeRows: officeRowsSchema.optional()
@@ -133,14 +133,13 @@ export const definitionSchema = z
 		const kinds = areas.map((a) => a.kind);
 		if (
 			kinds.filter((k) => k === 'text').length < 2 ||
-			!kinds.includes('image') ||
 			kinds.filter((k) => k === 'semester').length !== 1 ||
 			kinds.filter((k) => k === 'academicYear').length !== 1
 		)
 			ctx.addIssue({
 				code: 'custom',
 				message:
-					'Mark at least two printed text areas (school and form title), one logo or structure area, one semester and one academic year.'
+					'Mark at least two printed text areas (school and form title), one semester and one academic year. Logo areas are optional.'
 			});
 		if (
 			new Set(areas.map((a) => a.id)).size !== areas.length ||
@@ -157,6 +156,11 @@ export const definitionSchema = z
 		...(officeRows ? { officeRows } : {})
 	}));
 export type TemplateDefinition = z.infer<typeof definitionSchema>;
+export function hasIdentityAreas(definition: Pick<TemplateDefinition, 'personalFields'>) {
+	return ['studentName', 'studentNumber'].every((field) =>
+		definition.personalFields?.some((area) => area.field === field)
+	);
+}
 export type TemplateInfo = {
 	revision: string;
 	filename: string;
@@ -178,6 +182,21 @@ export function printedAreaBox(area: TemplateArea): Box {
 	};
 }
 
+// Bound nearby text searches to 5% of form width and 3.5% of form height around the saved area.
+// Saved boxes remain unchanged; text elsewhere on a different layout cannot satisfy the check.
+export function printedSearchBox(area: TemplateArea): Box {
+	if (area.kind === 'image') return area.box;
+	const box = printedAreaBox(area);
+	const x = Math.max(0, box.x - 0.05),
+		y = Math.max(0, box.y - 0.035);
+	return {
+		x,
+		y,
+		width: Math.min(1, box.x + box.width + 0.05) - x,
+		height: Math.min(1, box.y + box.height + 0.035) - y
+	};
+}
+
 const normalize = (text: string) =>
 	text
 		.normalize('NFKD')
@@ -188,14 +207,17 @@ export function checkAreaText(area: TemplateArea, reading: Reading, term: Cleara
 	let actual = reading.text;
 	let expected = area.expected;
 	if (area.kind === 'semester') {
-		actual = reading.text.match(/^\s*([1-9]\d*)\s*(?:st|nd|rd|th)?\s*Semester\b/i)?.[1] ?? '';
+		const semesters = [...reading.text.matchAll(/\b([1-9]\d*)\s*(?:st|nd|rd|th)?\s*Semester\b/gi)];
+		actual = new Set(semesters.map((match) => match[1])).size === 1 ? semesters[0][1] : '';
 		expected = term.semester;
 	} else if (area.kind === 'academicYear') {
-		const year = reading.text.match(/\b(20\d{2})\s*[-–—]\s*(20\d{2})\b/);
-		actual = year ? `${year[1]}-${year[2]}` : '';
+		const years = [...reading.text.matchAll(/\b(20\d{2})\s*[-–—]\s*(20\d{2})\b/g)].map(
+			(match) => `${match[1]}-${match[2]}`
+		);
+		actual = new Set(years).size === 1 ? years[0] : '';
 		expected = term.schoolYear;
 	}
-	if (!normalize(actual) || reading.confidence < 65)
+	if (!normalize(actual) || !normalize(expected) || reading.confidence < 65)
 		return {
 			label: area.label,
 			verdict: 'review',
@@ -203,9 +225,46 @@ export function checkAreaText(area: TemplateArea, reading: Reading, term: Cleara
 		};
 	return {
 		label: area.label,
-		verdict: normalize(actual) === normalize(expected) ? 'pass' : 'fail',
+		verdict: (
+			area.kind === 'text'
+				? normalize(actual).includes(normalize(expected))
+				: normalize(actual) === normalize(expected)
+		)
+			? 'pass'
+			: 'fail',
 		detail: `Read “${reading.text.trim()}”; expected “${expected}”.`
 	};
+}
+
+// Otsu thresholding compares printed shapes in black and white despite paper/exposure differences.
+function blackAndWhite(gray: Uint8Array): Uint8Array {
+	const histogram = new Uint32Array(256);
+	let sum = 0,
+		low = 255,
+		high = 0;
+	for (const value of gray) {
+		histogram[value]++;
+		sum += value;
+		low = Math.min(low, value);
+		high = Math.max(high, value);
+	}
+	if (high - low < 24) return new Uint8Array(gray.length).fill(255);
+	let count = 0,
+		backgroundSum = 0,
+		best = -1,
+		threshold = 127;
+	for (let value = 0; value < 255; value++) {
+		count += histogram[value];
+		backgroundSum += value * histogram[value];
+		if (!count || count === gray.length) continue;
+		const difference = backgroundSum / count - (sum - backgroundSum) / (gray.length - count);
+		const variance = count * (gray.length - count) * difference * difference;
+		if (variance > best) {
+			best = variance;
+			threshold = value;
+		}
+	}
+	return Uint8Array.from(gray, (value) => (value <= threshold ? 0 : 255));
 }
 
 // Normalized correlation preserves relative shapes while tolerating exposure changes.
@@ -223,6 +282,8 @@ export function compareVisual(
 		height < 8
 	)
 		throw new Error('Invalid visual patches.');
+	reference = blackAndWhite(reference);
+	actual = blackAndWhite(actual);
 	let best = -1;
 	// Small local scale changes occur in photocopies even after page alignment.
 	// Keep the same shape/detail and correlation requirements for every candidate.
@@ -268,6 +329,6 @@ export function compareVisual(
 				}
 	return {
 		score: Math.max(0, best),
-		verdict: best < 0 ? 'review' : best >= 0.8 ? 'pass' : best < 0.45 ? 'fail' : 'review'
+		verdict: best < 0 ? 'review' : best >= 0.65 ? 'pass' : best < 0.45 ? 'fail' : 'review'
 	};
 }

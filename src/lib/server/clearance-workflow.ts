@@ -9,7 +9,7 @@ import {
 } from '#lib/schema.js';
 import type { db, Transaction } from './db';
 import { getStudentEnrollment } from './student-enrollment';
-import { clearancePassed } from '#lib/clearance/report.js';
+import { clearanceCanSubmit, clearanceNeedsIdentityReview } from '#lib/clearance/report.js';
 
 type Database = typeof db | Transaction;
 export function submissionInfo(record: typeof clearanceSubmission.$inferSelect | undefined) {
@@ -71,9 +71,12 @@ export function requestClearanceEnrollment(
 			if (
 				record.enrollment.submittedClearance ||
 				submission.status !== 'ready' ||
-				!clearancePassed(submission.report)
+				!clearanceCanSubmit(submission.report)
 			)
-				error(409, 'Upload and pass clearance checks before requesting enrollment.');
+				error(
+					409,
+					'Upload clearance with passing template, office and writing-presence checks before requesting enrollment.'
+				);
 			const template = tx.select().from(clearanceTemplate).where(eq(clearanceTemplate.id, 1)).get();
 			if (template?.revision !== submission.templateRevision)
 				error(409, 'The template changed. Upload and check your clearance again.');
@@ -90,7 +93,8 @@ export function verifyClearanceSubmission(
 	database: Database,
 	enrollmentId: string,
 	submissionId: string | undefined,
-	actor: { id: string; name: string }
+	actor: { id: string; name: string },
+	identityConfirmed = false
 ) {
 	const submission = getSubmission(database, enrollmentId);
 	if (
@@ -98,11 +102,16 @@ export function verifyClearanceSubmission(
 		submission.id !== submissionId ||
 		submission.status !== 'requested' ||
 		!submission.requestedAt ||
-		!clearancePassed(submission.report)
+		!clearanceCanSubmit(submission.report)
 	)
 		error(
 			409,
 			'Review the current student enrollment request and uploaded clearance before verifying.'
+		);
+	if (clearanceNeedsIdentityReview(submission.report) && !identityConfirmed)
+		error(
+			409,
+			'Check the student name and number against the original clearance and confirm identity before verifying.'
 		);
 	database
 		.update(clearanceSubmission)

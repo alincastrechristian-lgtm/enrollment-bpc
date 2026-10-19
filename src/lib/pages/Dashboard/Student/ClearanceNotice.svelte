@@ -2,8 +2,13 @@
 	import { ArrowRight, ClipboardCheck } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 	import { getStudentClearance } from '#lib/actions/clearance.remote.js';
-	import { clearancePassed, hasCurrentOfficeChecks } from '#lib/clearance/report.js';
+	import {
+		clearanceCanSubmit,
+		clearanceNeedsIdentityReview,
+		hasCurrentClearanceChecks
+	} from '#lib/clearance/report.js';
 
+	import { hasIdentityAreas } from '#lib/clearance/definition.js';
 	const progress = getStudentClearance();
 	const current = $derived(progress.current?.current);
 	const submission = $derived(progress.current?.submission);
@@ -15,7 +20,7 @@
 			submission?.status === 'verified'
 		)
 			return null;
-		const currentChecks = !submission || hasCurrentOfficeChecks(submission.report);
+		const currentChecks = !submission || hasCurrentClearanceChecks(submission.report);
 		if (submission?.status === 'requested' && currentChecks)
 			return {
 				title: 'Enrollment request sent',
@@ -24,7 +29,10 @@
 				action: 'View request',
 				waiting: true
 			};
-		if (!progress.current?.template?.definition)
+		if (
+			!progress.current?.template?.definition ||
+			!hasIdentityAreas(progress.current.template.definition)
+		)
 			return {
 				title: 'Clearance upload is not available yet',
 				detail:
@@ -32,7 +40,15 @@
 				action: 'View clearance status',
 				waiting: true
 			};
-		if (submission?.status === 'ready' && clearancePassed(submission.report))
+		if (submission?.status === 'ready' && clearanceCanSubmit(submission.report)) {
+			if (clearanceNeedsIdentityReview(submission.report))
+				return {
+					title: 'Identity review needed',
+					detail:
+						'Your template and office checks passed. Send an enrollment request so the Registrar/admin can verify your name and student number or request another upload.',
+					action: 'Request review',
+					waiting: false
+				};
 			return {
 				title: 'Your clearance is ready',
 				detail:
@@ -40,6 +56,7 @@
 				action: 'Request enrollment',
 				waiting: false
 			};
+		}
 		if (submission)
 			return {
 				title: 'Upload your clearance again',

@@ -34,12 +34,15 @@
 	let dragging = $state(false);
 	let detection = $state<'found' | 'missing' | null>(null);
 	let loading = $state(false);
+	let aligning = $state(false);
 	let running = $state(false);
 	let progress = $state('');
 	let error = $state('');
 	let result = $state<TemplateResult>();
 	let controller: AbortController | undefined;
-	let destroyed = false;
+	$effect(() => {
+		if (!savedTemplate) onbusychange(loading || running || aligning);
+	});
 	const years = $derived(schoolYear.trim().match(/^(20\d{2})-(20\d{2})$/));
 	const termReady = $derived(
 		(semester === '1' || semester === '2') &&
@@ -74,9 +77,8 @@
 		detection = null;
 	}
 	async function builtin(initial = false) {
-		if (loading || running || (!initial && disabled)) return;
+		if (loading || running || aligning || (!initial && disabled)) return;
 		loading = true;
-		onbusychange(true);
 		error = '';
 		invalidate();
 		try {
@@ -90,16 +92,14 @@
 			error = 'Could not load blank template. Upload a JPG, PNG or WebP template.';
 		} finally {
 			loading = false;
-			if (!destroyed) onbusychange(false);
 		}
 	}
 	async function upload(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = '';
-		if (!file || disabled || running || loading) return;
+		if (!file || disabled || running || loading || aligning) return;
 		loading = true;
-		onbusychange(true);
 		error = '';
 		invalidate();
 		try {
@@ -113,7 +113,6 @@
 			error = cause instanceof Error ? cause.message : 'Could not load template.';
 		} finally {
 			loading = false;
-			if (!destroyed) onbusychange(false);
 		}
 	}
 	async function compare() {
@@ -125,13 +124,13 @@
 			disabled ||
 			running ||
 			loading ||
+			aligning ||
 			drawing ||
 			dragging ||
 			!validCorners(referenceCorners)
 		)
 			return;
 		running = true;
-		onbusychange(true);
 		error = '';
 		invalidate();
 		controller = new AbortController();
@@ -168,14 +167,12 @@
 			running = false;
 			progress = '';
 			controller = undefined;
-			if (!destroyed) onbusychange(false);
 		}
 	}
 	onMount(() => {
 		if (!savedTemplate) void builtin(true);
 	});
 	onDestroy(() => {
-		destroyed = true;
 		controller?.abort();
 		onbusychange(false);
 	});
@@ -224,7 +221,7 @@
 	<section
 		class="portal-panel min-w-0"
 		aria-labelledby="template-title"
-		aria-busy={loading || running}
+		aria-busy={loading || running || aligning}
 	>
 		<div class="card-body gap-4">
 			<div>
@@ -242,14 +239,14 @@
 					class="file-input w-full"
 					accept="image/jpeg,image/png,image/webp"
 					onchange={upload}
-					disabled={disabled || loading || running}
+					disabled={disabled || loading || running || aligning}
 				/>
 			</label>
 			<button
 				type="button"
 				class="btn btn-outline btn-sm"
 				onclick={() => builtin()}
-				disabled={disabled || loading || running}
+				disabled={disabled || loading || running || aligning}
 			>
 				Use built-in blank template
 			</button>
@@ -261,10 +258,11 @@
 						{#key reference}
 							<BorderEditor
 								src={referenceUrl}
+								bind:detecting={aligning}
 								bind:corners={referenceCorners}
 								bind:drawing
 								bind:dragging
-								disabled={disabled || loading || running}
+								disabled={disabled || loading || running || aligning}
 								{detection}
 								onchange={() => {
 									detection = null;
@@ -282,7 +280,7 @@
 						aria-label="Required semester"
 						class="select w-full"
 						bind:value={semester}
-						disabled={disabled || running || loading}
+						disabled={disabled || running || loading || aligning}
 					>
 						<option value="" disabled>Choose semester</option>
 						<option value="1">1st Semester</option>
@@ -297,7 +295,7 @@
 						bind:value={schoolYear}
 						placeholder="2025-2026"
 						maxlength="9"
-						disabled={disabled || running || loading}
+						disabled={disabled || running || loading || aligning}
 					/>
 				</label>
 			</div>
@@ -312,6 +310,7 @@
 				onclick={compare}
 				disabled={disabled ||
 					loading ||
+					aligning ||
 					running ||
 					!source ||
 					!reference ||

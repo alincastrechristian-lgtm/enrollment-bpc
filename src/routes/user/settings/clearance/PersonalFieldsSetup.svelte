@@ -112,7 +112,8 @@
 			Personal information input areas
 		</h3>
 		<p class="mt-1 text-sm text-base-content/65">
-			Optional: mark the writing areas for future identity checks. Exclude the printed labels.
+			Mark student name and student number for identity verification. Course, year and section are
+			optional and are not checked. Include the printed student-number prefix when present.
 		</p>
 	</div>
 	<div class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4">
@@ -250,8 +251,8 @@
 		<p
 			class="rounded-xl border border-dashed border-base-300 bg-base-200/30 p-6 text-sm text-base-content/65"
 		>
-			No personal areas selected. Detect them or add fields manually. You can save the printed
-			template setup without these optional areas.
+			No personal areas selected. Detect them or add fields manually. Student uploads require both
+			student name and student number areas.
 		</p>
 	{/if}
 	{#if !valid.success}

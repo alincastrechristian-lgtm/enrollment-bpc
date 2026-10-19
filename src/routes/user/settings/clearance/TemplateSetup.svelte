@@ -9,6 +9,7 @@
 	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
 	import {
 		definitionSchema,
+		hasIdentityAreas,
 		type TemplateArea,
 		type PersonalFieldArea,
 		type OfficeRow,
@@ -31,9 +32,9 @@
 	} = $props();
 	const steps = [
 		{ id: 'outline', title: 'Form outline', hint: 'Align the reference' },
-		{ id: 'printed', title: 'Printed areas', hint: 'School, logo and semester' },
+		{ id: 'printed', title: 'Printed areas', hint: 'School, title and term' },
 		{ id: 'offices', title: 'Offices & signatures', hint: 'Checkboxes and signing areas' },
-		{ id: 'personal', title: 'Personal inputs', hint: 'Optional · for later use' }
+		{ id: 'personal', title: 'Personal inputs', hint: 'Student name and number' }
 	] as const;
 	let corners = $state<Corners>(
 		untrack(() => structuredClone(template.definition?.corners ?? UNIT_CORNERS))
@@ -59,6 +60,7 @@
 		saving = $state(false);
 	let error = $state('');
 	let detecting = $state(false);
+	let aligning = $state(false);
 	let progress = $state('');
 	let suggestions = $state<AreaSuggestions>();
 	let selectedSuggestionId = $state('');
@@ -70,8 +72,12 @@
 	);
 	const draft = $derived({ corners, areas, personalFields, officeRows });
 	const valid = $derived(definitionSchema.safeParse(draft));
-	const locked = $derived(disabled || busy || saving || detecting || personalBusy || officeBusy);
-	$effect(() => onbusychange(busy || saving || detecting || personalBusy || officeBusy));
+	const locked = $derived(
+		disabled || busy || saving || detecting || aligning || personalBusy || officeBusy
+	);
+	$effect(() =>
+		onbusychange(busy || saving || detecting || aligning || personalBusy || officeBusy)
+	);
 	onDestroy(() => {
 		destroyed = true;
 		detectController?.abort();
@@ -215,7 +221,7 @@
 <section
 	class="portal-panel min-w-0 space-y-5 p-4 sm:p-6"
 	aria-labelledby="template-setup-title"
-	aria-busy={busy || saving || detecting || personalBusy || officeBusy}
+	aria-busy={busy || saving || detecting || aligning || personalBusy || officeBusy}
 >
 	<div class="flex items-center gap-3">
 		<MapPin class="text-primary" size={22} aria-hidden="true" />
@@ -284,6 +290,7 @@
 					<p class="text-xs font-semibold">Reference outline</p>
 					<BorderEditor
 						src={sourceUrl}
+						bind:detecting={aligning}
 						bind:corners
 						bind:drawing
 						bind:dragging
@@ -302,9 +309,9 @@
 			<div>
 				<h3 class="text-base font-semibold">Printed areas</h3>
 				<p class="mt-1 text-sm text-base-content/65">
-					Add school name and form title as text, a logo or table structure as an image, and the
-					semester and academic year. Include whole lines with a little margin. Exclude handwriting,
-					signatures and checkbox interiors.
+					Mark school name, form title, semester and academic year. Logo or printed structure areas
+					are optional. Include whole lines with a little margin. Exclude handwriting, signatures
+					and checkbox interiors.
 				</p>
 			</div>
 			<div class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4">
@@ -477,7 +484,7 @@
 							onclick={() => add('image')}
 							disabled={locked || areas.length >= 20}
 						>
-							Logo / structure
+							Logo / structure (optional)
 						</button>
 						<button
 							type="button"
@@ -559,7 +566,7 @@
 										disabled={locked}
 									>
 										<option value="text">Printed text</option>
-										<option value="image">Logo or structure</option>
+										<option value="image">Logo or structure (optional)</option>
 										<option value="semester">Semester</option>
 										<option value="academicYear">Academic year</option>
 									</select>
@@ -616,6 +623,11 @@
 		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-4">
 			<div class="min-w-0 text-xs text-base-content/60">
 				<p>Save applies all steps. Tests use your saved settings.</p>
+				{#if !hasIdentityAreas(draft)}
+					<p class="mt-1 text-warning">
+						Mark student name and student number in Personal inputs to enable student uploads.
+					</p>
+				{/if}
 				{#if suggestions}
 					<p class="mt-1 text-warning">
 						Apply or discard the printed-area suggestions before saving.

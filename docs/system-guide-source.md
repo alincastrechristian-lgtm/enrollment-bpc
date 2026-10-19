@@ -505,7 +505,7 @@ Sources: S10, S11, S24.
 
 ## 12.1 What configuration controls
 
-Settings > Clearance is administrator-only. It defines the current blank reference image, form border, printed template areas, configurable office rows, and optional personal-writing regions. Production office names are configurable; the five hard-coded departments in the diagnostic prototype are not the production office list.
+Settings > Clearance is administrator-only. It defines the current blank reference image, form border, printed template areas, configurable office rows, and personal-writing regions for student name/number verification. Production office names are configurable; the five hard-coded departments in the diagnostic prototype are not the production office list.
 
 Storage must be available before saving reference objects. The global template is a singleton with a UUID revision. Replacing the reference or saving its definition creates a new revision, enabling stale-form checks during later student upload/request actions.
 
@@ -520,7 +520,7 @@ A replacement reference resets the definition to null, because old coordinates c
 1. **Outline:** inspect detected form borders or manually define the four corners. Confirm that the reference is aligned to the intended form rather than the page background.
 2. **Printed areas:** inspect automatic suggestions, add/edit/remove regions manually, assign their kinds, and supply required expected text where appropriate.
 3. **Offices and signatures:** define each office's name region, Cleared checkbox region, and signature/stamp region. Suggestions are editable starting points, not approval evidence.
-4. **Optional personal inputs:** define writing boxes for future identity work. These saved regions do not enable live identity verification.
+4. **Personal inputs:** mark student name and student number writing areas, including a printed student-number prefix where present. Both are required for student uploads. Course, year and section mappings remain optional and are not verified.
 
 The final save validates all steps and stores the definition together with a fresh revision. The test uses saved settings, not unsaved coordinate changes.
 
@@ -529,7 +529,7 @@ The final save validates all steps and stores the definition together with a fre
 | Configuration | Rule |
 | --- | --- |
 | Printed areas | 5–20 areas, unique UUIDs and labels, all inside the aligned form. |
-| Required area mix | At least two text areas, at least one image/logo/structure area, exactly one semester area, exactly one academic-year area. |
+| Required area mix | At least two text areas, exactly one semester area, and exactly one academic-year area. Image/logo/structure areas are optional. |
 | Text expectations | Text areas require nonempty expected text. Semester/year expectations come from the actual enrollment/test values. |
 | Region size | Each box width and height must be at least 1.5% of the normalized form. |
 | Office list | At most 30 offices, unique IDs and case-insensitive names. At least one fully configured office is required for production uploads. |
@@ -552,7 +552,7 @@ Sources: S12–S15, S22.
 
 ## 13.1 Who can upload and when
 
-Only the student uploads their own current enrollment's clearance through Enrollment. The server requires completed setup, finalized grades, current ownership, and status neither dropped nor voided. Upload is unavailable after verification and while a current-version request awaits review. The implementation allows replacement of obsolete office-check-version requests so those records can obtain current findings.
+Only the student uploads their own current enrollment's clearance through Enrollment. The server requires completed setup, finalized grades, current ownership, and status neither dropped nor voided. Upload is unavailable after verification and while a current-version request awaits review. The implementation allows replacement of obsolete office-check-version requests and unverified submissions without personal checks so those records can obtain current findings. Existing verified staff approvals remain valid.
 
 The document must certify the current enrollment's semester and school-year pair, not the upcoming enrollment's term. A new photo of a correct old term does not satisfy a different current term.
 
@@ -562,8 +562,8 @@ The document must certify the current enrollment's semester and school-year pair
 2. The browser decodes it, tries to find the border, and offers adjustable corners. If detection fails, draw/adjust the outline manually.
 3. Ensure all four corners follow the form's actual border in the correct order. Submit Check and save clearance.
 4. The browser sends the original file, normalized corners, enrollment ID/revision, and current template revision. It does not submit trusted approval findings.
-5. The server rechecks ownership, eligibility, storage, template definition, office setup, and revisions.
-6. It independently decodes and analyzes the original image against the saved reference.
+5. The server rechecks ownership, eligibility, storage, template definition, office setup, student name/number mappings, and revisions.
+6. It independently decodes and analyzes the original image against the saved reference. After template and office checks pass, saved personal areas are sampled and sent to Gemini for transcription; the server compares them with the authenticated student record.
 7. Any fail or review result returns findings with no saved submission. Improve the image/form or ask staff to correct configuration, then retry.
 8. An all-pass result saves the image and report as ready. The student must still press the explicit request action.
 
@@ -577,35 +577,35 @@ Four normalized corners must be finite, lie within the image, form a clockwise c
 
 The process permits one production OCR check at a time per server process. A concurrent attempt receives a busy response rather than starting another expensive worker. The English Tesseract worker uses locally installed language data and a 120-second timeout; worker and busy lock are released afterward.
 
-Each saved printed area is evaluated. Text regions use OCR and normalization; image/structure regions compare aligned grayscale patches. Semester/year regions derive expected values from the current enrollment instead of copying the blank form's printed example term.
+Each saved printed area is evaluated. Logo/structure areas are optional; templates require school/form text and semester/year areas. Text regions use OCR and normalization; image/structure regions compare aligned black-and-white patches. Semester/year regions derive expected values from the current enrollment instead of copying the blank form's printed example term.
 
 | Printed check | Decision rule |
 | --- | --- |
 | OCR empty/unreadable or confidence below 65 | Review. It cannot support automatic passing submission. |
-| Ordinary text | Normalize case, diacritics, and punctuation, then compare expected normalized text. |
+| Ordinary text | Search expected normalized wording near its saved box, allowing 5% form width and 3.5% form height margin. Ignore extra nearby labels; distant text cannot match. |
 | Semester | Recognize the relevant positive ordinal/semester representation and compare to current enrollment. |
 | Academic year | Extract the `20xx–20xx` pair and compare to current school-year start and start+1. |
-| Image/structure comparison | Normalized correlation across small local scale/translation variations. At least 0.8 passes; below 0.45 fails; middle range reviews. |
+| Image/structure comparison | Normalized correlation across small local scale/translation variations. Black-and-white shape correlation of at least 0.65 passes; below 0.45 fails; middle range reviews. |
 | Empty/insufficient-detail image region | Review; two blank image regions do not establish a match. |
 
 Office checks run only after all template checks pass. A template mismatch cannot be overcome by dark marks in the office boxes.
 
 ## 13.4 Office-mark checks
 
-The current report has office-check version 2 and two checks per configured office: Cleared checkbox and signature/stamp. Production identity is always marked deferred.
+The current report has office-check version 2 and two checks per configured office: Cleared checkbox and signature/stamp. Identity starts unchecked during template/office analysis, then stores a match/review/mismatch result from the personal-information check before successful persistence.
 
 The checker uses adaptive thresholding and subtracts dilated printed-reference ink. It attempts to distinguish new handwriting/marks from the printed checkbox frame or printed signature line. Incorrect reference boxes can therefore produce review findings even with a visually marked form.
 
 | Office check | Current implementation |
 | --- | --- |
-| Checkbox alignment | Locate all four printed frame edges; at least 80% edge coverage and 60–140% of saved size. Inner crop must have at least six pixels per dimension. Uncertain alignment reviews. |
+| Checkbox alignment | Fit four nearby printed edges with local translation up to 45% of box size and edge slopes up to 0.24. Intersect edges to adjust corners, then deskew the interior. Require at least 80% full-edge and endpoint coverage, 60–140% saved side lengths, and a usable interior. Neighboring office centers bound selection; missing frames require review. |
 | Blank checkbox reference | More than 1% interior ink reviews and asks for reference correction. A prechecked reference is not treated as blank. |
 | Cleared mark pass | Added ink at least 1.2%, plus a connected component of at least six pixels spanning at least eight pixels in the normalized 32×32 interior patch. |
 | Weak checkbox marks | Positive but too small/isolated marks review; no added ink fails. |
 | Signature/stamp | Added ink ratio at least 0.004 passes; strictly above one third of 0.004 but below 0.004 reviews; at or below one third of 0.004 fails. |
 | Overall result | Any fail makes fail; otherwise any review/empty check list makes review; otherwise pass. Saving requires template pass, offices pass, and version 2. |
 
-These checks measure additional ink and template similarity. They do not establish signature authenticity, real office authorization, or the student's identity. The current production system does not verify handwritten student name/number; optional personal regions reserve that possibility for future work.
+Office checks measure additional ink and template similarity. They do not establish signature authenticity or real office authorization. Production first compares both configured personal writing areas with the aligned blank reference, excluding printed glyphs, MA-, underlines and specks. Empty or insufficient writing fails before sending crops to Gemini or saving the file. Presence detects added strokes, not readable text or authentic identity. Existing unverified uploads without this check require reupload; previously verified approvals remain valid. Only after both areas pass does production send the configured name/number crops to Google Gemini 2.5 Flash. Expected identity stays outside the prompt. An exact student number without a conflicting name can match. Close numbers, unreadable details or model warnings can be saved as Needs review and submitted for manual identity verification after template and office checks pass; identity mismatches remain blocked. Staff must explicitly confirm that the name and student number match the original clearance and student record before verifying a Needs review submission. The server enforces this acknowledgment. Staff can request another upload with a correction reason instead. Enrollment stays blocked until verification; reviewer identity and time are retained with the original automated findings.
 
 ![Flowchart 15. Production template matching and office-mark analysis. Automated passing findings do not replace human review.](system-guide-assets/27-ocr.png)
 
@@ -974,7 +974,7 @@ Browser components own local drafts, confirmation dialogs, display filters, bord
 
 The request hook resolves authentication and fills server locals. Protected routes/loaders and commands use those locals to validate role/ownership. Unknown failures become safe public errors while diagnostic details stay in server logs.
 
-![Flowchart 28. Browser/server responsibilities and authoritative stores. Ollama handwriting belongs only to the diagnostic endpoint.](system-guide-assets/30-architecture.png)
+![Flowchart 28. Browser/server responsibilities and authoritative stores. Current handwriting recognition uses Gemini for production and diagnostics; this architecture figure predates that provider change.](system-guide-assets/30-architecture.png)
 
 ## 21.2 Main relationships and invariants
 
@@ -1014,7 +1014,7 @@ Claims/leases coordinate specific shared operations. They do not create a genera
 | `GARAGE_ADMIN_ENDPOINT`, `GARAGE_ADMIN_TOKEN` | Private Garage Admin API configuration. |
 | `GARAGE_API_ENDPOINT`, `GARAGE_REGION` | S3-compatible endpoint and matching region. Region fallback is `garage`. |
 | `BODY_SIZE_LIMIT` | Node request-body limit; Compose sets `12M` to cover bounded 10 MiB file multipart requests. |
-| `OLLAMA_BASE_URL` | Private diagnostic handwriting service endpoint; not required for live clearance identity, which is deferred. |
+| `GEMINI_API_KEY` | Server-only key for Google Gemini handwriting transcription in production clearance and diagnostics. |
 | `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Seed-process inputs for initial administrator creation when running that seed process. |
 | Saved email settings | SMTP/Resend sender/provider/secret values are stored privately in system settings, not in page data. |
 
@@ -1064,15 +1064,15 @@ The server obtains expected identity from the session/database. Student accounts
 
 The JSON body is bounded to 2 MiB and must contain exactly two base64 PNG crops. Each encoded field has a length bound; actual PNG headers and dimensions are checked, with each crop limited to 2400×1000 and two million pixels.
 
-One handwriting request runs per server process. It calls configured private Ollama `/api/chat` using `qwen3-vl:4b`, processes student number then name, and requests transcription-only strict JSON. Reasoning text is ignored. Incomplete or unusable output produces warnings rather than inferred identity.
+One handwriting request runs per server process. The shared service calls Gemini `generateContent` using `gemini-2.5-flash`, sends both field crops in one request, and requests structured JSON. Calls have a 60-second timeout. Reasoning text is ignored. Incomplete or unusable output produces warnings rather than inferred identity. Authentication keys and provider error details remain server-side.
 
-Normalized comparison handles case, accents, punctuation, and spacing. Exact student-number evidence can pass if the name is not different. A missing number prefix/one-digit-close number or a sufficiently similar name leads to manual review rather than authenticated identity. Model warnings force review. Timeout/cancellation returns 408 and provider failure 502 with safe text.
+Normalized comparison handles case, accents, punctuation, and spacing. Exact student-number evidence can pass if the name is not different. Gemini reads the numeric student-number suffix; comparison ignores an optional printed or handwritten `MA-` prefix, including a repeated prefix, while preserving leading zeros and rejecting other letter prefixes. A one-digit-close number or a sufficiently similar name leads to manual review rather than authenticated identity. Model warnings force review. Timeout/cancellation returns 408 and provider failure 502 with safe text.
 
 ![Flowchart 30. Diagnostic browser inspection and optional handwriting recognition. These results do not approve a production clearance or modify enrollment records.](system-guide-assets/24-diagnostics.png)
 
 ## 22.3 How to interpret diagnostic results
 
-A prototype match means that experiment's expected image/text comparison succeeded. It does not set enrollment clearance true, create a requested submission, verify a signature, or authorize next enrollment. Production code explicitly marks identity deferred. Keep the diagnostic service's availability separate from live enrollment operations.
+A prototype match means that experiment's expected image/text comparison succeeded. It does not set enrollment clearance true, create a requested submission, verify a signature, or authorize next enrollment. Production uses the same recognition and comparison logic only after its own authenticated template and office checks. A diagnostic result cannot bypass that production pipeline.
 
 `/test/files` similarly exercises authenticated personal file storage, not clearance upload. A successful file upload there does not appear in Enrollment requests.
 
@@ -1130,7 +1130,7 @@ If grades are already finalized, an administrator must reopen before academic co
 
 The current routes do not provide a separate applicant review pipeline, student self-registration, instructor grade-entry role, cashier/payment/tuition ledger, timetable/room allocation, class seat capacity, automatic prerequisite enforcement, automatic retake insertion, graduation processing, or automatic next-term enrollment. Staff remains responsible for those institutional decisions or external processes.
 
-Clearance does not authenticate signatures or verify student handwriting in production. Optional personal regions and the diagnostic identity endpoint do not change that fact. The system stores one current submission per enrollment, not an append-only archive of every failed scan or upload replacement.
+Clearance does not authenticate signatures. Production uses Gemini transcription to compare handwritten name/number with the student record; this supports staff review and does not prove document authenticity. The system stores one current submission per enrollment, not an append-only archive of every failed scan or upload replacement.
 
 Profile is read-only, while guarded staff account editors are implemented. Two-factor setup/login is implemented. Administrator management is implemented. Do not rely on older notes that describe those latter features as unfinished.
 
@@ -1292,7 +1292,7 @@ Paths are repository-relative. Line references identify representative inspected
 | S27 | `src/lib/server/cor.ts:15`, `src/lib/server/cor-pdf.ts:13`, `src/routes/user/enrollment/[enrollmentId]/cor/+server.ts:6`. Certificate output. |
 | S28 | `src/routes/test/files/+page.server.ts:12`, `src/lib/server/garage/files.ts:126`, `README.md`. Diagnostic personal storage/configuration notes. |
 | S29 | `Dockerfile:1`, `docker-entrypoint.sh:1`, `docker-compose.yml:1`, `scripts/migrate.mjs:1`, `src/lib/server/db/seed.ts:1`, `.github/workflows/docker-publish.yml:1`, `src/env.ts:1`. Runtime/seed/configuration. |
-| S30 | `src/routes/test/+page.svelte:220`, `src/routes/test/IdentityCheck.svelte:51`, `src/routes/test/identity.server.ts:11`, `src/routes/test/identity.ts:38`. Diagnostic scan/identity. |
+| S30 | `src/routes/test/+page.svelte:220`, `src/routes/test/IdentityCheck.svelte:51`, `src/routes/test/identity.server.ts:11`, `src/lib/clearance/identity.ts`, `src/lib/server/handwriting.ts`. Diagnostic scan/identity. |
 
 | Term | Definition |
 | --- | --- |

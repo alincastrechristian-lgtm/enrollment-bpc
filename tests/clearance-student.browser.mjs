@@ -30,14 +30,14 @@ test(
 				'paths.js':
 					'export const resolve=(route,params={})=>route.replace(/\\[([^\\]]+)\\]/g,(_,key)=>encodeURIComponent(params[key]));',
 				'scan.js': `export async function loadUpload(){const image=new Image();image.src='/reference.jpg';await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);return canvas;}export const detectBorder=()=>[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];`,
-				'actions.svelte.js': `const state=$state({current:{id:'e',revision:0,status:'enrolled',finalizedGrades:false,submittedClearance:false,semester:2,schoolYearStart:2025},template:{revision:'template',definition:{semester:'2',schoolYear:'2025-2026'}},submission:null});
-			window.finalize=()=>{state.current.finalizedGrades=true;};window.checkPasses=false;window.uploads=[];window.requests=[];window.failUpload=false;window.setTemplateTerm=(semester,schoolYear)=>{state.template.definition={semester,schoolYear};};
+				'actions.svelte.js': `const state=$state({current:{id:'e',revision:0,status:'enrolled',finalizedGrades:false,submittedClearance:false,semester:2,schoolYearStart:2025},template:{revision:'template',definition:{semester:'2',schoolYear:'2025-2026',personalFields:[{field:'studentName'},{field:'studentNumber'}]}},submission:null});
+			window.finalize=()=>{state.current.finalizedGrades=true;};window.checkPasses=false;window.identityReview=false;window.uploads=[];window.requests=[];window.failUpload=false;window.setTemplateTerm=(semester,schoolYear)=>{state.template.definition={semester,schoolYear,personalFields:[{field:"studentName"},{field:"studentNumber"}]};};
 			window.reject=()=>{state.submission.status='rejected';state.submission.rejectionReason='Please complete the Library signature.';};window.drop=()=>{state.current.status='dropped';};window.restoreEnrollment=()=>{state.current.status='enrolled';};
-			window.outdate=()=>{delete state.submission.report.officeCheckVersion;};window.restoreChecks=()=>{state.submission.report.officeCheckVersion=2;};window.verify=()=>{state.submission.status='verified';state.current.submittedClearance=true;};
+			window.outdateIdentity=()=>{window.savedIdentity=state.submission.report.identity;state.submission.report.identity='deferred';};window.restoreIdentity=()=>{state.submission.report.identity=window.savedIdentity;};window.outdate=()=>{delete state.submission.report.officeCheckVersion;};window.restoreChecks=()=>{state.submission.report.officeCheckVersion=2;};window.verify=()=>{state.submission.status='verified';state.current.submittedClearance=true;};
 			window.newTerm=()=>{state.current={...state.current,id:'next',finalizedGrades:false,submittedClearance:false};state.submission=null;};
 			const check=(verdict)=>({label:'Upload: Printed form',verdict,detail:'Uploaded document evidence'});
 			export function getStudentClearance(){return {get current(){return state;}};}
-			export const uploadClearance={fields:new Proxy({}, {get:(_,name)=>({as:(type,value)=>({name,type,...(value===undefined?{}:{value})})})}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{if(window.failUpload)throw Error('Simulated upload failure');const data=new FormData(element);window.uploads.push({name:data.get('file')?.name,corners:data.get('corners'),revision:data.get('revision'),enrollmentId:data.get('enrollmentId')});const report={template:[{label:'Reference: Printed form',verdict:'pass',detail:'Saved reference evidence'},check(window.checkPasses?'pass':'fail'),{label:'Logo',verdict:'pass',detail:'Uploaded logo evidence'}],offices:window.checkPasses?[check('pass')]:[],identity:'deferred',officeCheckVersion:2};window.lastReport=report;result={success:window.checkPasses,report};if(window.checkPasses){state.submission={id:'submission',filename:'clearance-reference.jpg',status:'ready',report};result.report=state.submission.report;window.lastReport=state.submission.report;}return true;}});}})};
+			export const uploadClearance={fields:new Proxy({}, {get:(_,name)=>({as:(type,value)=>({name,type,...(value===undefined?{}:{value})})})}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{if(window.failUpload)throw Error('Simulated upload failure');const data=new FormData(element);window.uploads.push({name:data.get('file')?.name,corners:data.get('corners'),revision:data.get('revision'),enrollmentId:data.get('enrollmentId')});const report={template:[{label:'Reference: Printed form',verdict:'pass',detail:'Saved reference evidence'},check(window.checkPasses?'pass':'fail'),{label:'Logo',verdict:'pass',detail:'Uploaded logo evidence'}],offices:window.checkPasses?[check('pass')]:[],identity:window.checkPasses?{verdict:window.identityReview?'review':'match',detail:window.identityReview?'Name needs manual verification':'Student number matches',name:{status:'exact',detected:'Student',expected:'Student',detail:'Name matches'},studentNumber:{status:'exact',detected:'MA-001',expected:'MA-001',detail:'Number matches'}}:'deferred',officeCheckVersion:2,identityCheckVersion:1,identityPresence:{name:{label:'Name writing',verdict:'pass',detail:'Present'},studentNumber:{label:'Number writing',verdict:'pass',detail:'Present'}}};window.lastReport=report;result={success:window.checkPasses,report};if(window.checkPasses){state.submission={id:'submission',filename:'clearance-reference.jpg',status:'ready',report};result.report=state.submission.report;window.lastReport=state.submission.report;}return true;}});}})};
 			export async function requestEnrollment(data){window.requests.push(data);state.submission.status='requested';state.submission.requestedAt=new Date();}`
 			};
 			for (const [name, content] of Object.entries(files))
@@ -45,6 +45,8 @@ test(
 			server = await createServer({
 				root,
 				configFile: false,
+				cacheDir: path.join(root, 'node_modules/.vite'),
+				optimizeDeps: { include: ['@lucide/svelte', '@sveltejs/kit', 'zod'] },
 				plugins: [tailwindcss(), svelte({ configFile: false, preprocess: vitePreprocess() })],
 				resolve: {
 					alias: [
@@ -182,9 +184,15 @@ test(
 			).toBeVisible();
 			await page.evaluate(() => window.restoreChecks());
 			await expect(page.getByLabel('Upload clearance', { exact: true })).toHaveCount(0);
+			await expect(page.getByText('Student name and number', { exact: false })).toBeVisible();
+			await page.evaluate(() => window.outdateIdentity());
+			await expect(page.getByLabel('Upload clearance', { exact: true })).toBeVisible();
 			await expect(
-				page.getByText('Personal information verification:', { exact: false })
+				reminder.getByRole('heading', { name: 'Upload your clearance again', exact: true })
 			).toBeVisible();
+			await page.evaluate(() => window.restoreIdentity());
+			await expect(page.getByLabel('Upload clearance', { exact: true })).toHaveCount(0);
+
 			mkdirSync('.tmp', { recursive: true });
 			await page.screenshot({ path: '.tmp/clearance-request-student-desktop.png', fullPage: true });
 			await page.setViewportSize({ width: 390, height: 844 });
@@ -229,6 +237,50 @@ test(
 			);
 			await expect(uploaded.getByText('Uploaded logo evidence', { exact: true })).toHaveCount(1);
 			await expect(uploaded.getByText('Saved reference evidence', { exact: true })).toHaveCount(0);
+			await page.evaluate(() => {
+				window.finalize();
+				window.identityReview = true;
+			});
+			const studentClearance = page.getByRole('region', {
+				name: 'Clearance and enrollment request',
+				exact: true
+			});
+			await studentClearance
+				.getByLabel('Upload clearance', { exact: true })
+				.setInputFiles('static/clearance-reference.jpg');
+			await save.click();
+			await expect(
+				studentClearance.getByText('Manual identity review needed', { exact: true })
+			).toBeVisible();
+			await expect(
+				studentClearance.getByText(
+					'Clearance saved. Student name or number needs manual verification.',
+					{ exact: false }
+				)
+			).toBeVisible();
+			await expect(
+				reminder.getByRole('heading', { name: 'Identity review needed', exact: true })
+			).toBeVisible();
+			await expect(request).toBeEnabled();
+			await expect(studentClearance.getByLabel('Upload clearance', { exact: true })).toHaveCount(0);
+			await request.click();
+			await expect(
+				studentClearance.getByText(
+					'Your enrollment request is awaiting Registrar/admin clearance review.'
+				)
+			).toBeVisible();
+			await page.evaluate(() => window.reject());
+			await expect(studentClearance.getByLabel('Upload clearance', { exact: true })).toBeVisible();
+			await expect(
+				studentClearance.getByText('Correction requested:', { exact: false })
+			).toBeVisible();
+			await page.evaluate(() => window.verify());
+			await expect(
+				studentClearance.locator('summary').getByText('Verified by staff', { exact: true })
+			).toBeVisible();
+			await expect(
+				studentClearance.getByText('Automated identity reading needed review.', { exact: false })
+			).toBeVisible();
 			assert.deepEqual(errors, []);
 		} finally {
 			await browser?.close();

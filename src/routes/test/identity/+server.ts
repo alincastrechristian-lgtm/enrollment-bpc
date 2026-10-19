@@ -1,6 +1,6 @@
 import { isHttpError, json } from '@sveltejs/kit';
 import { getIdentityStudent, readIdentityCrops, recognizeIdentity } from '../identity.server';
-import { matchIdentity } from '../identity';
+import { matchIdentity } from '#lib/clearance/identity.js';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ locals, request, url }) => {
@@ -22,12 +22,6 @@ export const POST: RequestHandler = async ({ locals, request, url }) => {
 	try {
 		const readings = await recognizeIdentity(crops, signal);
 		const result = matchIdentity(readings, student);
-		if (readings.warnings) {
-			result.warnings = readings.warnings;
-			result.verdict = 'review';
-			result.detail =
-				'The handwriting model could not finish reading every field. Available details are shown; confirm against the original image.';
-		}
 		return json(result, { headers });
 	} catch (cause) {
 		// Auth/validation/busy errors retain their authored status; provider errors stay private.
@@ -36,7 +30,7 @@ export const POST: RequestHandler = async ({ locals, request, url }) => {
 			{
 				message: signal.aborted
 					? 'Handwriting check cancelled or timed out. Try a clearer image.'
-					: 'Could not complete the handwriting check. Check Ollama is available and retry.'
+					: 'Could not complete the handwriting check. Try again shortly or contact the Registrar.'
 			},
 			{ status: signal.aborted ? 408 : 502, headers }
 		);

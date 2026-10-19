@@ -1,5 +1,57 @@
 import type { Page } from 'tesseract.js';
 import type { Reading } from './clearance';
+import type { TemplateArea } from './definition';
+
+const normalize = (text: string) =>
+	text
+		.normalize('NFKD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.toUpperCase()
+		.replace(/[^A-Z0-9]/g, '');
+
+// Crops include a bounded neighborhood. Select the expected printed phrase without requiring
+// unrelated nearby labels to match or lower confidence in otherwise readable words.
+export function printedAreaReading(
+	area: TemplateArea,
+	data: Pick<Page, 'text' | 'confidence' | 'blocks'>
+): Reading {
+	if (area.kind === 'academicYear') return academicYearReading(data);
+	const reading = { text: data.text.trim(), confidence: data.confidence };
+	const words = (data.blocks ?? []).flatMap((block) =>
+		block.paragraphs.flatMap((paragraph) => paragraph.lines.flatMap((line) => line.words))
+	);
+	if (area.kind === 'semester') {
+		const values = new Set(
+			[...reading.text.matchAll(/\b([1-9]\d*)\s*(?:st|nd|rd|th)?\s*Semester\b/gi)].map(
+				(match) => match[1]
+			)
+		);
+		if (values.size !== 1) return reading;
+	}
+	for (let start = 0; start < words.length; start++) {
+		const selected = [];
+		for (let end = start; end < words.length; end++) {
+			selected.push(words[end]);
+			const text = selected.map((word) => word.text).join(' ');
+			const matches =
+				area.kind === 'semester'
+					? /^\s*[1-9]\d*\s*(?:st|nd|rd|th)?\s*Semester\b/i.test(text)
+					: normalize(text) === normalize(area.expected);
+			if (matches)
+				return {
+					text,
+					confidence: selected.reduce((sum, word) => sum + word.confidence, 0) / selected.length
+				};
+			if (
+				area.kind === 'semester'
+					? selected.length >= 3
+					: normalize(text).length >= normalize(area.expected).length
+			)
+				break;
+		}
+	}
+	return reading;
+}
 
 // A stray punctuation mark must not lower confidence in a clearly recognized year token.
 // Select by syntax, never by the administrator's expected year.

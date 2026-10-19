@@ -1,22 +1,50 @@
-import { addedInk, overall, type Check } from './clearance';
+import { addedInk, overall, type Check, type Region } from './clearance';
 import type { Box, OfficeRow } from './definition';
 import { checkCheckbox } from './checkbox';
+import type { IdentityResult } from './identity';
 
 export type ClearanceReport = {
 	template: Check[];
 	offices: Check[];
-	identity: 'deferred';
+	identity: 'deferred' | IdentityResult;
+	identityPresence?: Record<'name' | 'studentNumber', Check>;
+	identityCheckVersion?: number;
 	officeCheckVersion?: number;
 };
 export function hasCurrentOfficeChecks(report: ClearanceReport) {
 	return report.officeCheckVersion === 2;
 }
-export function clearancePassed(report: ClearanceReport) {
+export function hasCurrentClearanceChecks(report: ClearanceReport) {
 	return (
 		hasCurrentOfficeChecks(report) &&
+		report.identityCheckVersion === 1 &&
+		!!report.identityPresence &&
+		typeof report.identity === 'object' &&
+		report.identity !== null
+	);
+}
+export function clearancePassed(report: ClearanceReport) {
+	return (
+		clearanceCanSubmit(report) &&
+		typeof report.identity === 'object' &&
+		report.identity.verdict === 'match' &&
+		!report.identity.warnings
+	);
+}
+// Eligibility for a staff review request is distinct from passing automatic identity checks.
+export function clearanceCanSubmit(report: ClearanceReport) {
+	return (
+		hasCurrentClearanceChecks(report) &&
+		typeof report.identity === 'object' &&
+		['match', 'review'].includes(report.identity.verdict) &&
+		report.identityPresence?.name.verdict === 'pass' &&
+		report.identityPresence?.studentNumber.verdict === 'pass' &&
 		overall(report.template) === 'pass' &&
 		overall(report.offices) === 'pass'
 	);
+}
+export function clearanceNeedsIdentityReview(report: ClearanceReport) {
+	return clearanceCanSubmit(report) && !clearancePassed(report);
 }
 
 export function threshold(gray: Uint8Array, width: number, height: number) {
@@ -57,6 +85,17 @@ export function checkOfficeMarks(
 		throw new Error('Invalid office image.');
 	const reference = threshold(blank, width, height),
 		actual = threshold(uploaded, width, height);
+	const regionFor = (box: Box): Region => {
+		const x = Math.floor(box.x * width),
+			y = Math.floor(box.y * height);
+		return {
+			x,
+			y,
+			width: Math.min(width - x, Math.ceil(box.width * width)),
+			height: Math.min(height - y, Math.ceil(box.height * height))
+		};
+	};
+	const checkboxRegions = rows.flatMap((row) => (row.cleared ? [regionFor(row.cleared)] : []));
 	const check = (label: string, box: Box | undefined, checkbox: boolean): Check => {
 		if (!box)
 			return {
@@ -64,15 +103,9 @@ export function checkOfficeMarks(
 				verdict: 'review',
 				detail: 'This area has not been configured by an administrator.'
 			};
-		const x = Math.floor(box.x * width),
-			y = Math.floor(box.y * height);
-		const region = {
-			x,
-			y,
-			width: Math.min(width - x, Math.ceil(box.width * width)),
-			height: Math.min(height - y, Math.ceil(box.height * height))
-		};
-		if (checkbox) return checkCheckbox(label, reference, actual, width, height, region);
+		const region = regionFor(box);
+		if (checkbox)
+			return checkCheckbox(label, reference, actual, width, height, region, checkboxRegions);
 		const minimum = 0.004;
 		const ink = addedInk(actual, reference, width, height, region);
 		return {

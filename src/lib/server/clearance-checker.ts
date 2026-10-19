@@ -14,15 +14,17 @@ import {
 } from '#lib/clearance/clearance.js';
 import {
 	checkAreaText,
-	printedAreaBox,
+	printedSearchBox,
 	compareVisual,
 	type TemplateDefinition,
 	type ClearanceTerm,
+	hasIdentityAreas,
 	type Box
 } from '#lib/clearance/definition.js';
 import { checkOfficeMarks, type ClearanceReport } from '#lib/clearance/report.js';
 import { error } from '@sveltejs/kit';
-import { enhancePrintedContrast, academicYearReading } from '#lib/clearance/printed.js';
+import { enhancePrintedContrast, printedAreaReading } from '#lib/clearance/printed.js';
+import { checkIdentityPresence } from '#lib/clearance/identity-presence.js';
 
 type Image = { data: Uint8Array; width: number; height: number };
 let running = false;
@@ -67,6 +69,38 @@ function sample(image: Image, corners: Corners, box: Box, width: number, height:
 			data[y * width + x] = image.data[sy * image.width + sx];
 		}
 	return { data, width, height };
+}
+
+export async function clearanceIdentityCrops(
+	image: Image,
+	corners: Corners,
+	definition: TemplateDefinition
+) {
+	if (!hasIdentityAreas(definition))
+		error(
+			503,
+			'The Registrar must mark the student name and student number areas in the clearance template.'
+		);
+	const crops = {} as Record<'name' | 'studentNumber', string>;
+	for (const [field, kind] of [
+		['name', 'studentName'],
+		['studentNumber', 'studentNumber']
+	] as const) {
+		const box = definition.personalFields!.find((area) => area.field === kind)!.box;
+		const patch = sample(
+			image,
+			corners,
+			box,
+			Math.max(100, Math.round(box.width * WIDTH * 2)),
+			Math.max(40, Math.round(box.height * HEIGHT * 2))
+		);
+		crops[field] = (
+			await sharp(patch.data, { raw: { width: patch.width, height: patch.height, channels: 1 } })
+				.png()
+				.toBuffer()
+		).toString('base64');
+	}
+	return crops;
 }
 
 export async function checkClearance(
@@ -137,15 +171,14 @@ export async function checkClearance(
 				checks.push({
 					label: area.label,
 					verdict: visual.verdict,
-					detail: `${Math.round(visual.score * 100)}% visual similarity in the saved position.`
+					detail: `${Math.round(visual.score * 100)}% black-and-white shape similarity near the saved position; 65% required.`
 				});
 				continue;
 			}
 			await Promise.race([
 				worker.setParameters({
 					user_defined_dpi: '300',
-					tessedit_pageseg_mode:
-						area.kind === 'text' && /\n/.test(area.expected) ? PSM.SINGLE_BLOCK : PSM.SINGLE_LINE
+					tessedit_pageseg_mode: PSM.SPARSE_TEXT
 				}),
 				timeout
 			]);
@@ -155,7 +188,7 @@ export async function checkClearance(
 			] as const) {
 				// Reference term values may differ; only the enrollment determines the required term.
 				if (prefix === 'Reference' && area.kind !== 'text') continue;
-				const box = printedAreaBox(area);
+				const box = printedSearchBox(area);
 				const patch = sample(
 					image,
 					points,
@@ -170,28 +203,32 @@ export async function checkClearance(
 					.extend({ top: 12, bottom: 12, left: 12, right: 12, background: '#fff' })
 					.png()
 					.toBuffer();
-				const { data } = await Promise.race([
-					worker.recognize(png, {}, { blocks: area.kind === 'academicYear' }),
-					timeout
-				]);
+				const { data } = await Promise.race([worker.recognize(png, {}, { blocks: true }), timeout]);
 				checks.push({
-					...checkAreaText(
-						area,
-						area.kind === 'academicYear'
-							? academicYearReading(data)
-							: { text: data.text, confidence: data.confidence },
-						term
-					),
+					...checkAreaText(area, printedAreaReading(area, data), term),
 					label: `${prefix}: ${area.label}`
 				});
 			}
 		}
+		const offices =
+			overall(checks) === 'pass'
+				? checkOfficeMarks(blank.data, scan.data, width, height, definition.officeRows ?? [])
+				: [];
+		const identityPresence =
+			overall(checks) === 'pass' && overall(offices) === 'pass'
+				? checkIdentityPresence(
+						blank.data,
+						scan.data,
+						width,
+						height,
+						definition.personalFields ?? []
+					)
+				: undefined;
 		return {
 			template: checks,
-			offices:
-				overall(checks) === 'pass'
-					? checkOfficeMarks(blank.data, scan.data, width, height, definition.officeRows ?? [])
-					: [],
+			offices,
+			identityPresence,
+			identityCheckVersion: identityPresence ? 1 : undefined,
 			identity: 'deferred',
 			officeCheckVersion: 2
 		};

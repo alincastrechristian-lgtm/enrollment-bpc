@@ -4,10 +4,16 @@ import { error, isHttpError } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { clearanceSubmission, clearanceTemplate } from '#lib/schema.js';
-import { definitionSchema, clearanceTermFromEnrollment } from '#lib/clearance/definition.js';
-import { clearancePassed, hasCurrentOfficeChecks } from '#lib/clearance/report.js';
-import type { Corners } from '#lib/clearance/clearance.js';
-import { checkClearance, decodeClearance } from './clearance-checker';
+import {
+	definitionSchema,
+	clearanceTermFromEnrollment,
+	hasIdentityAreas
+} from '#lib/clearance/definition.js';
+import { clearanceCanSubmit, hasCurrentClearanceChecks } from '#lib/clearance/report.js';
+import { overall, type Corners } from '#lib/clearance/clearance.js';
+import { matchIdentity } from '#lib/clearance/identity.js';
+import { checkClearance, decodeClearance, clearanceIdentityCrops } from './clearance-checker';
+import { recognizeIdentity } from './handwriting';
 import {
 	getGarageS3Client,
 	downloadObject,
@@ -26,14 +32,15 @@ export async function uploadStudentClearance(
 		revision: number;
 		templateRevision: string;
 		corners: Corners;
-	}
+	},
+	signal?: AbortSignal
 ) {
 	if (!fileStorageConfigured()) error(503, 'File storage is unavailable. Contact the Registrar.');
 	const record = requireClearanceEnrollment(db, userId, input.enrollmentId);
 	const previous = getSubmission(db, input.enrollmentId);
 	if (
 		record.enrollment.submittedClearance ||
-		(previous?.status === 'requested' && hasCurrentOfficeChecks(previous.report)) ||
+		(previous?.status === 'requested' && hasCurrentClearanceChecks(previous.report)) ||
 		previous?.status === 'verified'
 	)
 		error(409, 'Your clearance is already awaiting review or verified.');
@@ -50,6 +57,11 @@ export async function uploadStudentClearance(
 	)
 		error(503, 'The Registrar must finish configuring the clearance template and office boxes.');
 	const definition = parsed.data;
+	if (!hasIdentityAreas(definition))
+		error(
+			503,
+			'The Registrar must mark the student name and student number areas in the clearance template.'
+		);
 	const file = input.file;
 	if (!file.size || file.size > MAX_FILE_BYTES)
 		error(400, 'Choose a clearance image up to 10 MiB.');
@@ -69,7 +81,21 @@ export async function uploadStudentClearance(
 		definition,
 		clearanceTermFromEnrollment(record.enrollment)
 	);
-	if (!clearancePassed(report)) return { success: false, report, submission: null };
+	if (
+		overall(report.template) !== 'pass' ||
+		overall(report.offices) !== 'pass' ||
+		report.identityCheckVersion !== 1 ||
+		report.identityPresence?.name.verdict !== 'pass' ||
+		report.identityPresence?.studentNumber.verdict !== 'pass'
+	)
+		return { success: false, report, submission: null };
+	const crops = await clearanceIdentityCrops(image, input.corners, definition);
+	report.identity = matchIdentity(
+		await recognizeIdentity(crops, signal ?? new AbortController().signal),
+		{ name: record.user.name, studentNumber: record.student.studentId }
+	);
+	if (!clearanceCanSubmit(report)) return { success: false, report, submission: null };
+	signal?.throwIfAborted();
 	const id = randomUUID(),
 		filename = safeUploadName(file.name),
 		key = `student-clearances/${encodeURIComponent(record.student.studentId)}/${id}/${filename}`;
@@ -89,6 +115,8 @@ export async function uploadStudentClearance(
 				const currentSubmission = getSubmission(tx, input.enrollmentId);
 				if (
 					current.enrollment.revision !== input.revision ||
+					current.user.name !== record.user.name ||
+					current.student.studentId !== record.student.studentId ||
 					current.enrollment.submittedClearance ||
 					currentSubmission?.id !== previous?.id ||
 					currentSubmission?.status !== previous?.status ||

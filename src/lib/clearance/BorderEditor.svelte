@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
+	import { resolve } from '$app/paths';
+	import type { TemplateInfo } from './definition';
 	import { UNIT_CORNERS, validCorners, type Corners, type Point } from './clearance';
 
 	let {
@@ -9,6 +11,8 @@
 		dragging = $bindable(false),
 		disabled = false,
 		detection = null,
+		template = null,
+		detecting = $bindable(false),
 		onchange
 	}: {
 		src: string;
@@ -17,6 +21,8 @@
 		dragging?: boolean;
 		disabled?: boolean;
 		detection?: 'found' | 'missing' | null;
+		template?: TemplateInfo | null;
+		detecting?: boolean;
 		onchange: () => void;
 	} = $props();
 	let viewport: HTMLDivElement;
@@ -29,12 +35,82 @@
 		wasDrawing: boolean;
 	} | null>(null);
 	let warning = $state('');
+	let alignmentDetail = $state('');
+	let progress = $state('');
+	let controller: AbortController | undefined;
+	let attemptedSource = '';
+	const locked = $derived(disabled || detecting);
 	let capture: HTMLElement | null = null;
 	const names = ['top left', 'top right', 'bottom right', 'bottom left'];
 	const displayed = $derived(
 		gesture?.index === null ? rectangle(gesture.start, gesture.current) : corners
 	);
 	const helpId = $props.id();
+	$effect(() => {
+		void src;
+		untrack(() => {
+			alignmentDetail = '';
+			warning = '';
+		});
+		return () => controller?.abort();
+	});
+	$effect(() => {
+		if (detection === 'missing' && template?.definition && !disabled && attemptedSource !== src) {
+			attemptedSource = src;
+			untrack(() => void detect());
+		}
+	});
+	async function detect() {
+		if (locked || gesture) return;
+		const imageUrl = src,
+			revision = template?.revision;
+		const abort = new AbortController();
+		controller = abort;
+		detecting = true;
+		warning = '';
+		alignmentDetail = '';
+		progress = 'Looking for the form border...';
+		onchange();
+		try {
+			const p = await import('./scan.client');
+			const image = await p.loadImage(imageUrl, abort.signal);
+			const result = await p.detectFormOutline(
+				image,
+				template?.definition
+					? {
+							definition: template.definition,
+							referenceUrl: `${resolve('/user/clearance-template')}?${new URLSearchParams({ revision: template.revision })}`
+						}
+					: undefined,
+				(text) => {
+					progress = text;
+				},
+				abort.signal
+			);
+			if (abort.signal.aborted || src !== imageUrl || template?.revision !== revision) return;
+			if (result.corners) {
+				corners = result.corners;
+				drawing = false;
+				onchange();
+				alignmentDetail = result.detail;
+			} else warning = result.detail + ' Your current outline was kept.';
+		} catch {
+			if (src === imageUrl)
+				warning = abort.signal.aborted
+					? 'Border detection cancelled. Your current outline was kept.'
+					: 'Could not detect the outline. Check the OCR connection, retry, or draw it manually. Your current outline was kept.';
+		} finally {
+			if (controller === abort) {
+				controller = undefined;
+				detecting = false;
+				progress = '';
+			}
+		}
+	}
+	function changed() {
+		alignmentDetail = '';
+		onchange();
+	}
 
 	const clamp = (value: number) => Math.max(0, Math.min(1, value));
 	function rectangle(a: Point, b: Point): Corners {
@@ -57,7 +133,7 @@
 		};
 	}
 	function begin(event: PointerEvent, index: number | null = null) {
-		if (disabled || dragging || !event.isPrimary || event.button !== 0) return;
+		if (locked || dragging || !event.isPrimary || event.button !== 0) return;
 		event.preventDefault();
 		event.stopPropagation();
 		const point = position(event);
@@ -92,7 +168,7 @@
 		}
 		corners = next;
 		warning = '';
-		onchange();
+		changed();
 	}
 	function release() {
 		const pointer = gesture?.pointer;
@@ -110,7 +186,7 @@
 				corners = next;
 				drawing = false;
 				warning = '';
-				onchange();
+				changed();
 			} else {
 				drawing = gesture.wasDrawing;
 				warning = 'Draw a larger box around the full clearance form.';
@@ -123,7 +199,7 @@
 		corners = gesture.previous;
 		drawing = gesture.wasDrawing;
 		warning = '';
-		onchange();
+		changed();
 		release();
 	}
 	function nudge(event: KeyboardEvent, index: number) {
@@ -134,7 +210,7 @@
 			ArrowDown: { x: 0, y: 1 }
 		};
 		const direction = directions[event.key];
-		if (!direction || disabled || gesture) return;
+		if (!direction || locked || gesture) return;
 		event.preventDefault();
 		const step = event.shiftKey ? 0.01 : 0.002;
 		const next = corners.map((point, i) =>
@@ -145,7 +221,7 @@
 		if (!validCorners(next)) return;
 		corners = next;
 		warning = '';
-		onchange();
+		changed();
 	}
 	function numeric(index: number, axis: 'x' | 'y', value: string) {
 		const number = Number(value);
@@ -155,9 +231,12 @@
 		) as Corners;
 		drawing = false;
 		warning = '';
-		onchange();
+		changed();
 	}
-	onDestroy(release);
+	onDestroy(() => {
+		controller?.abort();
+		release();
+	});
 </script>
 
 <svelte:window
@@ -194,7 +273,7 @@
 		aria-label="Form border editor"
 		aria-describedby={helpId}
 		class="relative my-2 w-fit max-w-full touch-none rounded-lg border border-base-300 bg-white select-none"
-		class:cursor-crosshair={!disabled}
+		class:cursor-crosshair={!locked}
 		onpointerdown={(event) => begin(event)}
 		onpointermove={move}
 		onpointerup={finish}
@@ -226,7 +305,7 @@
 					type="button"
 					aria-label={`Move ${names[i]} corner`}
 					aria-describedby={helpId}
-					{disabled}
+					disabled={locked}
 					class="absolute grid size-11 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none place-items-center rounded-full active:cursor-grabbing disabled:cursor-default"
 					style:left={`${point.x * 100}%`}
 					style:top={`${point.y * 100}%`}
@@ -242,18 +321,39 @@
 			{/each}
 		{/if}
 	</div>
+	{#if detecting}
+		<p role="status" class="text-sm">{progress}</p>
+	{:else if alignmentDetail}
+		<p role="status" class="text-sm">{alignmentDetail}</p>
+	{/if}
 	{#if warning}
 		<p role="alert" class="text-sm text-error">{warning}</p>
 	{/if}
 	<div class="flex flex-wrap gap-2">
 		<button
 			type="button"
+			class="btn btn-outline btn-sm"
+			disabled={locked || !!gesture}
+			onclick={detect}
+		>
+			{#if detecting}
+				<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
+			{/if}
+			Detect borders
+		</button>
+		{#if detecting}
+			<button type="button" class="btn btn-ghost btn-sm" onclick={() => controller?.abort()}>
+				Cancel border detection
+			</button>
+		{/if}
+		<button
+			type="button"
 			class="btn btn-ghost btn-sm"
-			disabled={disabled || !!gesture}
+			disabled={locked || !!gesture}
 			onclick={() => {
 				drawing = true;
 				warning = '';
-				onchange();
+				changed();
 			}}
 		>
 			Draw new box
@@ -261,12 +361,12 @@
 		<button
 			type="button"
 			class="btn btn-ghost btn-sm"
-			disabled={disabled || !!gesture}
+			disabled={locked || !!gesture}
 			onclick={() => {
 				corners = structuredClone(UNIT_CORNERS);
 				drawing = false;
 				warning = '';
-				onchange();
+				changed();
 			}}
 		>
 			Use full image border
@@ -276,7 +376,7 @@
 		<summary class="cursor-pointer text-sm">Numeric corner controls</summary>
 		<div class="mt-3 grid grid-cols-2 gap-3">
 			{#each corners as point, i (i)}
-				<fieldset class="space-y-1" disabled={disabled || !!gesture}>
+				<fieldset class="space-y-1" disabled={locked || !!gesture}>
 					<legend class="text-xs font-semibold">{i + 1}. {names[i]}</legend>
 					<div class="flex gap-2">
 						{#each ['x', 'y'] as axis (axis)}

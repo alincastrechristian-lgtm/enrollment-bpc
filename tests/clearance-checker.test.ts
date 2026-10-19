@@ -3,9 +3,14 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import sharp from 'sharp';
 import { isHttpError } from '@sveltejs/kit';
-import { checkClearance, decodeClearance } from '../src/lib/server/clearance-checker';
+import {
+	checkClearance,
+	decodeClearance,
+	clearanceIdentityCrops
+} from '../src/lib/server/clearance-checker';
 import { homography, project, UNIT_CORNERS, overall } from '../src/lib/clearance/clearance';
 import { clearancePassed } from '../src/lib/clearance/report';
+import { checkIdentityPresence } from '../src/lib/clearance/identity-presence';
 import { definitionSchema, type TemplateDefinition } from '../src/lib/clearance/definition';
 
 const term = { semester: '2', schoolYear: '2025-2026' };
@@ -91,7 +96,13 @@ test('offline server OCR validates real template before checking marks; blank, m
 		definition,
 		term
 	);
-	assert(clearancePassed(accepted));
+	assert.equal(overall(accepted.template), 'pass');
+	assert.equal(overall(accepted.offices), 'pass');
+	assert.equal(
+		clearancePassed(accepted),
+		false,
+		'Personal identity must pass separately before acceptance.'
+	);
 	const differentReferenceTerm = Buffer.from(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="${blank.width}" height="${blank.height}"><polygon fill="white" points="${point(0.315, 0.158)} ${point(0.67, 0.158)} ${point(0.67, 0.205)} ${point(0.315, 0.205)}"/><text x="${project(matrix, { x: 0.34, y: 0.19 }).x * blank.width}" y="${project(matrix, { x: 0.34, y: 0.19 }).y * blank.height}" font-size="18">1st Semester 2026-2027</text></svg>`
 	);
@@ -233,4 +244,163 @@ test('photocopied printed areas and italic year match without accepting empty of
 		'pass'
 	);
 	assert.equal(clearancePassed(wrongLogo), false);
+});
+
+test('identity crops follow saved personal areas, not fixed prototype positions', async () => {
+	const width = 1000,
+		height = 820,
+		data = new Uint8Array(width * height).fill(255);
+	for (let y = 410; y < 492; y++) for (let x = 500; x < 700; x++) data[y * width + x] = 40;
+	const configured = {
+		...definition,
+		personalFields: [
+			{
+				id: crypto.randomUUID(),
+				field: 'studentName' as const,
+				box: { x: 0.1, y: 0.1, width: 0.2, height: 0.1 }
+			},
+			{
+				id: crypto.randomUUID(),
+				field: 'studentNumber' as const,
+				box: { x: 0.5, y: 0.5, width: 0.2, height: 0.1 }
+			}
+		]
+	};
+	const crops = await clearanceIdentityCrops({ data, width, height }, UNIT_CORNERS, configured);
+	const name = await sharp(Buffer.from(crops.name, 'base64')).stats(),
+		number = await sharp(Buffer.from(crops.studentNumber, 'base64')).stats();
+	assert(name.channels[0].mean > 250);
+	assert(number.channels[0].mean < 50);
+	await assert.rejects(
+		clearanceIdentityCrops({ data, width, height }, UNIT_CORNERS, definition),
+		(e) => isHttpError(e) && e.status === 503
+	);
+});
+
+test('real written identity crops contain additional strokes while the blank reference does not', async () => {
+	const configured = {
+		...definition,
+		personalFields: [
+			{
+				id: crypto.randomUUID(),
+				field: 'studentName' as const,
+				box: { x: 0.025, y: 0.66, width: 0.63, height: 0.13 }
+			},
+			{
+				id: crypto.randomUUID(),
+				field: 'studentNumber' as const,
+				box: { x: 0.28, y: 0.79, width: 0.34, height: 0.065 }
+			}
+		]
+	};
+	const blank = await decodeClearance(readFileSync('static/clearance-reference.jpg'));
+	const written = await decodeClearance(readFileSync('static/clearance-written-example.jpg'));
+	const blankCrops = await clearanceIdentityCrops(blank, definition.corners, configured);
+	const writtenCrops = await clearanceIdentityCrops(
+		written,
+		[
+			{ x: 315 / 2048, y: 33 / 1218 },
+			{ x: 1762 / 2048, y: 0 },
+			{ x: 1864 / 2048, y: 1110 / 1218 },
+			{ x: 351 / 2048, y: 1 }
+		],
+		configured
+	);
+	const patches = await Promise.all(
+		[blankCrops.name, blankCrops.studentNumber, writtenCrops.name, writtenCrops.studentNumber].map(
+			(crop) =>
+				sharp(Buffer.from(crop, 'base64')).greyscale().raw().toBuffer({ resolveWithObject: true })
+		)
+	);
+	const width = patches[0].info.width,
+		gap = 20,
+		secondY = patches[0].info.height + gap;
+	const height = secondY + patches[1].info.height;
+	function stacked(first: (typeof patches)[number], second: (typeof patches)[number]) {
+		const data = new Uint8Array(width * height).fill(255);
+		for (const [patch, top] of [
+			[first, 0],
+			[second, secondY]
+		] as const)
+			for (let y = 0; y < patch.info.height; y++)
+				data.set(
+					patch.data.subarray(y * patch.info.width, (y + 1) * patch.info.width),
+					(top + y) * width
+				);
+		return data;
+	}
+	const fields = configured.personalFields.map((f, i) => ({
+		...f,
+		box: {
+			x: 0,
+			y: i ? secondY / height : 0,
+			width: patches[i].info.width / width,
+			height: patches[i].info.height / height
+		}
+	}));
+	const reference = stacked(patches[0], patches[1]);
+	const empty = checkIdentityPresence(reference, reference, width, height, fields);
+	assert.equal(empty.name.verdict, 'fail');
+	assert.equal(empty.studentNumber.verdict, 'fail');
+	const result = checkIdentityPresence(
+		reference,
+		stacked(patches[2], patches[3]),
+		width,
+		height,
+		fields
+	);
+	assert.equal(result.name.verdict, 'pass');
+	assert.equal(result.studentNumber.verdict, 'pass');
+});
+
+test('logo-free templates accept nearby printed phrases but reject distant branding and wrong terms', async () => {
+	const area = (
+		label: string,
+		kind: TemplateDefinition['areas'][number]['kind'],
+		expected: string,
+		x: number,
+		y: number,
+		width: number
+	) => ({ id: crypto.randomUUID(), label, kind, expected, box: { x, y, width, height: 0.037 } });
+	const configured = definitionSchema.parse({
+		corners: UNIT_CORNERS,
+		areas: [
+			area('School', 'text', 'EXAMPLE POLYTECHNIC COLLEGE', 0.08, 0.064, 0.6),
+			area('Title', 'text', 'Student Clearance Form', 0.08, 0.149, 0.6),
+			area('Semester', 'semester', '', 0.08, 0.236, 0.3),
+			area('Year', 'academicYear', '', 0.5, 0.236, 0.25)
+		]
+	});
+	const form = (shift: number, year = '2025-2026', school = 'EXAMPLE POLYTECHNIC COLLEGE') =>
+		sharp(
+			Buffer.from(
+				`<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="820"><rect width="1000" height="820" fill="white"/><g font-family="Arial" font-size="28" fill="black" transform="translate(20 ${shift})"><text x="80" y="80">${school}</text><text x="80" y="150">Student Clearance Form</text><text x="80" y="220">2nd Semester</text><text x="500" y="220">${year}</text></g></svg>`
+			)
+		)
+			.png()
+			.toBuffer();
+	const reference = await form(0);
+	const near = await checkClearance(
+		reference,
+		await decodeClearance(await form(25)),
+		UNIT_CORNERS,
+		configured,
+		term
+	);
+	assert.equal(overall(near.template), 'pass', JSON.stringify(near.template));
+	for (const bytes of [
+		await form(100),
+		await form(25, '2026-2027'),
+		await form(25, '2025-2026', 'OTHER POLYTECHNIC COLLEGE')
+	]) {
+		const report = await checkClearance(
+			reference,
+			await decodeClearance(bytes),
+			UNIT_CORNERS,
+			configured,
+			term
+		);
+		assert.notEqual(overall(report.template), 'pass', JSON.stringify(report.template));
+		assert.deepEqual(report.offices, []);
+	}
 });

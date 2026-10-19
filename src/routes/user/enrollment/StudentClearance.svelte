@@ -7,18 +7,21 @@
 	import BorderEditor from '#lib/clearance/BorderEditor.svelte';
 	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
 	import {
-		clearancePassed,
-		hasCurrentOfficeChecks,
+		clearanceCanSubmit,
+		clearanceNeedsIdentityReview,
+		hasCurrentClearanceChecks,
 		type ClearanceReport
 	} from '#lib/clearance/report.js';
 	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
-	import { clearanceTermFromEnrollment } from '#lib/clearance/definition.js';
+	import { clearanceTermFromEnrollment, hasIdentityAreas } from '#lib/clearance/definition.js';
 	import { resolve } from '$app/paths';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { ArrowRight, ClipboardCheck, FileImage, Upload } from '@lucide/svelte';
 	const progress = getStudentClearance();
 	let image = $state(''),
 		corners = $state<Corners>(structuredClone(UNIT_CORNERS));
+	let aligning = $state(false);
+	let detection = $state<'found' | 'missing' | null>(null);
 	let loading = $state(false),
 		busy = $state(false),
 		drawing = $state(false),
@@ -31,7 +34,8 @@
 	const submission = $derived(progress.current?.submission);
 	const template = $derived(progress.current?.template);
 	const term = $derived(current ? clearanceTermFromEnrollment(current) : null);
-	const currentChecks = $derived(!submission || hasCurrentOfficeChecks(submission.report));
+	const templateReady = $derived(!!template?.definition && hasIdentityAreas(template.definition));
+	const currentChecks = $derived(!submission || hasCurrentClearanceChecks(submission.report));
 	const allowed = $derived(
 		!!current?.finalizedGrades &&
 			!['dropped', 'voided'].includes(current.status) &&
@@ -39,7 +43,10 @@
 			(!['requested', 'verified'].includes(submission?.status ?? '') ||
 				(submission?.status === 'requested' && !currentChecks))
 	);
-	const ready = $derived(submission?.status === 'ready' && currentChecks);
+	const ready = $derived(submission?.status === 'ready' && clearanceCanSubmit(submission.report));
+	const identityReviewNeeded = $derived(
+		!!submission && clearanceNeedsIdentityReview(submission.report)
+	);
 	const statusLabel = $derived(
 		current?.submittedClearance || submission?.status === 'verified'
 			? 'Verified by staff'
@@ -48,7 +55,9 @@
 				: !current?.finalizedGrades
 					? 'Awaiting grades'
 					: ready
-						? 'Ready to request'
+						? identityReviewNeeded
+							? 'Identity review needed'
+							: 'Ready to request'
 						: submission
 							? 'Upload needed'
 							: 'Not uploaded'
@@ -74,6 +83,7 @@
 			image = source.toDataURL('image/jpeg', 0.95);
 			corners = structuredClone(found ?? UNIT_CORNERS);
 			drawing = !found;
+			detection = found ? 'found' : 'missing';
 		} catch (cause) {
 			message = getErrorMessage(cause, 'Could not open clearance image.');
 			if (input) input.value = '';
@@ -82,7 +92,7 @@
 		}
 	}
 	async function request() {
-		if (!submission || busy || loading) return;
+		if (!submission || busy || loading || aligning) return;
 		busy = true;
 		message = '';
 		try {
@@ -100,7 +110,7 @@
 	id="clearance"
 	class="portal-panel scroll-mt-6 overflow-hidden"
 	aria-label="Clearance and enrollment request"
-	aria-busy={busy || loading}
+	aria-busy={busy || loading || aligning}
 >
 	<header class="flex flex-wrap items-start gap-3 border-b border-base-300 p-5 sm:p-6">
 		<span class="rounded-xl bg-primary/10 p-2.5 text-primary">
@@ -170,7 +180,7 @@
 						<button
 							type="button"
 							class="btn btn-ghost btn-sm"
-							disabled={busy || loading}
+							disabled={busy || loading || aligning}
 							onclick={() => (replacing = true)}
 						>
 							Replace saved clearance
@@ -199,10 +209,19 @@
 					{/if}
 				</div>
 			{/if}
-			{#if allowed && template?.definition && (!ready || replacing)}
+			{#if allowed && templateReady && template && (!ready || replacing)}
 				<form
 					{...uploadClearance.enhance(async (form) => {
-						if (busy || loading || drawing || dragging || !image || !validCorners(corners)) return;
+						if (
+							busy ||
+							loading ||
+							aligning ||
+							drawing ||
+							dragging ||
+							!image ||
+							!validCorners(corners)
+						)
+							return;
 						busy = true;
 						message = '';
 						report = undefined;
@@ -214,7 +233,9 @@
 									replacing = false;
 									form.element.reset();
 									message =
-										'Clearance checks passed and file saved. You can now request enrollment.';
+										report && clearanceNeedsIdentityReview(report)
+											? 'Clearance saved. Student name or number needs manual verification. Send your enrollment request for Registrar/admin review.'
+											: 'Clearance checks passed and file saved. You can now request enrollment.';
 								} else
 									message =
 										'Clearance did not pass all checks. Review the findings and upload a clearer or completed form.';
@@ -252,13 +273,14 @@
 							accept="image/jpeg,image/png,image/webp"
 							class="file-input w-full"
 							aria-describedby="student-clearance-file-help"
-							disabled={busy || loading}
+							disabled={busy || loading || aligning}
 							onchange={open}
 						/>
 					</label>
 					<p id="student-clearance-file-help" class="text-xs text-base-content/65">
 						JPG, PNG or WebP up to 10 MiB. Include all office marks and keep the form border
-						visible.
+						visible. Only the name and student-number crops are sent to Google Gemini for
+						recognition; they are compared with your student record.
 					</p>
 					{#if loading}
 						<p role="status" class="flex items-center gap-2 text-sm">
@@ -273,13 +295,17 @@
 							</p>
 							<BorderEditor
 								src={image}
+								{template}
+								{detection}
+								bind:detecting={aligning}
 								bind:corners
 								bind:drawing
 								bind:dragging
 								onchange={() => {
 									report = undefined;
+									detection = null;
 								}}
-								disabled={busy || loading}
+								disabled={busy || loading || aligning}
 							/>
 						</div>
 					{/if}
@@ -288,7 +314,7 @@
 							<button
 								type="button"
 								class="btn btn-ghost btn-sm"
-								disabled={busy || loading}
+								disabled={busy || loading || aligning}
 								onclick={cancelReplacement}
 							>
 								Cancel replacement
@@ -297,7 +323,13 @@
 						<button
 							type="submit"
 							class="btn btn-primary btn-sm"
-							disabled={busy || loading || !image || drawing || dragging || !validCorners(corners)}
+							disabled={busy ||
+								loading ||
+								aligning ||
+								!image ||
+								drawing ||
+								dragging ||
+								!validCorners(corners)}
 						>
 							{#if busy}
 								<span class="loading loading-xs loading-spinner" aria-hidden="true"></span>
@@ -309,9 +341,10 @@
 						</p>
 					</div>
 				</form>
-			{:else if allowed && !template?.definition}
+			{:else if allowed && !templateReady}
 				<p class="text-sm text-warning">
-					Clearance template setup is not ready. Contact the Registrar.
+					Clearance template setup is not ready. Ask the Registrar to configure office boxes and
+					student name/number areas.
 				</p>
 			{/if}
 			{#if ready}
@@ -319,16 +352,25 @@
 					class="flex flex-col gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
 				>
 					<div>
-						<h3 class="text-sm font-bold">Ready for Registrar review</h3>
+						<h3 class="text-sm font-bold">
+							{identityReviewNeeded
+								? 'Manual identity review needed'
+								: 'Ready for Registrar review'}
+						</h3>
 						<p class="mt-1 text-xs text-base-content/70">
-							Send your request to continue. The Registrar reviews your clearance before completing
-							enrollment.
+							{identityReviewNeeded
+								? 'Template and office checks passed. Send your request so the Registrar/admin can check your name and student number. They may ask for another upload. Enrollment waits for their verification.'
+								: 'Send your request to continue. The Registrar reviews your clearance before completing enrollment.'}
 						</p>
 					</div>
 					<button
 						type="button"
 						class="btn shrink-0 btn-primary btn-sm"
-						disabled={busy || loading || !!image || (!!report && !clearancePassed(report))}
+						disabled={busy ||
+							loading ||
+							aligning ||
+							!!image ||
+							(!!report && !clearanceCanSubmit(report))}
 						onclick={request}
 					>
 						Request enrollment
@@ -343,7 +385,7 @@
 				</p>
 			{/if}
 			{#if report}
-				<ClearanceFindings {report} />
+				<ClearanceFindings {report} staffVerified={submission?.status === 'verified'} />
 			{:else if submission && !image && !loading}
 				<details class="rounded-xl border border-base-300 p-4" open>
 					<summary class="cursor-pointer text-sm font-semibold">
@@ -352,7 +394,12 @@
 					<p class="mt-3 text-xs text-base-content/65">
 						These results belong to your previously saved clearance, not a new upload.
 					</p>
-					<div class="mt-3"><ClearanceFindings report={submission.report} /></div>
+					<div class="mt-3">
+						<ClearanceFindings
+							report={submission.report}
+							staffVerified={submission.status === 'verified'}
+						/>
+					</div>
 				</details>
 			{:else if image && !loading}
 				<p class="text-xs text-base-content/65">

@@ -37,8 +37,15 @@ function distance(a: string, b: string): number {
 
 function compareField(detected: string, expected: string, number: boolean): IdentityField {
 	// Bound comparison work; callers also validate model output length.
-	const actual = normalize(detected.slice(0, 320));
-	const target = normalize(expected.slice(0, 320));
+	let actual = normalize(detected.slice(0, 320));
+	let target = normalize(expected.slice(0, 320));
+	const numericNumber = number && /^(?:MA)?\d+$/.test(target);
+	if (numericNumber) {
+		// MA- may be preprinted, written by the student, or present in both places.
+		// Strip only this known prefix; never discard arbitrary letters or change digits.
+		target = target.replace(/^MA/, '');
+		actual = actual.replace(/^(?:MA){1,2}(?=[\d?]+$)/, '');
+	}
 	const base = { detected, expected };
 	if (!target || !actual.replace(/\?/g, '') || (number && !/\d/.test(actual)))
 		return {
@@ -54,27 +61,19 @@ function compareField(detected: string, expected: string, number: boolean): Iden
 			...base,
 			status: 'exact',
 			similarity,
-			detail: 'Matches after ignoring spacing, punctuation and case.'
+			detail: numericNumber
+				? 'All student-number digits match. Optional printed or handwritten MA- prefix ignored.'
+				: 'Matches after ignoring spacing, punctuation and case.'
 		};
 	if (number) {
-		// The template prints MA-. A numeric-only extraction may omit it; never invent digits.
-		const digits = target.startsWith('MA') ? target.slice(2) : target;
-		const observedDigits = actual.startsWith('MA') ? actual.slice(2) : actual;
-		if (
-			/^\d{6,}$/.test(digits) &&
-			/^[\d?]+$/.test(observedDigits) &&
-			digits.length === observedDigits.length
-		) {
-			const digitEdits = distance(observedDigits, digits);
-			if (digitEdits <= 1)
+		if (/^\d{6,}$/.test(target) && /^[\d?]+$/.test(actual) && target.length === actual.length) {
+			if (edits === 1)
 				return {
 					...base,
 					status: 'close',
 					similarity,
 					detail:
-						digitEdits === 0
-							? 'All digits match, but the printed MA- prefix was not read. Confirm the image.'
-							: 'One digit differs or is unclear. Check the original image; do not approve automatically.'
+						'One digit differs or is unclear. Check the original image; do not approve automatically.'
 				};
 		}
 	} else if (actual.length >= 6 && target.length >= 6 && similarity >= 80) {
@@ -91,16 +90,25 @@ function compareField(detected: string, expected: string, number: boolean): Iden
 		similarity,
 		detail: number
 			? 'Student number differs beyond the one-digit tolerance, or digits are missing.'
-			: 'Name differs beyond the test tolerance. Poor handwriting recognition can also cause this.'
+			: 'Name differs beyond the matching tolerance. Poor handwriting recognition can also cause this.'
 	};
 }
 
 export function matchIdentity(
-	detected: IdentityStudent,
+	detected: IdentityReadings,
 	expected: IdentityStudent
 ): IdentityResult {
 	const name = compareField(detected.name, expected.name, false);
 	const studentNumber = compareField(detected.studentNumber, expected.studentNumber, true);
+	if (detected.warnings && Object.keys(detected.warnings).length)
+		return {
+			verdict: 'review',
+			detail:
+				'Some handwriting could not be read reliably. Check the original image or upload a clearer copy.',
+			warnings: detected.warnings,
+			name,
+			studentNumber
+		};
 	if (studentNumber.status === 'exact' && name.status !== 'different')
 		return {
 			verdict: 'match',

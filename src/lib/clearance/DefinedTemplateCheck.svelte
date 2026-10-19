@@ -101,7 +101,8 @@
 	<div>
 		<h2 id="defined-template-title" class="font-bold">Compare with saved template</h2>
 		<p class="mt-1 text-sm text-base-content/65">
-			Checks the saved marked areas at their corresponding positions after alignment.
+			Finds required printed text near its saved location after alignment. Optional logos use
+			black-and-white shape comparison at 65% similarity.
 		</p>
 	</div>
 	<p class="text-sm font-semibold break-all">{template.filename}</p>

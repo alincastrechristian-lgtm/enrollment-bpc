@@ -2,7 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { Corners } from '#lib/clearance/clearance.js';
-	import type { IdentityResult, IdentityStudent } from './identity';
+	import type { IdentityResult, IdentityStudent } from '#lib/clearance/identity.js';
 
 	let {
 		source,
@@ -111,8 +111,8 @@
 				<p>{student.studentNumber}</p>
 			</div>
 			<p class="text-xs text-base-content/65">
-				Confirm the form outline, then check. Only the name and number crops go to your local
-				handwriting server.
+				Confirm the form outline, then check. Only the name and number crops are sent to Google
+				Gemini for handwriting recognition.
 			</p>
 			<button
 				type="button"

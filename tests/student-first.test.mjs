@@ -752,7 +752,15 @@ test('clearance verification enforces staff access, ownership and grade finaliza
 				report: {
 					template: [{ label: 'Template', verdict: 'pass', detail: 'Matched' }],
 					offices: [{ label: 'Office marks', verdict: 'pass', detail: 'Present' }],
-					identity: 'deferred',
+					identity: load('src/lib/clearance/identity.ts').matchIdentity(
+						{ name: 'Student', studentNumber: 'MA-001' },
+						{ name: 'Student', studentNumber: 'MA-001' }
+					),
+					identityCheckVersion: 1,
+					identityPresence: {
+						name: { label: 'Name writing', verdict: 'pass', detail: 'Present' },
+						studentNumber: { label: 'Number writing', verdict: 'pass', detail: 'Present' }
+					},
 					officeCheckVersion: 2
 				},
 				status: 'requested',

@@ -76,7 +76,11 @@ export const uploadClearance = form(
 		const { locals } = getRequestEvent();
 		validateUser(locals, [Role.STUDENT]);
 		try {
-			const result = await uploadStudentClearance(locals.user.id, input);
+			const result = await uploadStudentClearance(
+				locals.user.id,
+				input,
+				getRequestEvent().request?.signal
+			);
 			await getStudentClearance().refresh();
 			return result;
 		} catch (cause) {

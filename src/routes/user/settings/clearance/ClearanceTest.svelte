@@ -24,13 +24,14 @@
 	let dragging = $state(false);
 	let loading = $state(false);
 	let checking = $state(false);
+	let aligning = $state(false);
 	let error = $state('');
 	let destroyed = false;
 	// Simulation only. Student uploads use the enrollment stored on the server.
 	let semester = $state('1');
 	let schoolYear = $state(`${new Date().getFullYear()}-${new Date().getFullYear() + 1}`);
-	const locked = $derived(disabled || loading || checking);
-	$effect(() => onbusychange(loading || checking));
+	const locked = $derived(disabled || loading || checking || aligning);
+	$effect(() => onbusychange(loading || checking || aligning));
 	onDestroy(() => {
 		destroyed = true;
 		onbusychange(false);
@@ -136,6 +137,8 @@
 				{#key source}
 					<BorderEditor
 						src={sourceUrl}
+						{template}
+						bind:detecting={aligning}
 						bind:corners
 						bind:drawing
 						bind:dragging
@@ -162,7 +165,7 @@
 				definition={template.definition}
 				term={{ semester, schoolYear }}
 				{corners}
-				disabled={disabled || loading || drawing || dragging}
+				disabled={disabled || loading || aligning || drawing || dragging}
 				onbusychange={(value) => {
 					checking = value;
 				}}
