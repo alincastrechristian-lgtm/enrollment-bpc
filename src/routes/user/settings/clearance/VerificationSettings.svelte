@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { saveClearanceVerification, testClearanceGemini } from '#lib/actions/clearance.remote.js';
+	import {
+		saveClearanceVerification,
+		testClearanceAi,
+		fetchClearanceOpenaiModels
+	} from '#lib/actions/clearance.remote.js';
+	import { AI_PROVIDER_LABELS, aiProviderSchema, type AiProvider } from '#lib/clearance/ai.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { untrack, onDestroy } from 'svelte';
 	import {
@@ -16,6 +21,11 @@
 		settings: {
 			automatedClearanceVerificationEnabled: boolean;
 			personalInfoVerificationEnabled: boolean;
+			aiProvider?: AiProvider;
+			hasOpenaiKey?: boolean;
+			openaiModel?: string;
+			ollamaBaseUrl?: string;
+			ollamaModel?: string;
 			hasGeminiKey: boolean;
 			geminiModel: GeminiModel;
 		};
@@ -28,12 +38,36 @@
 	let personalInfoVerificationEnabled = $state(
 		untrack(() => settings.personalInfoVerificationEnabled)
 	);
+	let aiProvider = $state<AiProvider>(untrack(() => settings.aiProvider ?? 'gemini'));
+	let openaiApiKey = $state('');
+	let clearOpenaiKey = $state(false);
+	let openaiModels = $state<string[]>([]);
+	let customOpenaiModel = $state(false);
+	let openaiModel = $state(untrack(() => settings.openaiModel ?? 'gpt-4.1-mini'));
+	const openaiModelChoices = $derived([
+		...new Set([
+			...(openaiModel ? [openaiModel] : []),
+			...(openaiModels.length ? openaiModels : ['gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o-mini'])
+		])
+	]);
+	let ollamaBaseUrl = $state(untrack(() => settings.ollamaBaseUrl ?? 'http://localhost:11434'));
+	let ollamaModel = $state(untrack(() => settings.ollamaModel ?? 'qwen3-vl:4b'));
 	let geminiApiKey = $state('');
 	let geminiModel = $state<GeminiModel>(
 		untrack(() => settings.geminiModel ?? DEFAULT_GEMINI_MODEL)
 	);
 	let clearGeminiKey = $state(false);
-	let pending = $state<'save' | 'test' | null>(null);
+	const removingKey = $derived(
+		aiProvider === 'gemini' ? clearGeminiKey : aiProvider === 'openai' ? clearOpenaiKey : false
+	);
+	const canTest = $derived(
+		aiProvider === 'ollama'
+			? !!ollamaBaseUrl.trim() && !!ollamaModel.trim()
+			: aiProvider === 'openai'
+				? !!(settings.hasOpenaiKey || openaiApiKey.trim())
+				: !!(settings.hasGeminiKey || geminiApiKey.trim())
+	);
+	let pending = $state<'save' | 'test' | 'models' | null>(null);
 	let message = $state('');
 	let failed = $state(false);
 	const dirty = $derived(
@@ -41,10 +75,48 @@
 			personalInfoVerificationEnabled !== settings.personalInfoVerificationEnabled ||
 			!!geminiApiKey.trim() ||
 			geminiModel !== (settings.geminiModel ?? DEFAULT_GEMINI_MODEL) ||
-			clearGeminiKey
+			clearGeminiKey ||
+			clearOpenaiKey ||
+			!!openaiApiKey.trim() ||
+			aiProvider !== (settings.aiProvider ?? 'gemini') ||
+			openaiModel !== (settings.openaiModel ?? 'gpt-4.1-mini') ||
+			ollamaBaseUrl !== (settings.ollamaBaseUrl ?? 'http://localhost:11434') ||
+			ollamaModel !== (settings.ollamaModel ?? 'qwen3-vl:4b')
 	);
 	$effect(() => onbusychange(!!pending));
 	onDestroy(() => onbusychange(false));
+	$effect(() => {
+		void openaiApiKey;
+		void clearOpenaiKey;
+		openaiModels = [];
+	});
+	async function fetchModels() {
+		if (disabled || pending || clearOpenaiKey) return;
+		pending = 'models';
+		message = '';
+		failed = false;
+		openaiModels = [];
+		try {
+			const result = await fetchClearanceOpenaiModels({
+				openaiApiKey: openaiApiKey.trim() || undefined
+			});
+			if (result.success) {
+				openaiModels = result.models;
+				customOpenaiModel = false;
+				message = result.models.length
+					? `Fetched ${result.models.length} available OpenAI models. Choose one below, then test its compatibility.`
+					: 'OpenAI returned no models for this key. Check project access and key permissions.';
+			} else {
+				failed = true;
+				message = result.message;
+			}
+		} catch (cause) {
+			failed = true;
+			message = getErrorMessage(cause, 'Could not fetch OpenAI models. Try again.');
+		} finally {
+			pending = null;
+		}
+	}
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
 		if (disabled || pending) return;
@@ -57,9 +129,17 @@
 				personalInfoVerificationEnabled,
 				geminiApiKey: geminiApiKey.trim() || undefined,
 				geminiModel,
-				clearGeminiKey
+				clearGeminiKey,
+				aiProvider,
+				openaiApiKey: openaiApiKey.trim() || undefined,
+				clearOpenaiKey,
+				openaiModel,
+				ollamaBaseUrl,
+				ollamaModel
 			});
 			geminiApiKey = '';
+			openaiApiKey = '';
+			clearOpenaiKey = false;
 			clearGeminiKey = false;
 			message = 'Verification settings saved.';
 		} catch (cause) {
@@ -70,12 +150,17 @@
 		}
 	}
 	async function test() {
-		if (disabled || pending || clearGeminiKey) return;
+		if (disabled || pending || removingKey) return;
 		pending = 'test';
 		message = '';
 		failed = false;
 		try {
-			const result = await testClearanceGemini({
+			const result = await testClearanceAi({
+				aiProvider,
+				openaiApiKey: openaiApiKey.trim() || undefined,
+				openaiModel,
+				ollamaBaseUrl,
+				ollamaModel,
 				geminiApiKey: geminiApiKey.trim() || undefined,
 				geminiModel
 			});
@@ -83,7 +168,7 @@
 			failed = !result.success;
 		} catch (cause) {
 			failed = true;
-			message = getErrorMessage(cause, 'Could not test Gemini. Try again.');
+			message = getErrorMessage(cause, 'Could not test AI provider. Try again.');
 		} finally {
 			pending = null;
 		}
@@ -128,9 +213,9 @@
 				<span>
 					<span class="block text-sm font-semibold">Verify student name and number</span>
 					<span class="mt-1 block text-xs leading-relaxed text-base-content/60">
-						Checks writing presence and uses Gemini to compare personal details with the student
-						record. When off, template and office checks continue, and results show personal
-						verification was skipped. Applies to new uploads.
+						Checks writing presence and uses the selected AI provider to compare personal details
+						with the student record. When off, template and office checks continue, and results show
+						personal verification was skipped. Applies to new uploads.
 					</span>
 				</span>
 				<input
@@ -142,51 +227,174 @@
 				/>
 			</label>
 			<div class="border-t border-base-300 pt-5">
-				<label for="gemini-model" class="block text-sm font-semibold">Gemini model</label>
+				<label for="ai-provider" class="block text-sm font-semibold">Handwriting AI provider</label>
 				<select
-					id="gemini-model"
-					class="select mt-2 w-full bg-base-200"
-					bind:value={geminiModel}
-					aria-describedby="gemini-model-help"
+					id="ai-provider"
+					class="select mt-2 mb-5 w-full bg-base-200"
+					bind:value={aiProvider}
 				>
-					{#each geminiModelSchema.options as model (model)}
-						<option value={model}>{GEMINI_MODEL_LABELS[model]}</option>
+					{#each aiProviderSchema.options as provider (provider)}
+						<option value={provider}>{AI_PROVIDER_LABELS[provider]}</option>
 					{/each}
 				</select>
-				<p id="gemini-model-help" class="mt-2 mb-5 text-xs text-base-content/60">
-					3.1 Flash-Lite is the recommended low-cost default. 2.5 Flash-Lite costs less but may
-					reject newer projects. Legacy 2.5 models may reject newer projects. Test uses your
-					selected model without saving; save to apply it to handwriting checks. Model access and
-					quota depend on your Google project.
-				</p>
-				<div class="flex flex-wrap items-center justify-between gap-2">
-					<label for="gemini-api-key" class="text-sm font-semibold">Gemini API key</label>
-					<span class="badge badge-outline badge-sm">
-						{settings.hasGeminiKey ? 'Key saved' : 'No key saved'}
-					</span>
-				</div>
-				<input
-					id="gemini-api-key"
-					class="input mt-2 w-full bg-base-200"
-					type="password"
-					autocomplete="new-password"
-					bind:value={geminiApiKey}
-					maxlength="512"
-					disabled={clearGeminiKey}
-					placeholder={settings.hasGeminiKey
-						? 'Leave blank to keep saved key'
-						: 'Enter Gemini API key'}
-					aria-describedby="gemini-key-help"
-				/>
-				<p id="gemini-key-help" class="mt-2 text-xs text-base-content/60">
-					Saved keys stay hidden. Test uses the entered key, or the saved key when blank. Testing
-					does not save changes.
-				</p>
-				{#if settings.hasGeminiKey}
-					<label class="mt-3 flex items-center gap-2 text-xs">
-						<input type="checkbox" class="checkbox checkbox-sm" bind:checked={clearGeminiKey} />
-						Remove saved key when saving
-					</label>
+				{#if aiProvider === 'gemini'}
+					<label for="gemini-model" class="block text-sm font-semibold">Gemini model</label>
+					<select
+						id="gemini-model"
+						class="select mt-2 w-full bg-base-200"
+						bind:value={geminiModel}
+						aria-describedby="gemini-model-help"
+					>
+						{#each geminiModelSchema.options as model (model)}
+							<option value={model}>{GEMINI_MODEL_LABELS[model]}</option>
+						{/each}
+					</select>
+					<p id="gemini-model-help" class="mt-2 mb-5 text-xs text-base-content/60">
+						3.1 Flash-Lite is the recommended low-cost default. 2.5 Flash-Lite costs less but may
+						reject newer projects. Legacy 2.5 models may reject newer projects. Test uses your
+						selected model without saving; save to apply it to handwriting checks. Model access and
+						quota depend on your Google project.
+					</p>
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<label for="gemini-api-key" class="text-sm font-semibold">Gemini API key</label>
+						<span class="badge badge-outline badge-sm">
+							{settings.hasGeminiKey ? 'Key saved' : 'No key saved'}
+						</span>
+					</div>
+					<input
+						id="gemini-api-key"
+						class="input mt-2 w-full bg-base-200"
+						type="password"
+						autocomplete="new-password"
+						bind:value={geminiApiKey}
+						maxlength="512"
+						disabled={clearGeminiKey}
+						placeholder={settings.hasGeminiKey
+							? 'Leave blank to keep saved key'
+							: 'Enter Gemini API key'}
+						aria-describedby="gemini-key-help"
+					/>
+					<p id="gemini-key-help" class="mt-2 text-xs text-base-content/60">
+						Saved keys stay hidden. Test uses the entered key, or the saved key when blank. Testing
+						does not save changes.
+					</p>
+					{#if settings.hasGeminiKey}
+						<label class="mt-3 flex items-center gap-2 text-xs">
+							<input type="checkbox" class="checkbox checkbox-sm" bind:checked={clearGeminiKey} />
+							Remove saved key when saving
+						</label>
+					{/if}
+				{:else if aiProvider === 'openai'}
+					<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+						<label for="openai-model" class="text-sm font-semibold">OpenAI model</label>
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={fetchModels}
+							disabled={clearOpenaiKey || (!settings.hasOpenaiKey && !openaiApiKey.trim())}
+						>
+							{pending === 'models' ? 'Fetching models...' : 'Fetch available models'}
+						</button>
+					</div>
+					{#if customOpenaiModel}
+						<div class="flex items-center gap-2">
+							<input
+								id="openai-model"
+								class="input w-full bg-base-200"
+								bind:value={openaiModel}
+								required
+								maxlength="120"
+								placeholder="Enter model ID"
+								aria-describedby="openai-model-help"
+							/>
+							<button
+								type="button"
+								class="btn shrink-0 btn-ghost btn-sm"
+								onclick={() => (customOpenaiModel = false)}
+							>
+								Choose from list
+							</button>
+						</div>
+					{:else}
+						<select
+							id="openai-model"
+							class="select w-full bg-base-200"
+							value={openaiModel}
+							aria-describedby="openai-model-help"
+							onchange={(event) => {
+								if (event.currentTarget.value === '__custom__') customOpenaiModel = true;
+								else openaiModel = event.currentTarget.value;
+							}}
+						>
+							{#if !openaiModel}
+								<option value="" disabled>Choose a model</option>
+							{/if}
+							{#each openaiModelChoices as model (model)}
+								<option value={model}>{model}</option>
+							{/each}
+							<option value="__custom__">Custom model...</option>
+						</select>
+					{/if}
+					<p id="openai-model-help" class="mt-2 mb-5 text-xs text-base-content/60">
+						Fetch models using the entered or saved key. Run Test AI connection to confirm image and
+						structured-output support before saving.
+					</p>
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<label for="openai-api-key" class="text-sm font-semibold">OpenAI API key</label>
+						<span class="badge badge-outline badge-sm">
+							{settings.hasOpenaiKey ? 'Key saved' : 'No key saved'}
+						</span>
+					</div>
+					<input
+						id="openai-api-key"
+						class="input mt-2 w-full bg-base-200"
+						type="password"
+						autocomplete="new-password"
+						bind:value={openaiApiKey}
+						maxlength="512"
+						disabled={clearOpenaiKey}
+						placeholder={settings.hasOpenaiKey
+							? 'Leave blank to keep saved key'
+							: 'Enter OpenAI API key'}
+					/>
+					<p class="mt-2 text-xs text-base-content/60">
+						Requires an OpenAI API key and API billing; ChatGPT subscriptions do not include API
+						credit. Saved keys stay hidden. Fetching and testing do not save changes.
+					</p>
+					{#if settings.hasOpenaiKey}
+						<label class="mt-3 flex items-center gap-2 text-xs">
+							<input type="checkbox" class="checkbox checkbox-sm" bind:checked={clearOpenaiKey} />
+							Remove saved key when saving
+						</label>
+					{/if}
+				{:else}
+					<label for="ollama-url" class="block text-sm font-semibold">Ollama server address</label>
+					<input
+						id="ollama-url"
+						class="input mt-2 w-full bg-base-200"
+						type="url"
+						bind:value={ollamaBaseUrl}
+						required
+						maxlength="500"
+						placeholder="http://192.168.254.63:11434"
+					/>
+					<p class="mt-2 mb-5 text-xs text-base-content/60">
+						Address must be reachable from the application server. Localhost refers to that server
+						or container, not your browser.
+					</p>
+					<label for="ollama-model" class="block text-sm font-semibold">Ollama vision model</label>
+					<input
+						id="ollama-model"
+						class="input mt-2 w-full bg-base-200"
+						bind:value={ollamaModel}
+						required
+						maxlength="120"
+						placeholder="qwen3-vl:4b"
+					/>
+					<p class="mt-2 text-xs text-base-content/60">
+						Pull a vision-capable model on your Ollama server first. Text-only models cannot read
+						clearance images.
+					</p>
 				{/if}
 			</div>
 		</fieldset>
@@ -200,13 +408,10 @@
 		<button
 			type="button"
 			class="btn btn-outline btn-sm"
-			disabled={disabled ||
-				!!pending ||
-				clearGeminiKey ||
-				(!settings.hasGeminiKey && !geminiApiKey.trim())}
+			disabled={disabled || !!pending || removingKey || !canTest}
 			onclick={test}
 		>
-			{pending === 'test' ? 'Testing Gemini…' : 'Test Gemini'}
+			{pending === 'test' ? 'Testing AI…' : 'Test AI connection'}
 		</button>
 		<button type="submit" class="btn btn-primary btn-sm" disabled={disabled || !!pending || !dirty}>
 			{pending === 'save' ? 'Saving…' : 'Save verification settings'}

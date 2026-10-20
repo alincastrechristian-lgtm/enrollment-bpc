@@ -38,6 +38,11 @@ export const systemSettings = sqliteTable('system_settings', {
 	resendApiKey: text('resend_api_key'),
 	geminiApiKey: text('gemini_api_key'),
 	geminiModel: text('gemini_model').notNull().default('gemini-3.1-flash-lite'),
+	aiProvider: text('ai_provider').notNull().default('gemini'),
+	openaiApiKey: text('openai_api_key').notNull().default(''),
+	openaiModel: text('openai_model').notNull().default('gpt-4.1-mini'),
+	ollamaBaseUrl: text('ollama_base_url').notNull().default('http://localhost:11434'),
+	ollamaModel: text('ollama_model').notNull().default('qwen3-vl:4b'),
 	automatedClearanceVerificationEnabled: integer('automated_clearance_verification_enabled', {
 		mode: 'boolean'
 	})

@@ -19,6 +19,7 @@ function load(file, dependencies = {}, override) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			dependencies[id] ??
+			(id === '#lib/clearance/ai.js' ? load('src/lib/clearance/ai.ts') : undefined) ??
 			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : undefined) ??
 			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
 				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
@@ -513,11 +514,11 @@ test('admin settings import legacy key once, never expose it, preserve blank inp
 	settings = await f.remote.getClearanceSettings();
 	assert.equal(settings.hasGeminiKey, false);
 	assert.equal(f.db.select().from(schema.systemSettings).get().geminiApiKey, '');
-	await assert.rejects(f.remote.testClearanceGemini({}), hasStatus(400));
+	await assert.rejects(f.remote.testClearanceAi({}), hasStatus(400));
 	for (const role of ['student', 'registrar']) {
 		f.state.viewer = { user: { id: 'student', role }, session: {} };
 		await assert.rejects(f.remote.saveClearanceVerification(settingInput()), hasStatus(403));
-		await assert.rejects(f.remote.testClearanceGemini({ geminiApiKey: 'bad' }), hasStatus(403));
+		await assert.rejects(f.remote.testClearanceAi({ geminiApiKey: 'bad' }), hasStatus(403));
 	}
 });
 test('Gemini test uses unsaved or saved key, sends blank PNG samples, and keeps provider errors private', async (t) => {
@@ -537,24 +538,24 @@ test('Gemini test uses unsaved or saved key, sends blank PNG samples, and keeps 
 			]
 		});
 	};
-	assert.equal((await f.remote.testClearanceGemini({ geminiApiKey: 'unsaved-key' })).success, true);
+	assert.equal((await f.remote.testClearanceAi({ geminiApiKey: 'unsaved-key' })).success, true);
 	assert.equal(calls[0].input.headers['x-goog-api-key'], 'unsaved-key');
 	assert.equal(f.db.select().from(schema.systemSettings).get().geminiApiKey, 'legacy-test-key');
 	const parts = JSON.parse(calls[0].input.body).contents[0].parts;
 	assert.equal(parts.filter((p) => p.inlineData?.mimeType === 'image/png').length, 2);
 	assert(!JSON.stringify(parts).includes('Student User'));
-	assert.equal((await f.remote.testClearanceGemini({})).success, true);
+	assert.equal((await f.remote.testClearanceAi({})).success, true);
 	assert.equal(calls[1].input.headers['x-goog-api-key'], 'legacy-test-key');
 	globalThis.fetch = async () =>
 		Response.json({ error: { message: 'PRIVATE KEY DETAILS' } }, { status: 403 });
-	const failed = await f.remote.testClearanceGemini({});
+	const failed = await f.remote.testClearanceAi({});
 	assert.equal(failed.success, false);
 	assert.match(failed.message, /HTTP 403.*lacks permission/);
 	assert(!failed.message.includes('PRIVATE'));
 	globalThis.fetch = async () => {
 		throw Error('PRIVATE connectivity details');
 	};
-	assert(!JSON.stringify(await f.remote.testClearanceGemini({})).includes('PRIVATE'));
+	assert(!JSON.stringify(await f.remote.testClearanceAi({})).includes('PRIVATE'));
 });
 test('0040 preserves legacy data and defaults; rollback rejects credentials and paper approval evidence', async (t) => {
 	const f = fixture(t, 40);
@@ -724,7 +725,7 @@ test('model selection persists for production while test overrides stay unsaved 
 			]
 		});
 	};
-	await f.remote.testClearanceGemini({ geminiModel: 'gemini-2.5-flash-lite' });
+	await f.remote.testClearanceAi({ geminiModel: 'gemini-2.5-flash-lite' });
 	assert.match(calls.at(-1).url, /models\/gemini-2.5-flash-lite:generateContent$/);
 	assert.deepEqual(calls.at(-1).config.thinkingConfig, { thinkingBudget: 0 });
 	assert.equal((await f.remote.getClearanceSettings()).geminiModel, 'gemini-3.1-flash-lite');
@@ -739,7 +740,7 @@ test('model selection persists for production while test overrides stay unsaved 
 	assert.throws(() =>
 		f.remote.saveClearanceVerification(settingInput({ geminiModel: 'https://other.invalid' }))
 	);
-	assert.throws(() => f.remote.testClearanceGemini({ geminiModel: 'not-allowed' }));
+	assert.throws(() => f.remote.testClearanceAi({ geminiModel: 'not-allowed' }));
 	for (const role of ['student', 'registrar']) {
 		f.state.viewer = { user: { id: 'student', role }, session: {} };
 		await assert.rejects(
@@ -747,25 +748,24 @@ test('model selection persists for production while test overrides stay unsaved 
 			hasStatus(403)
 		);
 		await assert.rejects(
-			f.remote.testClearanceGemini({ geminiModel: 'gemini-3.8-flash' }),
+			f.remote.testClearanceAi({ geminiModel: 'gemini-3.8-flash' }),
 			hasStatus(403)
 		);
 	}
 });
 test('0041 preserves keys and flags, defaults to low-cost model, and guards rollback of model choices', (t) => {
-	const f = fixture(t);
+	const f = fixture(t, 41);
 	const rollback = readFileSync('drizzle/rollback/0041_gemini_model_selection.sql', 'utf8');
-	f.db
-		.insert(schema.systemSettings)
-		.values({ id: 1, geminiApiKey: 'private-saved-key', personalInfoVerificationEnabled: false })
-		.run();
+	f.sqlite.exec(
+		"INSERT INTO system_settings(id,gemini_api_key,personal_info_verification_enabled) VALUES(1,'private-saved-key',0)"
+	);
 	const before = f.sqlite.prepare('SELECT * FROM system_settings').get();
 	f.sqlite.exec(rollback);
 	assert.equal(
 		f.sqlite.prepare('SELECT gemini_api_key FROM system_settings').get().gemini_api_key,
 		'private-saved-key'
 	);
-	migrate(f.db, { migrationsFolder: 'drizzle' });
+	migrate(f.db, migrationConfigThrough(t, 41));
 	assert.deepEqual(f.sqlite.prepare('SELECT * FROM system_settings').get(), before);
 	assert.equal(before.gemini_model, 'gemini-3.1-flash-lite');
 	f.sqlite.exec("UPDATE system_settings SET gemini_model='gemini-3.8-flash'");
@@ -776,4 +776,331 @@ test('0041 preserves keys and flags, defaults to low-cost model, and guards roll
 		'gemini-3.8-flash'
 	);
 	assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+});
+
+const openaiResponse = (value = { name: '', studentNumber: '' }) => ({
+	status: 'completed',
+	output: [
+		{
+			type: 'message',
+			status: 'completed',
+			content: [{ type: 'output_text', text: JSON.stringify(value) }]
+		}
+	]
+});
+const ollamaResponse = (value = { name: '', studentNumber: '' }) => ({
+	done: true,
+	done_reason: 'stop',
+	message: { role: 'assistant', content: JSON.stringify(value) }
+});
+
+test('OpenAI and Ollama admin settings preserve separate secrets and do not leak them to settings pages', async (t) => {
+	const f = fixture(t);
+	await f.remote.saveClearanceVerification(
+		settingInput({
+			aiProvider: 'openai',
+			openaiApiKey: 'private-openai-key',
+			openaiModel: 'gpt-4.1-nano'
+		})
+	);
+	await f.remote.saveClearanceVerification(settingInput({ openaiApiKey: '' }));
+	let settings = await f.remote.getClearanceSettings();
+	assert.equal(settings.aiProvider, 'openai');
+	assert.equal(settings.hasOpenaiKey, true);
+	assert.equal(settings.openaiModel, 'gpt-4.1-nano');
+	assert(!JSON.stringify(settings).includes('private-openai-key'));
+	assert(!Object.hasOwn(settings, 'openaiApiKey'));
+	assert(
+		!JSON.stringify(await f.emailPage({ locals: f.state.viewer })).includes('private-openai-key')
+	);
+	await assert.rejects(
+		f.remote.saveClearanceVerification(settingInput({ clearOpenaiKey: true })),
+		hasStatus(400)
+	);
+	await f.remote.saveClearanceVerification(
+		settingInput({
+			aiProvider: 'ollama',
+			clearOpenaiKey: true,
+			ollamaBaseUrl: 'http://192.168.254.63:11434/',
+			ollamaModel: 'qwen3-vl:4b'
+		})
+	);
+	settings = await f.remote.getClearanceSettings();
+	assert.equal(settings.aiProvider, 'ollama');
+	assert.equal(settings.hasOpenaiKey, false);
+	assert.equal(settings.hasGeminiKey, true);
+	assert.equal(settings.ollamaBaseUrl, 'http://192.168.254.63:11434');
+	assert.equal(f.db.select().from(schema.systemSettings).get().openaiApiKey, '');
+	for (const role of ['student', 'registrar']) {
+		f.state.viewer.user.role = role;
+		await assert.rejects(f.remote.getClearanceSettings(), hasStatus(403));
+		await assert.rejects(
+			f.remote.saveClearanceVerification(settingInput({ aiProvider: 'openai', openaiApiKey: 'x' })),
+			hasStatus(403)
+		);
+		await assert.rejects(f.remote.testClearanceAi({ aiProvider: 'ollama' }), hasStatus(403));
+	}
+});
+
+test('unsaved provider tests use blank PNGs and never save, redirect, leak credentials across providers or send expected identity', async (t) => {
+	const f = fixture(t);
+	const original = globalThis.fetch;
+	t.after(() => {
+		globalThis.fetch = original;
+	});
+	const calls = [];
+	globalThis.fetch = async (url, options) => {
+		calls.push({ url, options, body: JSON.parse(options.body) });
+		return Response.json(url.includes('openai.com') ? openaiResponse() : ollamaResponse());
+	};
+	assert.equal(
+		(
+			await f.remote.testClearanceAi({
+				aiProvider: 'openai',
+				openaiApiKey: 'unsaved-secret',
+				openaiModel: 'gpt-4.1-nano'
+			})
+		).success,
+		true
+	);
+	let call = calls.at(-1);
+	assert.equal(call.url, 'https://api.openai.com/v1/responses');
+	assert.equal(call.options.headers.Authorization, 'Bearer unsaved-secret');
+	assert.equal(call.options.redirect, 'error');
+	assert.equal(call.body.store, false);
+	assert.equal(call.body.text.format.strict, true);
+	assert.equal(call.body.text.format.schema.additionalProperties, false);
+	assert.equal(call.body.model, 'gpt-4.1-nano');
+	assert.equal(call.body.input[0].content.length, 3);
+	for (const part of call.body.input[0].content.slice(1)) {
+		assert.equal(part.type, 'input_image');
+		const metadata = await sharp(Buffer.from(part.image_url.split(',')[1], 'base64')).metadata();
+		assert.equal(metadata.width, 128);
+	}
+	assert(!JSON.stringify(call.body).includes('unsaved-secret'));
+	assert(!JSON.stringify(call.body).includes('23016578'));
+	assert(!JSON.stringify(call.body).includes('Jonnel'));
+	assert.equal(
+		(
+			await f.remote.testClearanceAi({
+				aiProvider: 'ollama',
+				ollamaBaseUrl: 'http://192.168.254.63:11434',
+				ollamaModel: 'qwen3-vl:4b',
+				openaiApiKey: 'must-not-forward'
+			})
+		).success,
+		true
+	);
+	call = calls.at(-1);
+	assert.equal(call.url, 'http://192.168.254.63:11434/api/chat');
+	assert.equal(call.options.headers.Authorization, undefined);
+	assert.equal(call.options.headers['x-goog-api-key'], undefined);
+	assert.equal(call.body.stream, false);
+	assert.equal(call.body.think, false);
+	assert.equal(call.body.messages[1].images.length, 2);
+	assert.equal(call.body.format.additionalProperties, false);
+	const settings = await f.remote.getClearanceSettings();
+	assert.equal(settings.aiProvider, 'gemini');
+	assert.equal(settings.hasOpenaiKey, false);
+	assert.equal(settings.ollamaBaseUrl, 'http://localhost:11434');
+	for (const url of [
+		'file:///tmp',
+		'http://user:secret@localhost:11434',
+		'http://localhost/api/chat',
+		'http://localhost?key=secret',
+		'http://localhost#fragment'
+	]) {
+		assert.throws(() => f.remote.testClearanceAi({ aiProvider: 'ollama', ollamaBaseUrl: url }));
+	}
+	assert.throws(() => f.remote.testClearanceAi({ aiProvider: 'unknown' }));
+});
+
+test('saved provider drives handwriting preview; incomplete, refused, malformed and truncated output never establishes identity', async (t) => {
+	const f = await handwritingFixture(t);
+	const original = globalThis.fetch;
+	t.after(() => {
+		globalThis.fetch = original;
+	});
+	for (const provider of ['openai', 'ollama']) {
+		await f.remote.saveClearanceVerification(
+			settingInput({ aiProvider: provider, openaiApiKey: 'saved-openai-secret' })
+		);
+		let payload;
+		globalThis.fetch = async (url, options) => {
+			assert.equal(
+				url,
+				provider === 'openai'
+					? 'https://api.openai.com/v1/responses'
+					: 'http://localhost:11434/api/chat'
+			);
+			payload = JSON.parse(options.body);
+			return Response.json(
+				provider === 'openai'
+					? openaiResponse({ name: 'Observed Name', studentNumber: '02301657' })
+					: ollamaResponse({ name: 'Observed Name', studentNumber: '02301657' })
+			);
+		};
+		let result = await f.remote.readClearanceTestHandwriting(f.input);
+		assert.equal(result.success, true);
+		assert.deepEqual(result.readings, { name: 'Observed Name', studentNumber: '02301657' });
+		assert(!JSON.stringify(payload).includes('saved-openai-secret'));
+		const invalid =
+			provider === 'openai'
+				? [
+						{ ...openaiResponse(), status: 'incomplete' },
+						{
+							status: 'completed',
+							output: [
+								{
+									type: 'message',
+									status: 'completed',
+									content: [{ type: 'refusal', refusal: 'No' }]
+								}
+							]
+						},
+						{
+							status: 'completed',
+							output: [
+								{
+									type: 'message',
+									status: 'completed',
+									content: [{ type: 'output_text', text: '{"name":"partial"' }]
+								}
+							]
+						},
+						null
+					]
+				: [
+						{ ...ollamaResponse(), done: false },
+						{ ...ollamaResponse(), done_reason: 'length' },
+						{ ...ollamaResponse(), message: { content: '{"name":"partial"' } },
+						null
+					];
+		for (const body of invalid) {
+			globalThis.fetch = async () => Response.json(body);
+			result = await f.remote.readClearanceTestHandwriting(f.input);
+			assert.equal(result.success, true);
+			assert.equal(result.readings.name, '');
+			assert.equal(result.readings.studentNumber, '');
+			assert(result.readings.warnings.name);
+			assert(result.readings.warnings.studentNumber);
+		}
+		for (const status of [400, 401, 403, 404, 429, 503]) {
+			globalThis.fetch = async () =>
+				Response.json(
+					{ error: { message: 'PRIVATE_KEY PRIVATE_PROJECT PRIVATE_STUDENT' } },
+					{ status }
+				);
+			const failed = await f.remote.testClearanceAi({});
+			assert.equal(failed.success, false);
+			assert.match(failed.message, new RegExp(`HTTP ${status}`));
+			assert(!failed.message.includes('PRIVATE'));
+		}
+	}
+});
+
+test('0042 preserves existing data and Gemini defaults; rollback refuses to discard provider settings', async (t) => {
+	const f = fixture(t, 41);
+	f.sqlite.exec(
+		"INSERT INTO system_settings(id,gemini_api_key,gemini_model) VALUES(1,'retained-secret','gemini-2.5-flash')"
+	);
+	const before = f.sqlite.prepare('SELECT * FROM system_settings').get();
+	migrate(f.db, migrationConfigThrough(t, 42));
+	const after = f.sqlite.prepare('SELECT * FROM system_settings').get();
+	for (const [key, value] of Object.entries(before)) assert.equal(after[key], value);
+	assert.equal(after.ai_provider, 'gemini');
+	assert.equal(after.openai_api_key, '');
+	const rollback = readFileSync('drizzle/rollback/0042_handwriting_providers.sql', 'utf8');
+	for (const assignment of [
+		"ai_provider='ollama'",
+		"openai_api_key='private-secret'",
+		"openai_model='gpt-4.1-nano'",
+		"ollama_base_url='http://192.168.254.63:11434'",
+		"ollama_model='other:4b'"
+	]) {
+		f.sqlite.exec(`UPDATE system_settings SET ${assignment}`);
+		assert.throws(() => f.sqlite.exec(rollback), /CHECK constraint/);
+		f.sqlite.exec('ROLLBACK');
+		f.sqlite
+			.prepare(
+				'UPDATE system_settings SET ai_provider=?,openai_api_key=?,openai_model=?,ollama_base_url=?,ollama_model=?'
+			)
+			.run(
+				after.ai_provider,
+				after.openai_api_key,
+				after.openai_model,
+				after.ollama_base_url,
+				after.ollama_model
+			);
+	}
+	f.sqlite.exec(rollback);
+	assert.deepEqual(f.sqlite.prepare('SELECT * FROM system_settings').get(), before);
+	migrate(f.db, migrationConfigThrough(t, 42));
+	assert.deepEqual(f.sqlite.prepare('SELECT * FROM system_settings').get(), after);
+	assert.equal(f.sqlite.pragma('integrity_check', { simple: true }), 'ok');
+	assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+});
+
+test('OpenAI model fetching is admin-only, uses unsaved or saved key without saving, and returns sorted IDs only', async (t) => {
+	const f = fixture(t);
+	const original = globalThis.fetch;
+	t.after(() => {
+		globalThis.fetch = original;
+	});
+	globalThis.fetch = async () =>
+		assert.fail('Unauthorized or missing-key requests must not reach OpenAI');
+	for (const role of ['student', 'registrar']) {
+		f.state.viewer.user.role = role;
+		await assert.rejects(
+			f.remote.fetchClearanceOpenaiModels({ openaiApiKey: 'secret' }),
+			hasStatus(403)
+		);
+	}
+	f.state.viewer.user.role = 'admin';
+	await assert.rejects(f.remote.fetchClearanceOpenaiModels({}), hasStatus(400));
+	const keys = [];
+	globalThis.fetch = async (url, options) => {
+		assert.equal(url, 'https://api.openai.com/v1/models');
+		assert.equal(options.redirect, 'error');
+		assert.equal(options.body, undefined);
+		keys.push(options.headers.Authorization);
+		return Response.json({
+			data: [{ id: 'z-model', owned_by: 'PRIVATE_PROJECT' }, { id: 'a-model' }, { id: 'z-model' }]
+		});
+	};
+	const before = f.sqlite.prepare('SELECT total_changes() AS n').get().n;
+	assert.deepEqual(await f.remote.fetchClearanceOpenaiModels({ openaiApiKey: 'unsaved-secret' }), {
+		success: true,
+		models: ['a-model', 'z-model']
+	});
+	assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n, before);
+	await f.remote.saveClearanceVerification(settingInput({ openaiApiKey: 'saved-secret' }));
+	assert.deepEqual(await f.remote.fetchClearanceOpenaiModels({}), {
+		success: true,
+		models: ['a-model', 'z-model']
+	});
+	assert.deepEqual(keys, ['Bearer unsaved-secret', 'Bearer saved-secret']);
+	globalThis.fetch = async () => Response.json({ data: [] });
+	assert.deepEqual(await f.remote.fetchClearanceOpenaiModels({}), { success: true, models: [] });
+	for (const body of [null, {}, { data: [{ name: 'missing-id' }] }]) {
+		globalThis.fetch = async () => Response.json(body);
+		assert.equal((await f.remote.fetchClearanceOpenaiModels({})).success, false);
+	}
+	for (const status of [401, 403, 429, 503]) {
+		globalThis.fetch = async () =>
+			Response.json({ error: { message: 'PRIVATE_PROJECT saved-secret' } }, { status });
+		const result = await f.remote.fetchClearanceOpenaiModels({});
+		assert.equal(result.success, false);
+		assert.match(result.message, new RegExp(`HTTP ${status}`));
+		assert(!result.message.includes('PRIVATE_PROJECT'));
+		assert(!result.message.includes('saved-secret'));
+	}
+	globalThis.fetch = async () => {
+		throw new Error('PRIVATE_URL saved-secret');
+	};
+	assert(!JSON.stringify(await f.remote.fetchClearanceOpenaiModels({})).includes('PRIVATE'));
+	globalThis.fetch = async () => {
+		throw new DOMException('secret', 'TimeoutError');
+	};
+	assert.match((await f.remote.fetchClearanceOpenaiModels({})).message, /20 seconds/);
 });

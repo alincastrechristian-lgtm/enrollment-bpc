@@ -170,8 +170,8 @@
 			</label>
 			<p id="clearance-test-help" class="text-xs text-base-content/60">
 				JPG, PNG or WebP up to 15 MB. Confirm both form outlines before comparing. The test image
-				stays in your browser unless you run the optional Gemini handwriting test. It does not
-				replace the saved template.
+				stays in your browser unless you run the optional AI handwriting test. It does not replace
+				the saved template.
 			</p>
 			{#if loading}
 				<p role="status" class="text-sm">Opening image and finding the form border...</p>
@@ -220,7 +220,7 @@
 				/>
 				<section
 					class="portal-panel space-y-4 p-5 sm:p-6"
-					aria-label="Gemini handwriting test"
+					aria-label="AI handwriting test"
 					aria-busy={reading}
 				>
 					<label class="flex cursor-pointer items-start gap-3">
@@ -231,18 +231,18 @@
 							disabled={locked}
 						/>
 						<span>
-							<span class="block text-sm font-semibold">Test handwriting with Gemini</span>
+							<span class="block text-sm font-semibold">Test handwriting with AI</span>
 							<span class="mt-1 block text-xs text-base-content/60">
-								Preview the student name and number Gemini reads from the saved input areas. No
-								identity comparison or clearance approval.
+								Preview the student name and number AI reads from the saved input areas. No identity
+								comparison or clearance approval.
 							</span>
 						</span>
 					</label>
 					{#if includeHandwriting}
 						<p class="text-xs text-base-content/60">
-							Click Read handwriting to send only the name and student number crops to Google using
-							the saved Gemini key. This diagnostic runs even when personal information verification
-							is disabled.
+							Click Read handwriting to send only the name and student number crops to the saved AI
+							provider. This diagnostic runs even when personal information verification is
+							disabled.
 						</p>
 						{#if !hasIdentityAreas(template.definition)}
 							<p class="text-sm text-warning">
@@ -262,7 +262,7 @@
 							{reading ? 'Reading handwriting…' : 'Read handwriting'}
 						</button>
 						{#if reading}
-							<p role="status" class="text-sm">Gemini is reading the selected fields…</p>
+							<p role="status" class="text-sm">AI is reading the selected fields…</p>
 						{/if}
 						{#if handwritingError}
 							<p role="alert" class="text-sm text-error">{handwritingError}</p>
@@ -270,7 +270,7 @@
 						{#if handwriting}
 							<dl
 								class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4 text-sm"
-								aria-label="Gemini handwriting result"
+								aria-label="AI handwriting result"
 							>
 								<div>
 									<dt class="font-semibold">Student name</dt>

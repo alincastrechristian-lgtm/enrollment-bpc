@@ -25,13 +25,14 @@ test(
 					'window.messages=[];export const showLoading=()=>{};export const showSuccess=message=>window.messages.push(message);export const showError=message=>window.messages.push(message);',
 				'fixture.js': `const area=(label,kind,x,y,width,height,expected='')=>({id:crypto.randomUUID(),label,kind,box:{x,y,width,height},expected});
 				export const definition={corners:[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],semester:'2',schoolYear:'2025-2026',areas:[area('School name','text',.3,.02,.4,.04,'BULACAN POLYTECHNIC COLLEGE'),area('Form title','text',.32,.12,.35,.04,'Student Clearance Form'),area('School seal','image',.08,.02,.16,.2),area('Semester','semester',.32,.17,.2,.04),area('Academic year','academicYear',.5,.17,.2,.04)],personalFields:[{id:crypto.randomUUID(),field:'studentName',box:{x:.1,y:.7,width:.5,height:.05}},{id:crypto.randomUUID(),field:'studentNumber',box:{x:.1,y:.8,width:.5,height:.05}}],officeRows:['Library','Registrar'].map((label,i)=>({id:crypto.randomUUID(),label,office:{x:.08,y:.3+i*.08,width:.12,height:.03},cleared:{x:.27,y:.3+i*.08,width:.045,height:.05},signature:{x:.62,y:.3+i*.08,width:.2,height:.05}}))};`,
-				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,hasGeminiKey:true,geminiModel:'gemini-3.1-flash-lite',template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
+				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,aiProvider:'gemini',hasOpenaiKey:false,openaiModel:'gpt-4.1-mini',ollamaBaseUrl:'http://localhost:11434',ollamaModel:'qwen3-vl:4b',hasGeminiKey:true,geminiModel:'gemini-3.1-flash-lite',template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
 				window.saved=[];window.uploads=[];window.failUpload=false;window.clearTemplate=()=>state={...state,template:null};
 				export function getClearanceSettings(){return{get current(){return state;}};}
+                window.modelListCalls=[];export async function fetchClearanceOpenaiModels(input){window.modelListCalls.push(input);return window.modelListError?{success:false,message:'OpenAI model listing failed (HTTP 403). Check permissions.'}:{success:true,models:['gpt-4.1-nano','gpt-test-vision']};}
                 window.verificationSaves=[];window.geminiTests=[];window.handwritingTests=[];
  export async function readClearanceTestHandwriting(input){window.handwritingTests.push(input);return window.handwritingError?{success:false,message:'Gemini request failed (HTTP 404, NOT_FOUND; model gemini-2.5-flash). The configured model was not found.'}:{success:true,readings:window.blankHandwriting?{name:'',studentNumber:'',warnings:{name:'Gemini returned an unusable transcription.'}}:{name:'Jonnel Mrei Palileo',studentNumber:'23016578'}};}
-                export async function saveClearanceVerification(input){window.verificationSaves.push(input);state={...state,...input,hasGeminiKey:input.clearGeminiKey?false:!!input.geminiApiKey||state.hasGeminiKey};delete state.geminiApiKey;return{success:true};}
-                export async function testClearanceGemini(input){window.geminiTests.push(input);return{success:true,message:'Gemini connection successful.'};}
+                export async function saveClearanceVerification(input){window.verificationSaves.push(input);state={...state,...input,hasGeminiKey:input.clearGeminiKey?false:!!input.geminiApiKey||state.hasGeminiKey};state.hasOpenaiKey=input.clearOpenaiKey?false:!!input.openaiApiKey||state.hasOpenaiKey;delete state.openaiApiKey;delete state.geminiApiKey;return{success:true};}
+                export async function testClearanceAi(input){window.geminiTests.push(input);return{success:true,message:'Gemini connection successful.'};}
 
 				export async function saveClearanceAreas(input){window.saved.push(input);state={...state,template:{...state.template,revision:crypto.randomUUID(),definition:structuredClone(input.definition)}};return{success:true};}
 				export const uploadClearanceTemplate={fields:new Proxy({allIssues:()=>[]},{get:(target,name)=>target[name]??{as:(type,value)=>({name,type,...(value===undefined?{}:{value})})}}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;await callback({element,result:{},submit:async()=>{if(window.failUpload)throw Error('Simulated storage error');const file=new FormData(element).get('file');window.uploads.push(file.name);state={...state,template:{filename:file.name,size:file.size,uploadedAt:new Date().toISOString(),revision:crypto.randomUUID(),definition:null}};return true;}});}})};`,
@@ -115,7 +116,7 @@ test(
 			await expect(model).toHaveValue('gemini-3.1-flash-lite');
 			await model.selectOption('gemini-2.5-flash-lite');
 			await key.fill('browser-unsaved-key');
-			await page.getByRole('button', { name: 'Test Gemini', exact: true }).click();
+			await page.getByRole('button', { name: 'Test AI connection', exact: true }).click();
 			await expect(page.getByText('Gemini connection successful.', { exact: true })).toBeVisible();
 			assert.equal(
 				await page.evaluate(() => window.geminiTests[0].geminiApiKey),
@@ -140,6 +141,61 @@ test(
 				false
 			);
 			await automation.check();
+			await page.getByRole('button', { name: 'Save verification settings', exact: true }).click();
+			const provider = page.getByLabel('Handwriting AI provider', { exact: true });
+			await provider.selectOption('openai');
+			await expect(page.getByLabel('Gemini model', { exact: true })).toHaveCount(0);
+			await page.getByLabel('OpenAI API key', { exact: true }).fill('unsaved-openai-secret');
+			await page.getByRole('button', { name: 'Fetch available models', exact: true }).click();
+			await expect(page.getByLabel('OpenAI model', { exact: true })).toBeVisible();
+			await expect(page.getByLabel('OpenAI model', { exact: true })).toHaveValue('gpt-4.1-mini');
+			assert.equal(
+				await page.evaluate(() => window.modelListCalls.at(-1).openaiApiKey),
+				'unsaved-openai-secret'
+			);
+			await expect(page.getByLabel('OpenAI model', { exact: true })).toHaveCount(1);
+			await page.getByLabel('OpenAI model', { exact: true }).selectOption('__custom__');
+			await page.getByLabel('OpenAI model', { exact: true }).fill('custom-vision-model');
+			await page.getByRole('button', { name: 'Choose from list', exact: true }).click();
+			await expect(page.getByLabel('OpenAI model', { exact: true })).toHaveValue(
+				'custom-vision-model'
+			);
+			await page.getByLabel('OpenAI model', { exact: true }).selectOption('gpt-4.1-nano');
+			await expect(page.getByLabel('OpenAI model', { exact: true })).toHaveValue('gpt-4.1-nano');
+			await page.getByLabel('OpenAI API key', { exact: true }).fill('replacement-openai-secret');
+			await expect(
+				page.getByLabel('OpenAI model', { exact: true }).locator('option[value="gpt-test-vision"]')
+			).toHaveCount(0);
+			await page.getByLabel('OpenAI API key', { exact: true }).fill('unsaved-openai-secret');
+			await page.evaluate(() => (window.modelListError = true));
+			await page.getByRole('button', { name: 'Fetch available models', exact: true }).click();
+			await expect(page.getByRole('alert')).toContainText('HTTP 403');
+			await expect(page.getByLabel('OpenAI model', { exact: true })).toHaveValue('gpt-4.1-nano');
+
+			await page.getByRole('button', { name: 'Test AI connection', exact: true }).click();
+			await expect
+				.poll(() => page.evaluate(() => window.geminiTests.at(-1)?.aiProvider))
+				.toBe('openai');
+			assert.equal(
+				await page.evaluate(() => window.geminiTests.at(-1).openaiApiKey),
+				'unsaved-openai-secret'
+			);
+			await provider.selectOption('ollama');
+			await page
+				.getByLabel('Ollama server address', { exact: true })
+				.fill('http://192.168.254.63:11434');
+			await page.getByRole('button', { name: 'Test AI connection', exact: true }).click();
+			await expect
+				.poll(() => page.evaluate(() => window.geminiTests.at(-1)?.aiProvider))
+				.toBe('ollama');
+			await page.getByRole('button', { name: 'Save verification settings', exact: true }).click();
+			await expect
+				.poll(() => page.evaluate(() => window.verificationSaves.at(-1)?.aiProvider))
+				.toBe('ollama');
+			await provider.selectOption('openai');
+			await expect(page.getByLabel('OpenAI API key', { exact: true })).toHaveValue('');
+			await expect(page.getByLabel('OpenAI model', { exact: true })).toHaveValue('gpt-4.1-nano');
+			await provider.selectOption('gemini');
 			await page.getByRole('button', { name: 'Save verification settings', exact: true }).click();
 			await expect(steps.getByRole('button', { name: 'Printed areas', exact: true })).toBeEnabled();
 			await expect(page.getByLabel('Choose template image', { exact: true })).toHaveCount(0);
@@ -204,7 +260,7 @@ test(
 				.getByLabel('Upload test clearance', { exact: true })
 				.setInputFiles('static/clearance-written-example.jpg');
 
-			const include = page.getByRole('checkbox', { name: /Test handwriting with Gemini/ });
+			const include = page.getByRole('checkbox', { name: /Test handwriting with AI/ });
 			await expect(include).not.toBeChecked();
 			await expect(page.getByRole('button', { name: 'Read handwriting', exact: true })).toHaveCount(
 				0
@@ -231,7 +287,7 @@ test(
 			await page.evaluate(() => (window.handwritingError = true));
 			await page.getByRole('button', { name: 'Read handwriting', exact: true }).click();
 			await expect(page.getByRole('alert').filter({ hasText: 'HTTP 404' })).toBeVisible();
-			await expect(page.getByLabel('Gemini handwriting result', { exact: true })).toHaveCount(0);
+			await expect(page.getByLabel('AI handwriting result', { exact: true })).toHaveCount(0);
 			await page.getByRole('button', { name: 'Compare template', exact: true }).click();
 			await expect(page.getByText('Matches saved template', { exact: true })).toBeVisible();
 			assert.deepEqual(await page.evaluate(() => window.testTerm), {

@@ -17,6 +17,7 @@ function load(file, dependencies = {}, override) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			dependencies[id] ??
+			(id === '#lib/clearance/ai.js' ? load('src/lib/clearance/ai.ts') : undefined) ??
 			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : require(id)),
 		exports
 	);

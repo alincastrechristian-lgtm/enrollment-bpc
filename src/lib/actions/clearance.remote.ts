@@ -15,6 +15,7 @@ import { db } from '#lib/server/db/index.js';
 import { clearanceTemplate, enrollment, studentData, systemSettings } from '#lib/schema.js';
 import { getClearancePolicy } from '#lib/server/clearance-settings.js';
 import { getGeminiApiKey, getGeminiModel, recognizeIdentity } from '#lib/server/handwriting.js';
+import { aiSettingsShape, aiKeySchema, AI_PROVIDER_LABELS } from '#lib/clearance/ai.js';
 import { geminiModelSchema } from '#lib/clearance/gemini.js';
 import sharp from 'sharp';
 import { and, eq } from 'drizzle-orm';
@@ -126,25 +127,85 @@ export const rejectClearance = command(
 export const getClearanceSettings = query(async () => {
 	validateUser(getRequestEvent().locals, [Role.ADMIN]);
 	const key = await getGeminiApiKey();
+	const settings = db.select().from(systemSettings).where(eq(systemSettings.id, 1)).get()!;
 	return {
 		configured: fileStorageConfigured(),
 		template: getClearanceTemplateInfo(),
 		...getClearancePolicy(db),
+		aiProvider: settings.aiProvider as 'gemini' | 'openai' | 'ollama',
+		hasOpenaiKey: !!settings.openaiApiKey,
+		openaiModel: settings.openaiModel,
+		ollamaBaseUrl: settings.ollamaBaseUrl,
+		ollamaModel: settings.ollamaModel,
 		hasGeminiKey: !!key,
 		geminiModel: await getGeminiModel()
 	};
 });
 
-const geminiKey = z
-	.string()
-	.trim()
-	.max(512)
-	.regex(/^[^\s]*$/, 'API key must not contain whitespace.');
+const geminiKey = aiKeySchema;
+export const fetchClearanceOpenaiModels = command(
+	z.object({ openaiApiKey: aiKeySchema.optional() }).strict(),
+	async ({ openaiApiKey }) => {
+		const { locals, request } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN]);
+		const key =
+			openaiApiKey ||
+			db
+				.select({ key: systemSettings.openaiApiKey })
+				.from(systemSettings)
+				.where(eq(systemSettings.id, 1))
+				.get()?.key;
+		if (!key) error(400, 'Enter or save an OpenAI API key first.');
+		try {
+			const response = await fetch('https://api.openai.com/v1/models', {
+				headers: { Authorization: `Bearer ${key}` },
+				redirect: 'error',
+				signal: AbortSignal.any([request.signal, AbortSignal.timeout(20_000)])
+			});
+			if (!response.ok) {
+				const advice =
+					response.status === 401
+						? 'Check that the API key is active and complete.'
+						: response.status === 403
+							? 'Check that the key has permission to list models in this project.'
+							: response.status === 429
+								? 'Request limit reached. Retry after the limit resets.'
+								: 'Check OpenAI availability and server connectivity, then retry.';
+				return {
+					success: false as const,
+					message: `OpenAI model listing failed (HTTP ${response.status}). ${advice}`
+				};
+			}
+			const parsed = z
+				.object({ data: z.array(z.object({ id: z.string().min(1).max(120) })).max(10_000) })
+				.safeParse(await response.json().catch(() => null));
+			if (!parsed.success)
+				return {
+					success: false as const,
+					message: 'OpenAI returned an unreadable model list. Try again later.'
+				};
+			const models = [...new Set(parsed.data.data.map((model) => model.id))].sort();
+			return { success: true as const, models };
+		} catch (cause) {
+			request.signal.throwIfAborted();
+			return {
+				success: false as const,
+				message:
+					cause instanceof Error && cause.name === 'TimeoutError'
+						? 'OpenAI model listing timed out after 20 seconds. Try again later.'
+						: 'Could not connect to OpenAI to fetch models. Check server connectivity, DNS, firewall and proxy settings.'
+			};
+		}
+	}
+);
+
 export const saveClearanceVerification = command(
 	z
 		.object({
 			automatedClearanceVerificationEnabled: z.boolean(),
 			personalInfoVerificationEnabled: z.boolean(),
+			...aiSettingsShape,
+			clearOpenaiKey: z.boolean().default(false),
 			geminiApiKey: geminiKey.optional(),
 			geminiModel: geminiModelSchema.optional(),
 			clearGeminiKey: z.boolean().default(false)
@@ -155,24 +216,33 @@ export const saveClearanceVerification = command(
 		await getGeminiApiKey();
 		db.transaction(
 			(tx) => {
-				const existingKey =
-					tx
-						.select({ key: systemSettings.geminiApiKey })
-						.from(systemSettings)
-						.where(eq(systemSettings.id, 1))
-						.get()?.key ?? '';
-				const key = input.clearGeminiKey ? '' : input.geminiApiKey || existingKey;
+				const existingKey = tx.select().from(systemSettings).where(eq(systemSettings.id, 1)).get();
+				const key = input.clearGeminiKey
+					? ''
+					: input.geminiApiKey || existingKey?.geminiApiKey || '';
+				const openaiKey = input.clearOpenaiKey
+					? ''
+					: input.openaiApiKey || existingKey?.openaiApiKey || '';
+				const provider = input.aiProvider ?? existingKey?.aiProvider ?? 'gemini';
 				if (
 					input.automatedClearanceVerificationEnabled &&
 					input.personalInfoVerificationEnabled &&
-					!key
+					(provider === 'gemini' ? !key : provider === 'openai' ? !openaiKey : false)
 				)
-					error(400, 'Enter a Gemini API key before enabling personal information verification.');
+					error(
+						400,
+						'Enter an API key for the selected provider before enabling personal information verification.'
+					);
 				tx.update(systemSettings)
 					.set({
 						automatedClearanceVerificationEnabled: input.automatedClearanceVerificationEnabled,
 						personalInfoVerificationEnabled: input.personalInfoVerificationEnabled,
 						geminiApiKey: key,
+						aiProvider: input.aiProvider,
+						openaiApiKey: openaiKey,
+						openaiModel: input.openaiModel,
+						ollamaBaseUrl: input.ollamaBaseUrl,
+						ollamaModel: input.ollamaModel,
 						geminiModel: input.geminiModel
 					})
 					.where(eq(systemSettings.id, 1))
@@ -185,15 +255,24 @@ export const saveClearanceVerification = command(
 	}
 );
 
-export const testClearanceGemini = command(
+export const testClearanceAi = command(
 	z
-		.object({ geminiApiKey: geminiKey.optional(), geminiModel: geminiModelSchema.optional() })
+		.object({
+			...aiSettingsShape,
+			geminiApiKey: geminiKey.optional(),
+			geminiModel: geminiModelSchema.optional()
+		})
 		.strict(),
 	async (input) => {
 		validateUser(getRequestEvent().locals, [Role.ADMIN]);
-		const key = input.geminiApiKey || (await getGeminiApiKey());
-		if (!key) error(400, 'Enter or save a Gemini API key first.');
-		// A blank sample exercises the same vision request without sending student information.
+		await getGeminiApiKey();
+		const settings = db.select().from(systemSettings).where(eq(systemSettings.id, 1)).get()!;
+		const provider = input.aiProvider ?? (settings.aiProvider as 'gemini' | 'openai' | 'ollama');
+		const label = AI_PROVIDER_LABELS[provider];
+		if (provider === 'gemini' && !(input.geminiApiKey || (await getGeminiApiKey())))
+			error(400, 'Enter or save a Gemini API key first.');
+		if (provider === 'openai' && !(input.openaiApiKey || settings.openaiApiKey))
+			error(400, 'Enter or save an OpenAI API key first.');
 		const png = (
 			await sharp({ create: { width: 128, height: 64, channels: 3, background: '#fff' } })
 				.png()
@@ -203,21 +282,23 @@ export const testClearanceGemini = command(
 			const result = await recognizeIdentity(
 				{ name: png, studentNumber: png },
 				getRequestEvent().request.signal,
-				key,
+				provider === 'gemini'
+					? input.geminiApiKey || (await getGeminiApiKey())
+					: { ...input, aiProvider: provider },
 				input.geminiModel
 			);
 			return {
 				success: !result.warnings,
 				message: result.warnings
-					? 'Gemini responded but returned an unusable transcription. Try again.'
-					: 'Gemini connection successful. The vision model accepted the test images.'
+					? `${label} responded but returned an unusable transcription. Try again.`
+					: `${label} connection successful. The vision model accepted the test images.`
 			};
 		} catch (cause) {
 			return {
 				success: false,
 				message: isHttpError(cause)
 					? cause.body.message
-					: 'Could not reach Gemini. Check server connectivity and try again.'
+					: `Could not reach ${label}. Check server connectivity and try again.`
 			};
 		}
 	}
@@ -276,7 +357,7 @@ export const readClearanceTestHandwriting = command(
 				success: false as const,
 				message: isHttpError(cause)
 					? cause.body.message
-					: "The server could not connect to Google's Gemini API. Check server internet access, DNS, firewall, and proxy settings."
+					: 'The server could not connect to the selected AI provider. Check server connectivity and AI settings.'
 			};
 		}
 	}
