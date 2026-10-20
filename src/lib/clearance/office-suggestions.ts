@@ -1,5 +1,6 @@
 import { type Box, type OfficeRow } from './definition';
 import type { PrintedLine } from './suggestions';
+import { findCheckboxFrame } from './checkbox';
 
 export type OfficeSuggestions = { rows: OfficeRow[]; hints: string[] };
 type Rect = PrintedLine['bbox'];
@@ -206,6 +207,7 @@ export function suggestOfficeRows(
 	const rules = horizontalRules(ink, width, height);
 	const candidates: {
 		row: OfficeRow;
+		table?: Word;
 		square: Rect;
 		right: number;
 		checkboxes: { square: Rect; choice?: Choice['kind'] }[];
@@ -290,6 +292,7 @@ export function suggestOfficeRows(
 			if (candidates.length >= 30) continue;
 			candidate = {
 				row: { id: crypto.randomUUID(), label, office: normalizeBox(office) },
+				table: header,
 				square,
 				right: office.x1,
 				checkboxes: []
@@ -300,6 +303,64 @@ export function suggestOfficeRows(
 		if (choice?.kind === 'cleared' && !candidate.row.cleared)
 			candidate.row.cleared = normalizeBox(square);
 		candidate.right = Math.max(candidate.right, square.x1, inline?.bbox.x1 ?? 0);
+	}
+	let recovered = 0;
+	for (const candidate of candidates) {
+		if (candidate.row.cleared) continue;
+		// Only caption-confirmed peers establish the positive column. Inferred boxes
+		// never reinforce one another, cross tables, or relabel an explicit negative.
+		const peers = candidates
+			.filter(
+				(c) =>
+					c !== candidate &&
+					c.table === candidate.table &&
+					Math.abs(c.row.office.x - candidate.row.office.x) < 0.12
+			)
+			.flatMap((c) => c.checkboxes.filter((b) => b.choice === 'cleared').map((b) => b.square));
+		if (peers.length < 2) continue;
+		const median = (values: number[]) =>
+			values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
+		const boxWidth = median(peers.map((b) => b.x1 - b.x0)),
+			boxHeight = median(peers.map((b) => b.y1 - b.y0)),
+			x = median(peers.map(cx)),
+			y = cy(candidate.square);
+		if (
+			peers.filter(
+				(b) =>
+					Math.abs(cx(b) - x) < boxWidth * 0.5 &&
+					Math.abs(b.y1 - b.y0 - boxHeight) < boxHeight * 0.3
+			).length < 2 ||
+			x - boxWidth / 2 <= (candidate.row.office.x + candidate.row.office.width) * width
+		)
+			continue;
+		let found = candidate.checkboxes.find(
+			(b) =>
+				b.choice !== 'notCleared' &&
+				Math.abs(cx(b.square) - x) < boxWidth * 0.5 &&
+				Math.abs(cy(b.square) - y) < boxHeight * 0.5
+		)?.square;
+		if (!found) {
+			// Search actual printed edges near the estimated position. A missing frame
+			// remains missing; column spacing alone is never enough to create a box.
+			const region = {
+				x: x - boxWidth / 2,
+				y: y - boxHeight / 2,
+				width: boxWidth,
+				height: boxHeight
+			};
+			const outline = findCheckboxFrame(ink, width, height, region, region);
+			if (outline)
+				found = union(outline.map((p) => ({ x0: p.x, x1: p.x + 1, y0: p.y, y1: p.y + 1 })));
+		}
+		if (
+			!found ||
+			candidate.checkboxes.some(
+				(b) => b.choice === 'notCleared' && Math.abs(cx(b.square) - cx(found!)) < boxWidth
+			)
+		)
+			continue;
+		candidate.row.cleared = normalizeBox(found);
+		recovered++;
 	}
 	for (const candidate of candidates) {
 		const { row, square } = candidate,
@@ -389,6 +450,10 @@ export function suggestOfficeRows(
 	const hints = [
 		'Review each office and linked box. Row alignment, checkbox outlines and printed rules are estimates, not approval evidence.'
 	];
+	if (recovered)
+		hints.push(
+			`${recovered} cleared checkbox areas recovered using matching office columns and printed outlines. Review their positions.`
+		);
 	if (!rows.length)
 		hints.push('No reliable office rows found. Add offices and mark their boxes manually.');
 	for (const row of rows) {

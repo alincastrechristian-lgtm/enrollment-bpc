@@ -14,7 +14,9 @@ function load(file, deps = {}) {
 }
 const core = load('src/lib/clearance/clearance.ts');
 const def = load('src/lib/clearance/definition.ts', { './clearance': core });
-const { suggestOfficeRows } = load('src/lib/clearance/office-suggestions.ts');
+const { suggestOfficeRows } = load('src/lib/clearance/office-suggestions.ts', {
+	'./checkbox': load('src/lib/clearance/checkbox.ts', { './clearance': core })
+});
 const width = 1000,
 	height = 800;
 const word = (text, x0, y0, x1, y1) => ({ text, bbox: { x0, y0, x1, y1 } });
@@ -38,13 +40,18 @@ function square(ink, x, y, size = 30) {
 	rule(ink, x, y, x, y + size);
 	rule(ink, x + size, y, x + size, y + size);
 }
-function fixture({ choices = true, signature = true, reverse = false } = {}) {
+function fixture({
+	choices = true,
+	signature = true,
+	reverse = false,
+	names = ['Library', 'Registrar']
+} = {}) {
 	const ink = new Uint8Array(width * height);
 	const lines = [
 		line(word('Department/Offices', 60, 180, 230, 200)),
 		line(word('Signature/Stamp', 640, 180, 810, 200))
 	];
-	for (const [i, name] of ['Library', 'Registrar'].entries()) {
+	for (const [i, name] of names.entries()) {
 		const y = 240 + i * 80;
 		square(ink, 260, y);
 		square(ink, 430, y + 2);
@@ -242,4 +249,56 @@ test('empty pages, isolated squares, text-sized square glyphs and bad OCR do not
 		0
 	);
 	assert.throws(() => suggestOfficeRows([], width, height, new Uint8Array(10)), /Invalid/);
+});
+
+test('a missed Cleared caption uses consistent peer columns without choosing Not Cleared', () => {
+	for (const reverse of [false, true]) {
+		const f = fixture({ names: ['Library', 'Adviser', 'Registrar'], reverse });
+		const x = reverse ? 475 : 305;
+		const caption = f.lines.find((l) => l.words[0].bbox.x0 === x && l.bbox.y0 === 325);
+		caption.confidence = 20;
+		const result = suggestOfficeRows(f.lines, width, height, f.ink);
+		const row = result.rows.find((r) => r.label === 'Adviser');
+		assert(row?.cleared, 'Visible Adviser checkbox stays assignable when its caption is lost.');
+		assert(Math.abs(row.cleared.x - (reverse ? 0.43 : 0.26)) < 0.01);
+	}
+});
+
+test('local frame search recovers disconnected or text-connected checkbox outlines in the confirmed column', () => {
+	for (const damage of ['gaps', 'touching text']) {
+		const f = fixture({ names: ['Library', 'Adviser', 'Registrar'] });
+		if (damage === 'gaps') {
+			for (const [x, y] of [
+				[274, 320],
+				[274, 350],
+				[260, 334],
+				[290, 334]
+			]) {
+				for (let dy = 0; dy < 2; dy++)
+					for (let dx = 0; dx < 2; dx++) f.ink[(y + dy) * width + x + dx] = 0;
+			}
+		} else rule(f.ink, 290, 334, 345, 335);
+		const result = suggestOfficeRows(f.lines, width, height, f.ink);
+		const row = result.rows.find((r) => r.label === 'Adviser');
+		assert(row?.cleared, damage);
+		assert(Math.abs(row.cleared.x - 0.26) < 0.015);
+		assert(Math.abs(row.cleared.y - 0.4) < 0.015);
+	}
+});
+
+test('peer alignment cannot invent an absent checkbox or use the negative choice', () => {
+	const f = fixture({ names: ['Library', 'Adviser', 'Registrar'] });
+	for (let y = 318; y <= 352; y++) f.ink.fill(0, y * width + 258, y * width + 293);
+	const result = suggestOfficeRows(f.lines, width, height, f.ink);
+	assert.equal(result.rows.find((r) => r.label === 'Adviser')?.cleared, undefined);
+	assert(result.hints.some((h) => h.includes('Adviser: cleared checkbox was not identified')));
+});
+
+test('peer consensus cannot override an explicitly negative checkbox caption', () => {
+	const f = fixture({ names: ['Library', 'Adviser', 'Registrar'] });
+	const caption = f.lines.find((l) => l.words[0].bbox.x0 === 305 && l.bbox.y0 === 325);
+	caption.text = 'Not Cleared';
+	caption.words[0].text = 'Not Cleared';
+	const result = suggestOfficeRows(f.lines, width, height, f.ink);
+	assert.equal(result.rows.find((r) => r.label === 'Adviser')?.cleared, undefined);
 });

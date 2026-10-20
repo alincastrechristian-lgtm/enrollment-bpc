@@ -13,7 +13,7 @@ type Edge = { offset: number; slope: number; score: number };
 
 // Fit nearby printed edges before inspecting the interior. Geometry selection must not
 // prefer checked boxes over empty boxes. Peer bounds prevent jumping into another office.
-function frame(
+export function findCheckboxFrame(
 	ink: Uint8Array,
 	width: number,
 	height: number,
@@ -265,8 +265,8 @@ export function checkCheckbox(
 	peers: Region[] = []
 ): Check {
 	const bounds = searchBounds(box, peers, width, height);
-	const blankBox = frame(reference, width, height, box, bounds),
-		scanBox = frame(actual, width, height, box, bounds);
+	const blankBox = findCheckboxFrame(reference, width, height, box, bounds),
+		scanBox = findCheckboxFrame(actual, width, height, box, bounds);
 	if (!blankBox || !scanBox)
 		return {
 			label,
