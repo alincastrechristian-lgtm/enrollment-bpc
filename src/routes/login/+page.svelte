@@ -1,10 +1,10 @@
 <script lang="ts">
-	import AuthLayout from '#lib/components/Auth/AuthLayout.svelte';
 	import { authClient } from '#lib/auth-client.js';
-	import { getAuthErrorMessage, getErrorMessage } from '#lib/errors.js';
+	import AuthLayout from '#lib/components/Auth/AuthLayout.svelte';
 	import { showError } from '#lib/components/Popup/Popup.svelte.js';
-	import { Eye, EyeOff } from '@lucide/svelte';
+	import { getAuthErrorMessage, getErrorMessage } from '#lib/errors.js';
 	import { resolve } from '$app/paths';
+	import { Eye, EyeOff } from '@lucide/svelte';
 
 	let showPassword = $state(false);
 	let busy = $state(false);
@@ -148,7 +148,7 @@
 					id="email"
 					type="email"
 					autocomplete="username"
-					placeholder="student@email.com"
+					placeholder="Enter your email"
 					class="input-bordered input h-14 w-full rounded-lg border-base-300 bg-base-100 text-lg text-base-content/80 placeholder:text-base-content/50 focus:border-primary focus:outline-primary/20"
 					required
 				/>
@@ -166,7 +166,7 @@
 						id="password"
 						type={showPassword ? 'text' : 'password'}
 						autocomplete="current-password"
-						placeholder="••••••••"
+						placeholder="Enter your password"
 						class="input-bordered input h-14 w-full rounded-lg border-base-300 bg-base-100 pr-14 text-lg text-base-content/80 placeholder:text-base-content/50 focus:border-primary focus:outline-primary/20"
 						required
 					/>
