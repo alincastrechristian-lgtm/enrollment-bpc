@@ -74,10 +74,9 @@ test('notification visibility, filters and read commands enforce actor/recipient
 		[f.own]
 	);
 	assert.equal(list(student).total, 2);
-	assert.equal(list(admin).total, 3);
+	assert.equal(list(admin).total, 0);
 	assert.equal(list(registrar, { search: 'Other' }).total, 0);
-	assert.equal(list(admin, { type: 'grades_finalized' }).items[0].id, f.other);
-	assert.equal(list(admin, { pageSize: 2, page: 2 }).items.length, 1);
+	assert.equal(list(admin, { type: 'grades_finalized' }).total, 0);
 	assert.throws(
 		() => list(viewer('s1', null)),
 		(cause) => isHttpError(cause) && cause.status === 403
@@ -99,7 +98,7 @@ test('notification visibility, filters and read commands enforce actor/recipient
 	notifications.markNotificationsRead(f.db, student, f.own);
 	assert.deepEqual(list(student).items.find((n) => n.id === f.own).readAt, firstRead);
 	assert.equal(list(student, { unreadOnly: true }).total, 1);
-	assert.equal(list(admin).items.find((n) => n.id === f.own).readAt, null);
+	assert.equal(list(registrar).items.find((n) => n.id === f.own).readAt, null);
 
 	let locals = { user: student, session: {} };
 	const { readNotifications } = load('src/lib/actions/notifications.remote.ts', {
@@ -131,6 +130,44 @@ test('notification visibility, filters and read commands enforce actor/recipient
 		() => readNotifications({}),
 		(cause) => isHttpError(cause) && cause.status === 401
 	);
+});
+
+test('admins see only their sent or received notifications and all dropped enrollments', (t) => {
+	const f = fixture(t);
+	const record = (recipientId, actorId, type, title) =>
+		notifications.recordNotification(f.db, {
+			recipientId,
+			actorId,
+			type,
+			title,
+			message: title
+		}).id;
+	const sent = record('s2', 'a', 'grades_finalized', 'Admin sent');
+	const received = record('a', null, 'password_reset', 'Admin received');
+	const dropped = record('s2', 'r2', 'enrollment_dropped', 'Registrar dropped');
+	const ownDropped = record('s1', 'a', 'enrollment_dropped', 'Admin dropped');
+	const list = (options) => notifications.getNotifications(f.db, admin, options);
+	assert.deepEqual(
+		new Set(list().items.map((item) => item.id)),
+		new Set([sent, received, dropped, ownDropped])
+	);
+	assert.deepEqual(notifications.getNotificationCounts(f.db, admin), { total: 4, unread: 0 });
+	assert.equal(list({ search: 'Other' }).total, 0);
+	assert.equal(list({ search: 'Registrar' }).items[0].id, dropped);
+	assert.deepEqual(
+		list({ type: 'grades_finalized' }).items.map((item) => item.id),
+		[sent]
+	);
+	assert.equal(list({ type: 'enrollment_dropped' }).total, 2);
+	const first = list({ pageSize: 3 });
+	const second = list({ pageSize: 3, page: 2 });
+	assert.equal(first.total, 4);
+	assert.equal(first.pages, 2);
+	assert.equal(second.items.length, 1);
+	assert.equal(new Set([...first.items, ...second.items].map((item) => item.id)).size, 4);
+	assert.ok(list().items.every((item) => item.readAt === null));
+	assert.equal(notifications.getNotificationCounts(f.db, viewer('r2', 'registrar')).total, 2);
+	assert.equal(notifications.getNotificationCounts(f.db, student).total, 3);
 });
 
 test('email metadata covers all notification types and never contains password reset tokens', () => {

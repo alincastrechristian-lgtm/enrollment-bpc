@@ -66,7 +66,7 @@
 <section class="flex w-full flex-1 flex-col gap-5" aria-label="Notifications">
 	<p class="text-xs text-base-content/60">
 		{data.role === 'admin'
-			? 'All system notifications, including actions performed by registrars.'
+			? 'Notifications you sent or received, plus all dropped enrollment updates.'
 			: data.role === 'registrar'
 				? 'Notifications from actions you performed for students.'
 				: 'Account and enrollment updates addressed to you.'}

@@ -12,7 +12,11 @@ type Viewer = { id: string; role?: string | null };
 function visibility(viewer: Viewer) {
 	switch (viewer.role) {
 		case Role.ADMIN:
-			return undefined;
+			return or(
+				eq(notification.actorId, viewer.id),
+				eq(notification.recipientId, viewer.id),
+				eq(notification.type, 'enrollment_dropped')
+			);
 		case Role.REGISTRAR:
 			return eq(notification.actorId, viewer.id);
 		case Role.STUDENT:
