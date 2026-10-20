@@ -1,3 +1,4 @@
+import { abortable, withDeadline, CLEARANCE_CHECK_TIMEOUT_MS } from '#lib/clearance/deadline.js';
 import { randomUUID } from 'node:crypto';
 import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { error, isHttpError } from '@sveltejs/kit';
@@ -25,15 +26,38 @@ import {
 import { GARAGE_BUCKET } from './garage';
 import { getSubmission, requireClearanceEnrollment, submissionInfo } from './clearance-workflow';
 
+type ClearanceUpload = {
+	file: File;
+	enrollmentId: string;
+	revision: number;
+	templateRevision: string;
+	corners: Corners;
+};
+
 export async function uploadStudentClearance(
 	userId: string,
-	input: {
-		file: File;
-		enrollmentId: string;
-		revision: number;
-		templateRevision: string;
-		corners: Corners;
-	},
+	input: ClearanceUpload,
+	signal?: AbortSignal
+) {
+	try {
+		return await withDeadline(
+			(deadline) => processStudentClearance(userId, input, deadline),
+			CLEARANCE_CHECK_TIMEOUT_MS,
+			signal
+		);
+	} catch (cause) {
+		if (cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError'))
+			error(
+				408,
+				'Clearance checking took too long or was interrupted. Refresh clearance status before trying again.'
+			);
+		throw cause;
+	}
+}
+
+async function processStudentClearance(
+	userId: string,
+	input: ClearanceUpload,
 	signal?: AbortSignal
 ) {
 	const policy = getClearancePolicy(db);
@@ -67,7 +91,8 @@ export async function uploadStudentClearance(
 	const file = input.file;
 	if (!file.size || file.size > MAX_FILE_BYTES)
 		error(400, 'Choose a clearance image up to 10 MiB.');
-	const bytes = Buffer.from(await file.arrayBuffer());
+	signal?.throwIfAborted();
+	const bytes = Buffer.from(await abortable(file.arrayBuffer(), signal));
 	let image;
 	try {
 		image = await decodeClearance(bytes, file.type);
@@ -75,15 +100,20 @@ export async function uploadStudentClearance(
 		if (isHttpError(cause)) throw cause;
 		error(400, 'Could not read this image. Choose a valid JPG, PNG or WebP.');
 	}
-	const reference = await downloadObject(template.objectKey);
-	const report = await checkClearance(
-		Buffer.from(await reference.arrayBuffer()),
-		image,
-		input.corners,
-		definition,
-		clearanceTermFromEnrollment(record.enrollment),
-		policy.personalInfoVerificationEnabled
+	const reference = await abortable(downloadObject(template.objectKey, signal), signal);
+	const report = await abortable(
+		checkClearance(
+			Buffer.from(await abortable(reference.arrayBuffer(), signal)),
+			image,
+			input.corners,
+			definition,
+			clearanceTermFromEnrollment(record.enrollment),
+			policy.personalInfoVerificationEnabled,
+			signal
+		),
+		signal
 	);
+	signal?.throwIfAborted();
 	if (overall(report.template) !== 'pass' || overall(report.offices) !== 'pass')
 		return { success: false, report, submission: null };
 	if (policy.personalInfoVerificationEnabled) {
@@ -94,6 +124,7 @@ export async function uploadStudentClearance(
 		)
 			return { success: false, report, submission: null };
 		const crops = await clearanceIdentityCrops(image, input.corners, definition);
+		signal?.throwIfAborted();
 		report.identity = matchIdentity(
 			await recognizeIdentity(crops, signal ?? new AbortController().signal),
 			{ name: record.user.name, studentNumber: record.student.studentId }
@@ -109,18 +140,37 @@ export async function uploadStudentClearance(
 	const id = randomUUID(),
 		filename = safeUploadName(file.name),
 		key = `student-clearances/${encodeURIComponent(record.student.studentId)}/${id}/${filename}`;
-	await getGarageS3Client().send(
-		new PutObjectCommand({
-			Bucket: GARAGE_BUCKET,
-			Key: key,
-			Body: bytes,
-			ContentLength: bytes.length,
-			ContentType: file.type
-		})
-	);
 	try {
+		const pendingPut = getGarageS3Client().send(
+			new PutObjectCommand({
+				Bucket: GARAGE_BUCKET,
+				Key: key,
+				Body: bytes,
+				ContentLength: bytes.length,
+				ContentType: file.type
+			}),
+			{ abortSignal: signal }
+		);
+		// A storage server may accept the upload even after the caller stops waiting.
+		// Clean a late staged object only when no committed submission references it.
+		void pendingPut.then(
+			async () => {
+				if (!signal?.aborted) return;
+				try {
+					if (getSubmission(db, input.enrollmentId)?.objectKey !== key) {
+						await deleteClearanceObject(key);
+					}
+				} catch {
+					console.error('Late clearance staging cleanup failed.');
+				}
+			},
+			() => {}
+		);
+		await abortable(pendingPut, signal);
+		signal?.throwIfAborted();
 		db.transaction(
 			(tx) => {
+				signal?.throwIfAborted();
 				const current = requireClearanceEnrollment(tx, userId, input.enrollmentId);
 				if (
 					getClearancePolicy(tx).personalInfoVerificationEnabled !==
@@ -172,9 +222,7 @@ export async function uploadStudentClearance(
 		// A failed or uncertain commit must never delete the currently referenced file.
 		if (getSubmission(db, input.enrollmentId)?.objectKey !== key) {
 			try {
-				await getGarageS3Client().send(
-					new DeleteObjectCommand({ Bucket: GARAGE_BUCKET, Key: key })
-				);
+				await deleteClearanceObject(key);
 			} catch {
 				console.error('Clearance staging cleanup failed.');
 			}
@@ -183,9 +231,7 @@ export async function uploadStudentClearance(
 	}
 	if (previous) {
 		try {
-			await getGarageS3Client().send(
-				new DeleteObjectCommand({ Bucket: GARAGE_BUCKET, Key: previous.objectKey })
-			);
+			await deleteClearanceObject(previous.objectKey);
 		} catch {
 			console.error('Previous student clearance cleanup failed.');
 		}
@@ -195,4 +241,14 @@ export async function uploadStudentClearance(
 		report,
 		submission: submissionInfo(getSubmission(db, input.enrollmentId))
 	};
+}
+
+async function deleteClearanceObject(key: string) {
+	await withDeadline(
+		(signal) =>
+			getGarageS3Client().send(new DeleteObjectCommand({ Bucket: GARAGE_BUCKET, Key: key }), {
+				abortSignal: signal
+			}),
+		10_000
+	);
 }

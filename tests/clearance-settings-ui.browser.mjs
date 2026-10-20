@@ -28,9 +28,10 @@ test(
 				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,aiProvider:'gemini',hasOpenaiKey:false,openaiModel:'gpt-4.1-mini',ollamaBaseUrl:'http://localhost:11434',ollamaModel:'qwen3-vl:4b',hasGeminiKey:true,geminiModel:'gemini-3.1-flash-lite',template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
 				window.saved=[];window.uploads=[];window.failUpload=false;window.clearTemplate=()=>state={...state,template:null};
 				export function getClearanceSettings(){return{get current(){return state;}};}
+                window.ollamaModelListCalls=[];export async function fetchClearanceOllamaModels(input){window.ollamaModelListCalls.push(input);return{success:true,models:['qwen3-vl:4b','test-vision:latest']};}
                 window.modelListCalls=[];export async function fetchClearanceOpenaiModels(input){window.modelListCalls.push(input);return window.modelListError?{success:false,message:'OpenAI model listing failed (HTTP 403). Check permissions.'}:{success:true,models:['gpt-4.1-nano','gpt-test-vision']};}
                 window.verificationSaves=[];window.geminiTests=[];window.handwritingTests=[];
- export async function readClearanceTestHandwriting(input){window.handwritingTests.push(input);return window.handwritingError?{success:false,message:'Gemini request failed (HTTP 404, NOT_FOUND; model gemini-2.5-flash). The configured model was not found.'}:{success:true,readings:window.blankHandwriting?{name:'',studentNumber:'',warnings:{name:'Gemini returned an unusable transcription.'}}:{name:'Jonnel Mrei Palileo',studentNumber:'23016578'}};}
+ export async function readClearanceTestHandwriting(input){window.handwritingTests.push(input);return window.handwritingError?{success:false,message:'Gemini request failed (HTTP 404, NOT_FOUND; model gemini-2.5-flash). The configured model was not found.'}:{success:true,readings:window.blankHandwriting?{name:'',studentNumber:'',warnings:{name:'Gemini returned an unusable transcription.',studentNumber:'Gemini returned an unusable transcription.'}}:{name:'Jonnel Mrei Palileo',studentNumber:'23016578'}};}
                 export async function saveClearanceVerification(input){window.verificationSaves.push(input);state={...state,...input,hasGeminiKey:input.clearGeminiKey?false:!!input.geminiApiKey||state.hasGeminiKey};state.hasOpenaiKey=input.clearOpenaiKey?false:!!input.openaiApiKey||state.hasOpenaiKey;delete state.openaiApiKey;delete state.geminiApiKey;return{success:true};}
                 export async function testClearanceAi(input){window.geminiTests.push(input);return{success:true,message:'Gemini connection successful.'};}
 
@@ -184,6 +185,32 @@ test(
 			await page
 				.getByLabel('Ollama server address', { exact: true })
 				.fill('http://192.168.254.63:11434');
+			await page.getByRole('button', { name: 'Fetch available models', exact: true }).click();
+			await expect(page.getByLabel('Ollama vision model', { exact: true })).toHaveCount(1);
+			await expect(page.getByLabel('Ollama vision model', { exact: true })).toHaveValue(
+				'qwen3-vl:4b'
+			);
+			assert.equal(
+				await page.evaluate(() => window.ollamaModelListCalls.at(-1).ollamaBaseUrl),
+				'http://192.168.254.63:11434'
+			);
+			await page
+				.getByLabel('Ollama vision model', { exact: true })
+				.selectOption('test-vision:latest');
+			await page.getByLabel('Ollama vision model', { exact: true }).selectOption('__custom__');
+			await page.getByLabel('Ollama vision model', { exact: true }).fill('custom-vision:4b');
+			await page.getByRole('button', { name: 'Choose from list', exact: true }).click();
+			await expect(page.getByLabel('Ollama vision model', { exact: true })).toHaveValue(
+				'custom-vision:4b'
+			);
+			await page
+				.getByLabel('Ollama server address', { exact: true })
+				.fill('http://localhost:11434');
+			await expect(
+				page
+					.getByLabel('Ollama vision model', { exact: true })
+					.locator('option[value="test-vision:latest"]')
+			).toHaveCount(0);
 			await page.getByRole('button', { name: 'Test AI connection', exact: true }).click();
 			await expect
 				.poll(() => page.evaluate(() => window.geminiTests.at(-1)?.aiProvider))

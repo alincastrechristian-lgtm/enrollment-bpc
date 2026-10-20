@@ -16,7 +16,10 @@
 	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
 	import { clearanceTermFromEnrollment, hasIdentityAreas } from '#lib/clearance/definition.js';
 	import { resolve } from '$app/paths';
+	import { isHttpError } from '@sveltejs/kit';
 	import { getErrorMessage } from '#lib/errors.js';
+	import { withDeadline, CLEARANCE_CLIENT_TIMEOUT_MS } from '#lib/clearance/deadline.js';
+	import { onDestroy } from 'svelte';
 	import { ArrowRight, ClipboardCheck, FileImage, Upload } from '@lucide/svelte';
 	const progress = getStudentClearance();
 	const documents = getStudentDocuments();
@@ -33,6 +36,9 @@
 		message = $state('');
 	let input = $state<HTMLInputElement>();
 	let replacing = $state(false);
+	let checkTimedOut = $state(false);
+	const lifetime = new AbortController();
+	onDestroy(() => lifetime.abort());
 	const current = $derived(progress.current?.current);
 	const submission = $derived(progress.current?.submission);
 	const template = $derived(progress.current?.template);
@@ -247,6 +253,7 @@
 						{...uploadClearance.enhance(async (form) => {
 							if (
 								busy ||
+								checkTimedOut ||
 								loading ||
 								aligning ||
 								drawing ||
@@ -259,7 +266,13 @@
 							message = '';
 							report = undefined;
 							try {
-								if (await form.submit()) {
+								if (
+									await withDeadline(
+										() => form.submit(),
+										CLEARANCE_CLIENT_TIMEOUT_MS,
+										lifetime.signal
+									)
+								) {
 									report = form.result?.report;
 									if (form.result?.success) {
 										image = '';
@@ -274,7 +287,15 @@
 											'Clearance did not pass all checks. Review the findings and upload a clearer or completed form.';
 								} else message = 'Check the selected image and outline.';
 							} catch (cause) {
-								message = getErrorMessage(cause, 'Could not check clearance. Try again.');
+								if (lifetime.signal.aborted) return;
+								if (
+									(cause instanceof Error && cause.name === 'TimeoutError') ||
+									isHttpError(cause, 408)
+								) {
+									checkTimedOut = true;
+									message =
+										'Clearance checking is taking too long. Its saved status is unknown. Refresh clearance status before uploading again.';
+								} else message = getErrorMessage(cause, 'Could not check clearance. Try again.');
 							} finally {
 								busy = false;
 							}
@@ -312,8 +333,8 @@
 						</label>
 						<p id="student-clearance-file-help" class="text-xs text-base-content/65">
 							JPG, PNG or WebP up to 10 MiB. Include all office marks and keep the form border
-							visible. Only the name and student-number crops are sent to Google Gemini for
-							recognition; they are compared with your student record.
+							visible. Only the name and student-number crops are sent to the configured AI provider
+							for recognition; they are compared with your student record.
 						</p>
 						{#if loading}
 							<p role="status" class="flex items-center gap-2 text-sm">
@@ -357,6 +378,7 @@
 								type="submit"
 								class="btn btn-primary btn-sm"
 								disabled={busy ||
+									checkTimedOut ||
 									loading ||
 									aligning ||
 									!image ||
@@ -369,6 +391,7 @@
 								{/if}
 								{busy ? 'Checking clearance…' : 'Check and save clearance'}
 							</button>
+
 							<p class="text-xs text-base-content/60">
 								Checking your file does not send an enrollment request.
 							</p>
@@ -456,6 +479,15 @@
 			{/if}
 			{#if message}
 				<p role="status" class="rounded-xl bg-base-200/60 p-4 text-sm">{message}</p>
+			{/if}
+			{#if checkTimedOut}
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					onclick={() => window.location.reload()}
+				>
+					Refresh clearance status
+				</button>
 			{/if}
 		</div>
 	</section>

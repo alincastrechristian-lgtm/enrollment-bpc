@@ -30,6 +30,7 @@
 	let includeHandwriting = $state(false);
 	let reading = $state(false);
 	let handwriting = $state<IdentityReadings>();
+	let cropPreviews = $state<{ name: string; studentNumber: string }>();
 	let handwritingError = $state('');
 	let readingVersion = 0;
 	let aligning = $state(false);
@@ -47,6 +48,7 @@
 		void includeHandwriting;
 		readingVersion++;
 		handwriting = undefined;
+		cropPreviews = undefined;
 		handwritingError = '';
 	});
 	onDestroy(() => {
@@ -64,6 +66,11 @@
 		try {
 			const processor = await import('#lib/clearance/scan.client.js');
 			const crops = processor.identityCrops(source, corners, template.definition);
+			if (destroyed || version !== readingVersion) return;
+			cropPreviews = {
+				name: crops.name.toDataURL('image/png'),
+				studentNumber: crops.studentNumber.toDataURL('image/png')
+			};
 			const result = await readClearanceTestHandwriting({
 				revision: template.revision,
 				crops: {
@@ -261,6 +268,33 @@
 						>
 							{reading ? 'Reading handwriting…' : 'Read handwriting'}
 						</button>
+						{#if cropPreviews}
+							<details class="rounded-xl border border-base-300 p-3">
+								<summary class="cursor-pointer text-sm font-semibold">View cropped fields</summary>
+								<p class="mt-2 text-xs text-base-content/60">
+									Check that handwriting is complete and the name crop avoids signatures. Adjust the
+									saved input areas or form outline if needed.
+								</p>
+								<div class="mt-3 grid gap-3 sm:grid-cols-2">
+									<figure>
+										<figcaption class="mb-2 text-xs font-semibold">Student name crop</figcaption>
+										<img
+											src={cropPreviews.name}
+											alt="Student name area sent for handwriting recognition"
+											class="max-h-32 w-full rounded border border-base-300 object-contain"
+										/>
+									</figure>
+									<figure>
+										<figcaption class="mb-2 text-xs font-semibold">Student number crop</figcaption>
+										<img
+											src={cropPreviews.studentNumber}
+											alt="Student number area sent for handwriting recognition"
+											class="max-h-32 w-full rounded border border-base-300 object-contain"
+										/>
+									</figure>
+								</div>
+							</details>
+						{/if}
 						{#if reading}
 							<p role="status" class="text-sm">AI is reading the selected fields…</p>
 						{/if}
@@ -285,7 +319,7 @@
 									</dd>
 								</div>
 							</dl>
-							{#each Object.entries(handwriting.warnings ?? {}) as [field, warning] (field)}
+							{#each [...new Set(Object.values(handwriting.warnings ?? {}))] as warning (warning)}
 								<p class="text-sm text-warning">{warning}</p>
 							{/each}
 						{/if}

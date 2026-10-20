@@ -1,3 +1,4 @@
+import { abortable, withDeadline } from '#lib/clearance/deadline.js';
 import sharp from 'sharp';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -109,133 +110,140 @@ export async function checkClearance(
 	corners: Corners,
 	definition: TemplateDefinition,
 	term: ClearanceTerm,
-	personalInfoVerificationEnabled = true
+	personalInfoVerificationEnabled = true,
+	signal?: AbortSignal
 ): Promise<ClearanceReport> {
 	if (running) error(429, 'Another clearance is being checked. Try again shortly.');
 	running = true;
 	let worker: Worker | undefined;
 	let expired = false;
-	let stop: ReturnType<typeof setTimeout> | undefined;
 	try {
-		const reference = await decodeClearance(referenceBytes);
-		const edge = (a: number, b: number) =>
-			Math.hypot(
-				(definition.corners[a].x - definition.corners[b].x) * reference.width,
-				(definition.corners[a].y - definition.corners[b].y) * reference.height
-			);
-		const ratio = (edge(0, 1) + edge(3, 2)) / (edge(0, 3) + edge(1, 2));
-		const width = Math.round(ratio >= 1 ? 1800 : 1800 * ratio),
-			height = Math.round(ratio >= 1 ? 1800 / ratio : 1800);
-		const full = { x: 0, y: 0, width: 1, height: 1 };
-		const blank = sample(reference, definition.corners, full, width, height),
-			scan = sample(upload, corners, full, width, height);
-		const checks: Check[] = [];
-		const timeout = new Promise<never>((_, reject) => {
-			stop = setTimeout(() => {
-				expired = true;
-				void worker?.terminate();
-				reject(new Error('Clearance check timed out. Try again.'));
-			}, 120000);
-		});
-		const require = createRequire(import.meta.url);
-		const pending = createWorker('eng', 1, {
-			langPath: join(
-				dirname(require.resolve('@tesseract.js-data/eng/package.json')),
-				'4.0.0_best_int'
-			),
-			cacheMethod: 'none',
-			errorHandler: () => {}
-		});
-		void pending.then(
-			(value) => {
-				if (expired) void value.terminate();
-			},
-			() => {}
-		);
-		worker = await Promise.race([pending, timeout]);
-		for (const area of definition.areas) {
-			if (area.kind === 'image') {
-				const visualPatch = async (image: Image, points: Corners) => {
-					const patch = sample(image, points, area.box, 256, 256);
-					return sharp(patch.data, { raw: { width: 256, height: 256, channels: 1 } })
-						.resize(64, 64)
-						.greyscale()
-						.raw()
-						.toBuffer();
+		return await withDeadline(
+			async (deadline) => {
+				const reference = await abortable(decodeClearance(referenceBytes), deadline);
+				deadline.throwIfAborted();
+				const edge = (a: number, b: number) =>
+					Math.hypot(
+						(definition.corners[a].x - definition.corners[b].x) * reference.width,
+						(definition.corners[a].y - definition.corners[b].y) * reference.height
+					);
+				const ratio = (edge(0, 1) + edge(3, 2)) / (edge(0, 3) + edge(1, 2));
+				const width = Math.round(ratio >= 1 ? 1800 : 1800 * ratio),
+					height = Math.round(ratio >= 1 ? 1800 / ratio : 1800);
+				const full = { x: 0, y: 0, width: 1, height: 1 };
+				const blank = sample(reference, definition.corners, full, width, height),
+					scan = sample(upload, corners, full, width, height);
+				const checks: Check[] = [];
+				const timeout = abortable(new Promise<never>(() => {}), deadline);
+				const require = createRequire(import.meta.url);
+				const pending = createWorker('eng', 1, {
+					langPath: join(
+						dirname(require.resolve('@tesseract.js-data/eng/package.json')),
+						'4.0.0_best_int'
+					),
+					cacheMethod: 'none',
+					errorHandler: () => {}
+				});
+				void pending.then(
+					(value) => {
+						if (expired) void value.terminate().catch(() => {});
+					},
+					() => {}
+				);
+				worker = await Promise.race([pending, timeout]);
+				for (const area of definition.areas) {
+					if (area.kind === 'image') {
+						const visualPatch = async (image: Image, points: Corners) => {
+							const patch = sample(image, points, area.box, 256, 256);
+							return sharp(patch.data, { raw: { width: 256, height: 256, channels: 1 } })
+								.resize(64, 64)
+								.greyscale()
+								.raw()
+								.toBuffer();
+						};
+						const visual = compareVisual(
+							await visualPatch(reference, definition.corners),
+							await visualPatch(upload, corners),
+							64,
+							64
+						);
+						checks.push({
+							label: area.label,
+							verdict: visual.verdict,
+							detail: `${Math.round(visual.score * 100)}% black-and-white shape similarity near the saved position; 65% required.`
+						});
+						continue;
+					}
+					await Promise.race([
+						worker.setParameters({
+							user_defined_dpi: '300',
+							tessedit_pageseg_mode: PSM.SPARSE_TEXT
+						}),
+						timeout
+					]);
+					for (const [image, points, prefix] of [
+						[reference, definition.corners, 'Reference'],
+						[upload, corners, 'Upload']
+					] as const) {
+						// Reference term values may differ; only the enrollment determines the required term.
+						if (prefix === 'Reference' && area.kind !== 'text') continue;
+						const box = printedSearchBox(area);
+						const patch = sample(
+							image,
+							points,
+							box,
+							Math.max(100, Math.round(box.width * WIDTH * 3)),
+							Math.max(40, Math.round(box.height * HEIGHT * 3))
+						);
+						if (area.kind === 'academicYear') enhancePrintedContrast(patch.data);
+						const png = await sharp(patch.data, {
+							raw: { width: patch.width, height: patch.height, channels: 1 }
+						})
+							.extend({ top: 12, bottom: 12, left: 12, right: 12, background: '#fff' })
+							.png()
+							.toBuffer();
+						const { data } = await Promise.race([
+							worker.recognize(png, {}, { blocks: true }),
+							timeout
+						]);
+						checks.push({
+							...checkAreaText(area, printedAreaReading(area, data), term),
+							label: `${prefix}: ${area.label}`
+						});
+					}
+				}
+				const offices =
+					overall(checks) === 'pass'
+						? checkOfficeMarks(blank.data, scan.data, width, height, definition.officeRows ?? [])
+						: [];
+				const identityPresence =
+					personalInfoVerificationEnabled &&
+					overall(checks) === 'pass' &&
+					overall(offices) === 'pass'
+						? checkIdentityPresence(
+								blank.data,
+								scan.data,
+								width,
+								height,
+								definition.personalFields ?? []
+							)
+						: undefined;
+				return {
+					template: checks,
+					offices,
+					identityPresence,
+					identityCheckVersion: identityPresence ? 1 : undefined,
+					identity: 'deferred',
+					officeCheckVersion: 2
 				};
-				const visual = compareVisual(
-					await visualPatch(reference, definition.corners),
-					await visualPatch(upload, corners),
-					64,
-					64
-				);
-				checks.push({
-					label: area.label,
-					verdict: visual.verdict,
-					detail: `${Math.round(visual.score * 100)}% black-and-white shape similarity near the saved position; 65% required.`
-				});
-				continue;
-			}
-			await Promise.race([
-				worker.setParameters({
-					user_defined_dpi: '300',
-					tessedit_pageseg_mode: PSM.SPARSE_TEXT
-				}),
-				timeout
-			]);
-			for (const [image, points, prefix] of [
-				[reference, definition.corners, 'Reference'],
-				[upload, corners, 'Upload']
-			] as const) {
-				// Reference term values may differ; only the enrollment determines the required term.
-				if (prefix === 'Reference' && area.kind !== 'text') continue;
-				const box = printedSearchBox(area);
-				const patch = sample(
-					image,
-					points,
-					box,
-					Math.max(100, Math.round(box.width * WIDTH * 3)),
-					Math.max(40, Math.round(box.height * HEIGHT * 3))
-				);
-				if (area.kind === 'academicYear') enhancePrintedContrast(patch.data);
-				const png = await sharp(patch.data, {
-					raw: { width: patch.width, height: patch.height, channels: 1 }
-				})
-					.extend({ top: 12, bottom: 12, left: 12, right: 12, background: '#fff' })
-					.png()
-					.toBuffer();
-				const { data } = await Promise.race([worker.recognize(png, {}, { blocks: true }), timeout]);
-				checks.push({
-					...checkAreaText(area, printedAreaReading(area, data), term),
-					label: `${prefix}: ${area.label}`
-				});
-			}
-		}
-		const offices =
-			overall(checks) === 'pass'
-				? checkOfficeMarks(blank.data, scan.data, width, height, definition.officeRows ?? [])
-				: [];
-		const identityPresence =
-			personalInfoVerificationEnabled && overall(checks) === 'pass' && overall(offices) === 'pass'
-				? checkIdentityPresence(
-						blank.data,
-						scan.data,
-						width,
-						height,
-						definition.personalFields ?? []
-					)
-				: undefined;
-		return {
-			template: checks,
-			offices,
-			identityPresence,
-			identityCheckVersion: identityPresence ? 1 : undefined,
-			identity: 'deferred',
-			officeCheckVersion: 2
-		};
+			},
+			120_000,
+			signal
+		);
 	} finally {
-		if (stop) clearTimeout(stop);
-		if (worker && !expired) await worker.terminate();
+		expired = true;
 		running = false;
+		// Worker shutdown must never prevent an HTTP response or retain the check slot.
+		if (worker) void worker.terminate().catch(() => {});
 	}
 }

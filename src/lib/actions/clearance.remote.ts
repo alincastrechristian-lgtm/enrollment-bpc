@@ -15,7 +15,13 @@ import { db } from '#lib/server/db/index.js';
 import { clearanceTemplate, enrollment, studentData, systemSettings } from '#lib/schema.js';
 import { getClearancePolicy } from '#lib/server/clearance-settings.js';
 import { getGeminiApiKey, getGeminiModel, recognizeIdentity } from '#lib/server/handwriting.js';
-import { aiSettingsShape, aiKeySchema, AI_PROVIDER_LABELS } from '#lib/clearance/ai.js';
+import {
+	aiSettingsShape,
+	aiKeySchema,
+	ollamaUrlSchema,
+	aiModelSchema,
+	AI_PROVIDER_LABELS
+} from '#lib/clearance/ai.js';
 import { geminiModelSchema } from '#lib/clearance/gemini.js';
 import sharp from 'sharp';
 import { and, eq } from 'drizzle-orm';
@@ -194,6 +200,56 @@ export const fetchClearanceOpenaiModels = command(
 					cause instanceof Error && cause.name === 'TimeoutError'
 						? 'OpenAI model listing timed out after 20 seconds. Try again later.'
 						: 'Could not connect to OpenAI to fetch models. Check server connectivity, DNS, firewall and proxy settings.'
+			};
+		}
+	}
+);
+
+export const fetchClearanceOllamaModels = command(
+	z.object({ ollamaBaseUrl: ollamaUrlSchema.optional() }).strict(),
+	async ({ ollamaBaseUrl }) => {
+		const { locals, request } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN]);
+		const address = ollamaUrlSchema.parse(
+			ollamaBaseUrl ??
+				db
+					.select({ url: systemSettings.ollamaBaseUrl })
+					.from(systemSettings)
+					.where(eq(systemSettings.id, 1))
+					.get()?.url ??
+				'http://localhost:11434'
+		);
+		try {
+			const response = await fetch(`${address}/api/tags`, {
+				redirect: 'error',
+				signal: AbortSignal.any([request.signal, AbortSignal.timeout(20_000)])
+			});
+			if (!response.ok)
+				return {
+					success: false as const,
+					message: `Ollama model listing failed (HTTP ${response.status}). Check the server address, access permissions and Ollama availability.`
+				};
+			const parsed = z
+				.object({ models: z.array(z.object({ name: aiModelSchema })).max(10_000) })
+				.safeParse(await response.json().catch(() => null));
+			if (!parsed.success)
+				return {
+					success: false as const,
+					message:
+						'Ollama returned an unreadable model list. Check the server address and try again.'
+				};
+			return {
+				success: true as const,
+				models: [...new Set(parsed.data.models.map((model) => model.name))].sort()
+			};
+		} catch (cause) {
+			request.signal.throwIfAborted();
+			return {
+				success: false as const,
+				message:
+					cause instanceof Error && cause.name === 'TimeoutError'
+						? 'Ollama model listing timed out after 20 seconds. Check the server and try again.'
+						: 'Could not connect to Ollama to fetch models. Check the server address, listening interface and firewall. The address must be reachable from the application server.'
 			};
 		}
 	}

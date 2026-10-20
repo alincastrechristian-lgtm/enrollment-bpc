@@ -19,6 +19,7 @@ function load(file, dependencies = {}, override) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			dependencies[id] ??
+			(id === '#lib/clearance/deadline.js' ? load('src/lib/clearance/deadline.ts') : undefined) ??
 			(id === '#lib/clearance/ai.js' ? load('src/lib/clearance/ai.ts') : undefined) ??
 			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : undefined) ??
 			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
@@ -1103,4 +1104,141 @@ test('OpenAI model fetching is admin-only, uses unsaved or saved key without sav
 		throw new DOMException('secret', 'TimeoutError');
 	};
 	assert.match((await f.remote.fetchClearanceOpenaiModels({})).message, /20 seconds/);
+});
+
+test('Ollama model listing uses entered or saved server without credentials or writes and fails safely', async (t) => {
+	const f = fixture(t);
+	const original = globalThis.fetch;
+	t.after(() => {
+		globalThis.fetch = original;
+	});
+	globalThis.fetch = async () => assert.fail('Unauthorized calls must not contact Ollama');
+	for (const role of ['student', 'registrar']) {
+		f.state.viewer.user.role = role;
+		await assert.rejects(
+			f.remote.fetchClearanceOllamaModels({ ollamaBaseUrl: 'http://localhost:11434' }),
+			hasStatus(403)
+		);
+	}
+	f.state.viewer.user.role = 'admin';
+	for (const url of [
+		'file:///tmp',
+		'http://user:secret@localhost:11434',
+		'http://localhost/api/tags',
+		'http://localhost?key=secret',
+		'http://localhost#fragment'
+	]) {
+		assert.throws(() => f.remote.fetchClearanceOllamaModels({ ollamaBaseUrl: url }));
+	}
+	const urls = [];
+	globalThis.fetch = async (url, options) => {
+		urls.push(url);
+		assert.equal(options.redirect, 'error');
+		assert.equal(options.headers, undefined);
+		assert.equal(options.body, undefined);
+		return Response.json({
+			models: [
+				{ name: 'z-vision:4b', digest: 'PRIVATE' },
+				{ name: 'a-vision:4b' },
+				{ name: 'z-vision:4b' }
+			]
+		});
+	};
+	const before = f.sqlite.prepare('SELECT total_changes() AS n').get().n;
+	assert.deepEqual(
+		await f.remote.fetchClearanceOllamaModels({ ollamaBaseUrl: 'http://192.168.254.63:11434/' }),
+		{ success: true, models: ['a-vision:4b', 'z-vision:4b'] }
+	);
+	assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n, before);
+	await f.remote.saveClearanceVerification(
+		settingInput({ ollamaBaseUrl: 'http://saved-host:11434' })
+	);
+	await f.remote.fetchClearanceOllamaModels({});
+	assert.deepEqual(urls, [
+		'http://192.168.254.63:11434/api/tags',
+		'http://saved-host:11434/api/tags'
+	]);
+	globalThis.fetch = async () => Response.json({ models: [] });
+	assert.deepEqual(await f.remote.fetchClearanceOllamaModels({}), { success: true, models: [] });
+	for (const body of [null, {}, { models: [{ id: 'missing-name' }] }]) {
+		globalThis.fetch = async () => Response.json(body);
+		assert.equal((await f.remote.fetchClearanceOllamaModels({})).success, false);
+	}
+	globalThis.fetch = async () => new Response('PRIVATE_ERROR', { status: 503 });
+	let result = await f.remote.fetchClearanceOllamaModels({});
+	assert.match(result.message, /HTTP 503/);
+	assert(!result.message.includes('PRIVATE'));
+	globalThis.fetch = async () => {
+		throw Error('PRIVATE_URL');
+	};
+	result = await f.remote.fetchClearanceOllamaModels({});
+	assert.equal(result.success, false);
+	assert(!result.message.includes('PRIVATE'));
+	globalThis.fetch = async () => {
+		throw new DOMException('private', 'TimeoutError');
+	};
+	assert.match((await f.remote.fetchClearanceOllamaModels({})).message, /20 seconds/);
+});
+
+test('GPT-5 nano reserves JSON output room with minimal reasoning and reports safe incomplete/refusal causes', async (t) => {
+	const f = await handwritingFixture(t);
+	const original = globalThis.fetch;
+	t.after(() => {
+		globalThis.fetch = original;
+	});
+	for (const model of ['gpt-5-nano', 'gpt-5-nano-2025-08-07', 'gpt-4.1-mini', 'gpt-5.1']) {
+		await f.remote.saveClearanceVerification(
+			settingInput({ aiProvider: 'openai', openaiApiKey: 'saved-key', openaiModel: model })
+		);
+		const nano = model === 'gpt-5-nano' || model === 'gpt-5-nano-2025-08-07';
+		globalThis.fetch = async (_url, options) => {
+			const body = JSON.parse(options.body);
+			assert.equal(body.max_output_tokens, nano ? 4096 : 1024);
+			assert.deepEqual(body.reasoning, nano ? { effort: 'minimal' } : undefined);
+			const response = openaiResponse({ name: 'Example Student', studentNumber: '00123456' });
+			response.output.unshift({ type: 'reasoning', summary: [] });
+			return Response.json(response);
+		};
+		const result = await f.remote.readClearanceTestHandwriting(f.input);
+		assert.equal(result.success, true);
+		assert.deepEqual(result.readings, { name: 'Example Student', studentNumber: '00123456' });
+	}
+	for (const [response, pattern] of [
+		[
+			{
+				status: 'incomplete',
+				incomplete_details: { reason: 'max_output_tokens' },
+				output: openaiResponse({ name: 'Partial name', studentNumber: '12345678' }).output
+			},
+			/output limit.*Reasoning tokens/
+		],
+		[{ status: 'incomplete', incomplete_details: { reason: 'content_filter' } }, /filtered/],
+		[
+			{ status: 'incomplete', incomplete_details: { reason: 'PRIVATE_REASON saved-key' } },
+			/incomplete response/
+		],
+		[
+			{
+				status: 'completed',
+				output: [
+					{
+						type: 'message',
+						status: 'completed',
+						content: [{ type: 'refusal', refusal: 'PRIVATE saved-key' }]
+					}
+				]
+			},
+			/declined to transcribe/
+		],
+		[{ status: 'completed', output: [] }, /invalid or missing transcription JSON/]
+	]) {
+		globalThis.fetch = async () => Response.json(response);
+		const result = await f.remote.readClearanceTestHandwriting(f.input);
+		assert.equal(result.readings.name, '');
+		assert.equal(result.readings.studentNumber, '');
+		assert.match(result.readings.warnings.name, pattern);
+		assert.equal(result.readings.warnings.name, result.readings.warnings.studentNumber);
+		assert(!JSON.stringify(result).includes('PRIVATE'));
+		assert(!JSON.stringify(result).includes('saved-key'));
+	}
 });

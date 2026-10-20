@@ -38,7 +38,7 @@ test(
 			window.newTerm=()=>{state.current={...state.current,id:'next',finalizedGrades:false,submittedClearance:false};state.submission=null;};
 			const check=(verdict)=>({label:'Upload: Printed form',verdict,detail:'Uploaded document evidence'});
 			export function getStudentClearance(){return {get current(){return state;}};}
-			export const uploadClearance={fields:new Proxy({}, {get:(_,name)=>({as:(type,value)=>({name,type,...(value===undefined?{}:{value})})})}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{if(window.failUpload)throw Error('Simulated upload failure');const data=new FormData(element);window.uploads.push({name:data.get('file')?.name,corners:data.get('corners'),revision:data.get('revision'),enrollmentId:data.get('enrollmentId')});const report={template:[{label:'Reference: Printed form',verdict:'pass',detail:'Saved reference evidence'},check(window.checkPasses?'pass':'fail'),{label:'Logo',verdict:'pass',detail:'Uploaded logo evidence'}],offices:window.checkPasses?[check('pass')]:[],identity:window.checkPasses?{verdict:window.identityReview?'review':'match',detail:window.identityReview?'Name needs manual verification':'Student number matches',name:{status:'exact',detected:'Student',expected:'Student',detail:'Name matches'},studentNumber:{status:'exact',detected:'MA-001',expected:'MA-001',detail:'Number matches'}}:'deferred',officeCheckVersion:2,identityCheckVersion:1,identityPresence:{name:{label:'Name writing',verdict:'pass',detail:'Present'},studentNumber:{label:'Number writing',verdict:'pass',detail:'Present'}}};window.lastReport=report;result={success:window.checkPasses,report};if(window.checkPasses){state.submission={id:'submission',filename:'clearance-reference.jpg',status:'ready',report};result.report=state.submission.report;window.lastReport=state.submission.report;}return true;}});}})};
+			export const uploadClearance={fields:new Proxy({}, {get:(_,name)=>({as:(type,value)=>({name,type,...(value===undefined?{}:{value})})})}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{if(window.failUpload)throw Error('Simulated upload failure');if(window.deferUpload)await new Promise(resolve=>window.finishUpload=resolve);const data=new FormData(element);window.uploads.push({name:data.get('file')?.name,corners:data.get('corners'),revision:data.get('revision'),enrollmentId:data.get('enrollmentId')});const report={template:[{label:'Reference: Printed form',verdict:'pass',detail:'Saved reference evidence'},check(window.checkPasses?'pass':'fail'),{label:'Logo',verdict:'pass',detail:'Uploaded logo evidence'}],offices:window.checkPasses?[check('pass')]:[],identity:window.checkPasses?{verdict:window.identityReview?'review':'match',detail:window.identityReview?'Name needs manual verification':'Student number matches',name:{status:'exact',detected:'Student',expected:'Student',detail:'Name matches'},studentNumber:{status:'exact',detected:'MA-001',expected:'MA-001',detail:'Number matches'}}:'deferred',officeCheckVersion:2,identityCheckVersion:1,identityPresence:{name:{label:'Name writing',verdict:'pass',detail:'Present'},studentNumber:{label:'Number writing',verdict:'pass',detail:'Present'}}};window.lastReport=report;result={success:window.checkPasses,report};if(window.checkPasses){state.submission={id:'submission',filename:'clearance-reference.jpg',status:'ready',report};result.report=state.submission.report;window.lastReport=state.submission.report;}return true;}});}})};
 			export async function requestEnrollment(data){window.requests.push(data);state.submission.status='requested';state.submission.requestedAt=new Date();}`
 			};
 			for (const [name, content] of Object.entries(files))
@@ -125,6 +125,32 @@ test(
 			await expect(
 				page.getByRole('button', { name: 'Request enrollment', exact: true })
 			).toHaveCount(0);
+			await page.clock.install();
+			await page.evaluate(() => (window.deferUpload = true));
+			await save.click();
+			await expect(
+				page.getByRole('button', { name: 'Checking clearance', exact: false })
+			).toBeVisible();
+			await page.clock.fastForward(210_001);
+			await expect(page.getByText('Its saved status is unknown.', { exact: false })).toBeVisible();
+			await expect(save).toBeDisabled();
+			await expect(
+				page.getByRole('region', { name: 'Clearance and enrollment request', exact: true })
+			).toHaveAttribute('aria-busy', 'false');
+			await page.evaluate(() => {
+				window.deferUpload = false;
+				window.finishUpload();
+			});
+			await expect(page.getByText('Its saved status is unknown.', { exact: false })).toBeVisible();
+			await page.getByRole('button', { name: 'Refresh clearance status', exact: true }).click();
+			await page.waitForLoadState('load');
+			await page.waitForFunction(() => typeof window.finalize === 'function');
+			await expect(page.getByLabel('Upload clearance', { exact: true })).toHaveCount(0);
+			await page.evaluate(() => window.finalize());
+			await page
+				.getByLabel('Upload clearance', { exact: true })
+				.setInputFiles('static/clearance-reference.jpg');
+			await expect(save).toBeEnabled();
 			await page.evaluate(() => (window.checkPasses = true));
 			await save.click();
 			const request = page.getByRole('button', { name: 'Request enrollment', exact: true });
@@ -162,10 +188,11 @@ test(
 			await page.evaluate(() => window.restoreChecks());
 			await expect(request).toBeEnabled();
 			const uploads = await page.evaluate(() => window.uploads);
-			assert.equal(uploads.length, 2);
-			assert.equal(uploads[1].name, 'clearance-reference.jpg');
-			assert.equal(uploads[1].revision, '0');
-			assert.equal(JSON.parse(uploads[1].corners).length, 4);
+			// Status recovery reloaded the fixture; this is the first upload in the fresh session.
+			assert.equal(uploads.length, 1);
+			assert.equal(uploads[0].name, 'clearance-reference.jpg');
+			assert.equal(uploads[0].revision, '0');
+			assert.equal(JSON.parse(uploads[0].corners).length, 4);
 			await request.click();
 			await expect(
 				page.getByText('Your enrollment request is awaiting Registrar/admin clearance review.')

@@ -17,6 +17,7 @@ function load(file, dependencies = {}, override) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			dependencies[id] ??
+			(id === '#lib/clearance/deadline.js' ? load('src/lib/clearance/deadline.ts') : undefined) ??
 			(id === '#lib/clearance/ai.js' ? load('src/lib/clearance/ai.ts') : undefined) ??
 			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : require(id)),
 		exports
@@ -109,7 +110,7 @@ const guard = ts
 	.getText();
 const { validateUser } = load(
 	'',
-	{ '@sveltejs/kit': { error } },
+	{ '@sveltejs/kit': { error, isHttpError } },
 	`import {error} from '@sveltejs/kit';\n${guard}`
 );
 const png =
@@ -134,7 +135,7 @@ function fixture(t, dev = true) {
 		'./db': { db },
 		'#lib/schema.js': schema,
 		'./settings': load('src/lib/server/settings.ts', { '../schema': schema, './db': { db } }),
-		'@sveltejs/kit': { error }
+		'@sveltejs/kit': { error, isHttpError }
 	});
 	const service = load('src/routes/test/identity.server.ts', {
 		'#lib/Roles.js': { Role },
@@ -142,7 +143,7 @@ function fixture(t, dev = true) {
 		'#lib/server/auth.js': { validateUser },
 		'#lib/server/db/index.js': { db },
 		'#lib/server/handwriting.js': handwriting,
-		'@sveltejs/kit': { error }
+		'@sveltejs/kit': { error, isHttpError }
 	});
 	const endpoint = load('src/routes/test/identity/+server.ts', {
 		'$app/env': { dev },
@@ -152,7 +153,7 @@ function fixture(t, dev = true) {
 	}).POST;
 	const page = load('src/routes/test/+page.server.ts', {
 		'$app/env': { dev },
-		'@sveltejs/kit': { error },
+		'@sveltejs/kit': { error, isHttpError },
 		'./identity.server': service,
 		'#lib/server/clearance-template.js': { getClearanceTemplateInfo: () => null }
 	}).load;
@@ -366,7 +367,7 @@ test('missing Gemini key fails closed before sending images', async (t) => {
 		'./db': {},
 		'#lib/schema.js': schema,
 		'./settings': { getSystemSettings: async () => ({ geminiApiKey: '' }) },
-		'@sveltejs/kit': { error }
+		'@sveltejs/kit': { error, isHttpError }
 	});
 	mockTranscription(t, async () => {
 		assert.fail('No provider request without a key');
@@ -470,5 +471,34 @@ test('Gemini errors identify HTTP status and remediation while keeping provider 
 	assert.deepEqual(await service.recognizeIdentity(crops, new AbortController().signal), {
 		name: '',
 		studentNumber: ''
+	});
+});
+
+test('Gemini response-body stalls expire at 60 seconds and release the shared inference slot', async (t) => {
+	const { service } = fixture(t);
+	let entered;
+	const bodyStarted = new Promise((resolve) => {
+		entered = resolve;
+	});
+	mockTranscription(t, async () => ({
+		ok: true,
+		json: () => {
+			entered();
+			return new Promise(() => {});
+		}
+	}));
+	t.mock.timers.enable({ apis: ['setTimeout'] });
+	const active = service.recognizeIdentity(crops, new AbortController().signal);
+	await bodyStarted;
+	const failed = assert.rejects(
+		active,
+		(cause) => cause.status === 503 && /within 60 seconds/.test(cause.body.message)
+	);
+	t.mock.timers.tick(60_000);
+	await failed;
+	globalThis.fetch = async () => reply('Example Student', '00123456');
+	assert.deepEqual(await service.recognizeIdentity(crops, new AbortController().signal), {
+		name: 'Example Student',
+		studentNumber: '00123456'
 	});
 });

@@ -2,7 +2,8 @@
 	import {
 		saveClearanceVerification,
 		testClearanceAi,
-		fetchClearanceOpenaiModels
+		fetchClearanceOpenaiModels,
+		fetchClearanceOllamaModels
 	} from '#lib/actions/clearance.remote.js';
 	import { AI_PROVIDER_LABELS, aiProviderSchema, type AiProvider } from '#lib/clearance/ai.js';
 	import { getErrorMessage } from '#lib/errors.js';
@@ -52,6 +53,15 @@
 	]);
 	let ollamaBaseUrl = $state(untrack(() => settings.ollamaBaseUrl ?? 'http://localhost:11434'));
 	let ollamaModel = $state(untrack(() => settings.ollamaModel ?? 'qwen3-vl:4b'));
+	let ollamaModels = $state<string[]>([]);
+	let customOllamaModel = $state(false);
+	const ollamaModelChoices = $derived([
+		...new Set([...(ollamaModel ? [ollamaModel] : []), ...ollamaModels])
+	]);
+	$effect(() => {
+		void ollamaBaseUrl;
+		ollamaModels = [];
+	});
 	let geminiApiKey = $state('');
 	let geminiModel = $state<GeminiModel>(
 		untrack(() => settings.geminiModel ?? DEFAULT_GEMINI_MODEL)
@@ -91,28 +101,38 @@
 		openaiModels = [];
 	});
 	async function fetchModels() {
-		if (disabled || pending || clearOpenaiKey) return;
+		if (disabled || pending || removingKey) return;
 		pending = 'models';
 		message = '';
 		failed = false;
-		openaiModels = [];
+		const ollama = aiProvider === 'ollama';
+		const label = ollama ? 'Ollama' : 'OpenAI';
+		if (ollama) ollamaModels = [];
+		else openaiModels = [];
 		try {
-			const result = await fetchClearanceOpenaiModels({
-				openaiApiKey: openaiApiKey.trim() || undefined
-			});
+			const result = ollama
+				? await fetchClearanceOllamaModels({ ollamaBaseUrl: ollamaBaseUrl.trim() })
+				: await fetchClearanceOpenaiModels({ openaiApiKey: openaiApiKey.trim() || undefined });
 			if (result.success) {
-				openaiModels = result.models;
-				customOpenaiModel = false;
+				if (ollama) {
+					ollamaModels = result.models;
+					customOllamaModel = false;
+				} else {
+					openaiModels = result.models;
+					customOpenaiModel = false;
+				}
 				message = result.models.length
-					? `Fetched ${result.models.length} available OpenAI models. Choose one below, then test its compatibility.`
-					: 'OpenAI returned no models for this key. Check project access and key permissions.';
+					? `Fetched ${result.models.length} available ${label} models. Choose one below, then test its compatibility.`
+					: ollama
+						? 'No models are installed on this Ollama server. Pull a vision-capable model first.'
+						: 'OpenAI returned no models for this key. Check project access and key permissions.';
 			} else {
 				failed = true;
 				message = result.message;
 			}
 		} catch (cause) {
 			failed = true;
-			message = getErrorMessage(cause, 'Could not fetch OpenAI models. Try again.');
+			message = getErrorMessage(cause, `Could not fetch ${label} models. Try again.`);
 		} finally {
 			pending = null;
 		}
@@ -382,18 +402,58 @@
 						Address must be reachable from the application server. Localhost refers to that server
 						or container, not your browser.
 					</p>
-					<label for="ollama-model" class="block text-sm font-semibold">Ollama vision model</label>
-					<input
-						id="ollama-model"
-						class="input mt-2 w-full bg-base-200"
-						bind:value={ollamaModel}
-						required
-						maxlength="120"
-						placeholder="qwen3-vl:4b"
-					/>
+					<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+						<label for="ollama-model" class="text-sm font-semibold">Ollama vision model</label>
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={fetchModels}
+							disabled={!ollamaBaseUrl.trim()}
+						>
+							{pending === 'models' ? 'Fetching models...' : 'Fetch available models'}
+						</button>
+					</div>
+					{#if customOllamaModel}
+						<div class="flex items-center gap-2">
+							<input
+								id="ollama-model"
+								class="input w-full bg-base-200"
+								bind:value={ollamaModel}
+								required
+								maxlength="120"
+								placeholder="Enter model ID"
+							/>
+							<button
+								type="button"
+								class="btn shrink-0 btn-ghost btn-sm"
+								onclick={() => (customOllamaModel = false)}
+							>
+								Choose from list
+							</button>
+						</div>
+					{:else}
+						<select
+							id="ollama-model"
+							class="select w-full bg-base-200"
+							value={ollamaModel}
+							onchange={(event) => {
+								if (event.currentTarget.value === '__custom__') customOllamaModel = true;
+								else ollamaModel = event.currentTarget.value;
+							}}
+						>
+							{#if !ollamaModel}
+								<option value="" disabled>Choose a model</option>
+							{/if}
+							{#each ollamaModelChoices as model (model)}
+								<option value={model}>{model}</option>
+							{/each}
+							<option value="__custom__">Custom model...</option>
+						</select>
+					{/if}
 					<p class="mt-2 text-xs text-base-content/60">
-						Pull a vision-capable model on your Ollama server first. Text-only models cannot read
-						clearance images.
+						Fetch installed models from the entered server without saving changes. Choose a
+						vision-capable model and run Test AI connection; text-only models cannot read clearance
+						images.
 					</p>
 				{/if}
 			</div>

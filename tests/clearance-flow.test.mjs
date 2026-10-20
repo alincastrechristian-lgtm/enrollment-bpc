@@ -16,6 +16,7 @@ function load(file, deps = {}) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			deps[id] ??
+			(id === '#lib/clearance/deadline.js' ? load('src/lib/clearance/deadline.ts') : undefined) ??
 			(id === '#lib/clearance/ai.js' ? load('src/lib/clearance/ai.ts') : undefined) ??
 			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : undefined) ??
 			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
@@ -118,18 +119,21 @@ function fixture(t) {
 		MAX_FILE_BYTES: 10 * 1024 * 1024,
 		fileStorageConfigured: () => true,
 		safeUploadName: (name) => name.replace(/[/\\]/g, ''),
-		downloadObject: async (key) => {
+		downloadObject: async (key, signal) => {
+			if (state.onDownload) return state.onDownload(key, signal);
 			state.reads++;
 			return new Response(objects.get(key));
 		},
 		getGarageS3Client: () => ({
-			send: async (command) => {
+			send: async (command, options) => {
 				const { Key, Body } = command.input;
 				if (command.constructor.name === 'PutObjectCommand') {
 					state.puts++;
+					await state.onPut?.(options?.abortSignal);
 					if (state.failPut) throw Error('Storage failed');
 					objects.set(Key, Buffer.from(Body));
 				} else {
+					await state.onDelete?.();
 					if (state.failDelete) throw Error('Cleanup failed');
 					objects.delete(Key);
 				}
@@ -901,4 +905,107 @@ test('paper approval retains an older upload as history and stays valid after au
 	assert.throws(() => f.sqlite.exec(rollback), /CHECK constraint/);
 	f.sqlite.exec('ROLLBACK');
 	assert.equal(f.db.select().from(schema.enrollment).get().manualClearanceVerifiedBy, 'staff');
+});
+
+test('whole clearance deadline preserves saved evidence and prevents late checking from writing or invoking AI', async (t) => {
+	const f = fixture(t);
+	await f.upload();
+	const before = f.row();
+	const calls = f.state.identityCalls,
+		puts = f.state.puts;
+	let started, finish;
+	const entered = new Promise((resolve) => {
+		started = resolve;
+	});
+	f.state.onCheck = () => {
+		started();
+		return new Promise((resolve) => {
+			finish = resolve;
+		});
+	};
+	t.mock.timers.enable({ apis: ['setTimeout'] });
+	const active = f.upload();
+	await entered;
+	const failed = assert.rejects(active, status(408));
+	t.mock.timers.tick(180_000);
+	await failed;
+	assert.equal(f.row().id, before.id);
+	assert(f.objects.has(before.objectKey));
+	finish();
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(f.state.puts, puts);
+	assert.equal(f.state.identityCalls, calls);
+	f.state.onCheck = null;
+	assert.equal((await f.upload()).success, true);
+});
+
+test('reference-body stalls time out without storage writes', async (t) => {
+	const f = fixture(t);
+	let entered;
+	const started = new Promise((resolve) => {
+		entered = resolve;
+	});
+	f.state.onDownload = async (_key, signal) => ({
+		arrayBuffer: () => {
+			assert(signal instanceof AbortSignal);
+			entered();
+			return new Promise(() => {});
+		}
+	});
+	t.mock.timers.enable({ apis: ['setTimeout'] });
+	const active = f.upload();
+	await started;
+	const failed = assert.rejects(active, status(408));
+	t.mock.timers.tick(180_000);
+	await failed;
+	assert.equal(f.row(), undefined);
+	assert.equal(f.state.puts, 0);
+	assert.equal(f.state.identityCalls, 0);
+});
+
+test('a cancelled storage upload cannot commit late, and late accepted objects are removed', async (t) => {
+	const f = fixture(t);
+	let started, finish, uploadSignal;
+	const entered = new Promise((resolve) => {
+		started = resolve;
+	});
+	f.state.onPut = (signal) => {
+		uploadSignal = signal;
+		started();
+		return new Promise((resolve) => {
+			finish = resolve;
+		});
+	};
+	t.mock.timers.enable({ apis: ['setTimeout'] });
+	const active = f.upload();
+	await entered;
+	const failed = assert.rejects(active, status(408));
+	t.mock.timers.tick(180_000);
+	await failed;
+	assert(uploadSignal.aborted);
+	assert.equal(f.row(), undefined);
+	finish();
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(f.row(), undefined);
+	assert.deepEqual([...f.objects.keys()], ['blank']);
+});
+
+test('old-file cleanup cannot keep a successfully saved clearance pending forever', async (t) => {
+	const f = fixture(t);
+	await f.upload();
+	let started;
+	const entered = new Promise((resolve) => {
+		started = resolve;
+	});
+	f.state.onDelete = () => {
+		started();
+		return new Promise(() => {});
+	};
+	t.mock.timers.enable({ apis: ['setTimeout'] });
+	const active = f.upload();
+	await entered;
+	t.mock.timers.tick(10_000);
+	assert.equal((await active).success, true);
+	assert.equal(f.row().status, 'ready');
+	assert(f.objects.has(f.row().objectKey));
 });
