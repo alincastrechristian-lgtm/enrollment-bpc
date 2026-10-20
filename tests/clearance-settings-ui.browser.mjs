@@ -25,9 +25,13 @@ test(
 					'window.messages=[];export const showLoading=()=>{};export const showSuccess=message=>window.messages.push(message);export const showError=message=>window.messages.push(message);',
 				'fixture.js': `const area=(label,kind,x,y,width,height,expected='')=>({id:crypto.randomUUID(),label,kind,box:{x,y,width,height},expected});
 				export const definition={corners:[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],semester:'2',schoolYear:'2025-2026',areas:[area('School name','text',.3,.02,.4,.04,'BULACAN POLYTECHNIC COLLEGE'),area('Form title','text',.32,.12,.35,.04,'Student Clearance Form'),area('School seal','image',.08,.02,.16,.2),area('Semester','semester',.32,.17,.2,.04),area('Academic year','academicYear',.5,.17,.2,.04)],personalFields:[{id:crypto.randomUUID(),field:'studentName',box:{x:.1,y:.7,width:.5,height:.05}}],officeRows:['Library','Registrar'].map((label,i)=>({id:crypto.randomUUID(),label,office:{x:.08,y:.3+i*.08,width:.12,height:.03},cleared:{x:.27,y:.3+i*.08,width:.045,height:.05},signature:{x:.62,y:.3+i*.08,width:.2,height:.05}}))};`,
-				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
+				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,hasGeminiKey:true,template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
 				window.saved=[];window.uploads=[];window.failUpload=false;window.clearTemplate=()=>state={...state,template:null};
 				export function getClearanceSettings(){return{get current(){return state;}};}
+                window.verificationSaves=[];window.geminiTests=[];
+                export async function saveClearanceVerification(input){window.verificationSaves.push(input);state={...state,...input,hasGeminiKey:input.clearGeminiKey?false:!!input.geminiApiKey||state.hasGeminiKey};delete state.geminiApiKey;return{success:true};}
+                export async function testClearanceGemini(input){window.geminiTests.push(input);return{success:true,message:'Gemini connection successful.'};}
+
 				export async function saveClearanceAreas(input){window.saved.push(input);state={...state,template:{...state.template,revision:crypto.randomUUID(),definition:structuredClone(input.definition)}};return{success:true};}
 				export const uploadClearanceTemplate={fields:new Proxy({allIssues:()=>[]},{get:(target,name)=>target[name]??{as:(type,value)=>({name,type,...(value===undefined?{}:{value})})}}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;await callback({element,result:{},submit:async()=>{if(window.failUpload)throw Error('Simulated storage error');const file=new FormData(element).get('file');window.uploads.push(file.name);state={...state,template:{filename:file.name,size:file.size,uploadedAt:new Date().toISOString(),revision:crypto.randomUUID(),definition:null}};return true;}});}})};`,
 				'scan.js': `import{definition}from'./fixture.js';
@@ -101,6 +105,30 @@ test(
 				assert(Math.abs(geometry.height - geometry.imageHeight - 2) < 1, JSON.stringify(geometry));
 				assert(Math.abs(geometry.imageWidth / geometry.imageHeight - geometry.ratio) < 0.01);
 			};
+
+			const automation = page.getByRole('switch', { name: /Automated clearance verification/ });
+			const personal = page.getByRole('switch', { name: /Verify student name and number/ });
+			const key = page.getByLabel('Gemini API key', { exact: true });
+			await expect(key).toHaveValue('');
+			await key.fill('browser-unsaved-key');
+			await page.getByRole('button', { name: 'Test Gemini', exact: true }).click();
+			await expect(page.getByText('Gemini connection successful.', { exact: true })).toBeVisible();
+			assert.equal(
+				await page.evaluate(() => window.geminiTests[0].geminiApiKey),
+				'browser-unsaved-key'
+			);
+			await automation.uncheck();
+			await expect(personal).toBeDisabled();
+			await page.getByRole('button', { name: 'Save verification settings', exact: true }).click();
+			await expect(key).toHaveValue('');
+			assert.equal(
+				await page.evaluate(
+					() => window.verificationSaves[0].automatedClearanceVerificationEnabled
+				),
+				false
+			);
+			await automation.check();
+			await page.getByRole('button', { name: 'Save verification settings', exact: true }).click();
 			await expect(steps.getByRole('button', { name: 'Printed areas', exact: true })).toBeEnabled();
 			await expect(page.getByLabel('Choose template image', { exact: true })).toHaveCount(0);
 			await expect(

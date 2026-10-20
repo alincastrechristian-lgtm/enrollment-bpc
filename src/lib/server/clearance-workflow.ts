@@ -11,6 +11,7 @@ import type { db, Transaction } from './db';
 import { getStudentEnrollment } from './student-enrollment';
 import { clearanceCanSubmit, clearanceNeedsIdentityReview } from '#lib/clearance/report.js';
 import { documentUploadBlock } from '#lib/server/documents.js';
+import { getClearancePolicy } from '#lib/server/clearance-settings.js';
 
 type Database = typeof db | Transaction;
 export function submissionInfo(record: typeof clearanceSubmission.$inferSelect | undefined) {
@@ -45,6 +46,11 @@ export function requireClearanceEnrollment(
 	userId: string,
 	enrollmentId: string
 ) {
+	if (!getClearancePolicy(database).automatedClearanceVerificationEnabled)
+		error(
+			409,
+			'Online clearance checks are disabled. Submit paper clearance to the Registrar for verification.'
+		);
 	const record = getStudentEnrollment(database, userId, enrollmentId);
 	if (
 		record.student.currentEnrollmentId !== enrollmentId ||
@@ -171,6 +177,7 @@ export function rejectClearanceSubmission(
 	);
 }
 export function clearanceRequests(database: Database) {
+	if (!getClearancePolicy(database).automatedClearanceVerificationEnabled) return [];
 	return database
 		.select({
 			id: clearanceSubmission.id,

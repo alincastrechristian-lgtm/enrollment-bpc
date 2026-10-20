@@ -108,7 +108,8 @@ export async function checkClearance(
 	upload: Image,
 	corners: Corners,
 	definition: TemplateDefinition,
-	term: ClearanceTerm
+	term: ClearanceTerm,
+	personalInfoVerificationEnabled = true
 ): Promise<ClearanceReport> {
 	if (running) error(429, 'Another clearance is being checked. Try again shortly.');
 	running = true;
@@ -215,7 +216,7 @@ export async function checkClearance(
 				? checkOfficeMarks(blank.data, scan.data, width, height, definition.officeRows ?? [])
 				: [];
 		const identityPresence =
-			overall(checks) === 'pass' && overall(offices) === 'pass'
+			personalInfoVerificationEnabled && overall(checks) === 'pass' && overall(offices) === 'pass'
 				? checkIdentityPresence(
 						blank.data,
 						scan.data,

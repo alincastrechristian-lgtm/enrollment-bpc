@@ -7,11 +7,17 @@ export async function load({ locals }) {
 
 	const settings = await getSystemSettings();
 
-	const { senderPassword, resendApiKey, ...safeSettings } = settings;
+	const { senderPassword, resendApiKey } = settings;
 
 	return {
 		settings: {
-			...safeSettings,
+			id: settings.id,
+			seeded: settings.seeded,
+			emailApiType: settings.emailApiType,
+			smtpHost: settings.smtpHost,
+			smtpPort: settings.smtpPort,
+			senderName: settings.senderName,
+			senderEmail: settings.senderEmail,
 			hasSenderPassword: Boolean(senderPassword),
 			hasResendApiKey: Boolean(resendApiKey)
 		}

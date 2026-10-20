@@ -13,7 +13,14 @@ function load(file, deps = {}) {
 		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	});
 	const exports = {};
-	new Function('require', 'exports', outputText)((id) => deps[id] ?? require(id), exports);
+	new Function('require', 'exports', outputText)(
+		(id) =>
+			deps[id] ??
+			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
+				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
+				: require(id)),
+		exports
+	);
 	return exports;
 }
 const core = load('src/lib/clearance/clearance.ts');
@@ -128,6 +135,10 @@ function fixture(t) {
 		})
 	};
 	const deps = {
+		'#lib/server/handwriting.js': {
+			getGeminiApiKey: async () => '',
+			recognizeIdentity: async () => ({ name: '', studentNumber: '' })
+		},
 		'#lib/schema.js': schema,
 		'#lib/Roles.js': roles,
 		'#lib/server/db/index.js': { db },
@@ -155,8 +166,14 @@ function fixture(t) {
 					session: state.role ? {} : null
 				}
 			}),
-			query: (handler) => () =>
-				Object.assign(Promise.resolve(handler()), { refresh: async () => {} }),
+			query: (handler) => () => {
+				const result = Promise.resolve(handler());
+				return Object.assign(result, {
+					refresh: async () => {
+						await result;
+					}
+				});
+			},
 			command: (validator, handler) => async (input) => handler(validator.parse(input)),
 			form: (validator, handler) => async (input) => handler(validator.parse(input))
 		}
@@ -777,4 +794,109 @@ test('failed template or office checks skip Gemini; identity changes during chec
 	await assert.rejects(f.upload(), status(409));
 	assert.equal(f.row(), undefined);
 	assert.equal(f.objects.size, 1);
+});
+
+function policy(f, values) {
+	f.db
+		.insert(schema.systemSettings)
+		.values({ id: 1, ...values })
+		.onConflictDoUpdate({ target: schema.systemSettings.id, set: values })
+		.run();
+}
+test('paper clearance still blocks enrollment until explicit authorized staff verification', async (t) => {
+	const f = fixture(t);
+	policy(f, { automatedClearanceVerificationEnabled: false });
+	await assert.rejects(f.upload(), status(409));
+	assert.throws(() => f.plan.getEnrollmentPlan(f.db, f.next()), status(409));
+	await assert.rejects(
+		f.grades.verifyEnrollmentClearance({ ...f.reference(), manualClearanceConfirmed: true }),
+		status(403)
+	);
+	f.state.role = 'registrar';
+	f.state.userId = 'staff';
+	await assert.rejects(f.grades.verifyEnrollmentClearance(f.reference()), status(400));
+	f.sqlite.exec('UPDATE enrollment SET finalized_grades=0');
+	await assert.rejects(
+		f.grades.verifyEnrollmentClearance({ ...f.reference(), manualClearanceConfirmed: true }),
+		status(409)
+	);
+	f.sqlite.exec('UPDATE enrollment SET finalized_grades=1');
+	await assert.rejects(
+		f.grades.verifyEnrollmentClearance({
+			...f.reference(),
+			revision: 99,
+			manualClearanceConfirmed: true
+		}),
+		status(409)
+	);
+	await f.grades.verifyEnrollmentClearance({ ...f.reference(), manualClearanceConfirmed: true });
+	const row = f.db.select().from(schema.enrollment).get();
+	assert.equal(row.submittedClearance, true);
+	assert.equal(row.manualClearanceVerifiedBy, 'staff');
+	assert.equal(row.manualClearanceVerifierName, 'Registrar');
+	assert(row.manualClearanceVerifiedAt instanceof Date);
+	assert.equal(f.row(), undefined);
+	assert.doesNotThrow(() => f.plan.getEnrollmentPlan(f.db, f.next()));
+	policy(f, { automatedClearanceVerificationEnabled: true });
+	assert.doesNotThrow(() => f.plan.getEnrollmentPlan(f.db, f.next()));
+});
+test('paper confirmation cannot bypass enabled automation, and admins can verify in paper mode', async (t) => {
+	const f = fixture(t);
+	f.state.role = 'admin';
+	f.state.userId = 'staff';
+	await assert.rejects(
+		f.grades.verifyEnrollmentClearance({ ...f.reference(), manualClearanceConfirmed: true }),
+		status(409)
+	);
+	assert.equal(f.db.select().from(schema.enrollment).get().submittedClearance, false);
+	policy(f, { automatedClearanceVerificationEnabled: false });
+	await f.grades.verifyEnrollmentClearance({ ...f.reference(), manualClearanceConfirmed: true });
+	assert.equal(f.db.select().from(schema.enrollment).get().submittedClearance, true);
+});
+test('personal verification off skips Gemini and missing identity mapping but preserves template and office failures', async (t) => {
+	const f = fixture(t);
+	policy(f, { personalInfoVerificationEnabled: false });
+	f.config.personalFields = [];
+	f.db.update(schema.clearanceTemplate).set({ definition: f.config }).run();
+	f.state.report.identityPresence = { name: check('fail'), studentNumber: check('fail') };
+	const result = await f.upload();
+	assert.equal(result.success, true);
+	assert.equal(f.state.identityCalls, 0);
+	assert.equal(result.report.identity, 'disabled');
+	assert(reports.clearanceCanSubmit(result.report));
+	for (const key of ['template', 'offices']) {
+		f.state.report[key] = [check('fail')];
+		assert.equal((await f.upload()).success, false);
+		f.state.report[key] = [check('pass')];
+	}
+	assert.equal(f.state.identityCalls, 0);
+});
+test('policy changes during checking cannot commit an upload', async (t) => {
+	const f = fixture(t);
+	f.state.onCheck = () => policy(f, { personalInfoVerificationEnabled: false });
+	await assert.rejects(f.upload(), status(409));
+	assert.equal(f.row(), undefined);
+	f.state.onCheck = () => policy(f, { automatedClearanceVerificationEnabled: false });
+	await assert.rejects(f.upload(), status(409));
+	assert.equal(f.row(), undefined);
+});
+
+test('paper approval retains an older upload as history and stays valid after automation is re-enabled', async (t) => {
+	const f = fixture(t);
+	await f.upload();
+	const old = structuredClone(f.row());
+	policy(f, { automatedClearanceVerificationEnabled: false });
+	f.state.role = 'registrar';
+	f.state.userId = 'staff';
+	await f.grades.verifyEnrollmentClearance({ ...f.reference(), manualClearanceConfirmed: true });
+	assert.deepEqual(f.row(), old);
+	policy(f, { automatedClearanceVerificationEnabled: true });
+	assert.doesNotThrow(() => f.plan.getEnrollmentPlan(f.db, f.next()));
+	const rollback = readFileSync(
+		'drizzle/rollback/0040_clearance_verification_settings.sql',
+		'utf8'
+	);
+	assert.throws(() => f.sqlite.exec(rollback), /CHECK constraint/);
+	f.sqlite.exec('ROLLBACK');
+	assert.equal(f.db.select().from(schema.enrollment).get().manualClearanceVerifiedBy, 'staff');
 });

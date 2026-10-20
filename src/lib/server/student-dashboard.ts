@@ -3,7 +3,11 @@ import { formatGrade, getGradeStatus, getGradeConcerns } from '#lib/enrollment-g
 
 type EnrollmentHistory = Awaited<ReturnType<typeof getStudentEnrollmentHistory>>;
 
-export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
+export function buildStudentDashboard(
+	name: string,
+	record: EnrollmentHistory,
+	automatedClearanceVerificationEnabled = true
+) {
 	// The explicit current enrollment link is authoritative, even when a newer record exists.
 	const current = record?.enrollments.find(
 		(entry) => entry.id === record.currentEnrollmentId && entry.status !== 'voided'
@@ -29,8 +33,9 @@ export function buildStudentDashboard(name: string, record: EnrollmentHistory) {
 		nextSteps.push({
 			id: 'clearance',
 			title: 'Complete clearance for your next enrollment',
-			detail:
-				'Open Enrollment to upload your completed clearance or track your request. The Registrar reviews your clearance before completing your next enrollment.'
+			detail: automatedClearanceVerificationEnabled
+				? 'Open Enrollment to upload your completed clearance or track your request. The Registrar reviews your clearance before completing your next enrollment.'
+				: 'Submit your completed paper clearance to the Registrar. Staff must verify it before your next enrollment.'
 		});
 	const droppedEnrollments = (record?.enrollments ?? [])
 		.filter((entry) => entry.status === 'dropped')

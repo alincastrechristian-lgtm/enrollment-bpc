@@ -7,11 +7,13 @@
 	import { onDestroy } from 'svelte';
 	import ClearanceTest from './ClearanceTest.svelte';
 	import TemplateSetup from './TemplateSetup.svelte';
+	import VerificationSettings from './VerificationSettings.svelte';
 
 	const settings = getClearanceSettings();
 	let busy = $state(false);
 	let testBusy = $state(false);
 	let setupBusy = $state(false);
+	let verificationBusy = $state(false);
 	let preview = $state('');
 	let selectedName = $state('');
 	let previewError = $state(false);
@@ -19,7 +21,7 @@
 	let replacing = $state(false);
 	let workspace = $state<'setup' | 'test'>('setup');
 	let setupStep = $state<'outline' | 'printed' | 'offices' | 'personal'>('printed');
-	const locked = $derived(busy || testBusy || setupBusy);
+	const locked = $derived(busy || testBusy || setupBusy || verificationBusy);
 	function clearSelection() {
 		if (preview) URL.revokeObjectURL(preview);
 		preview = '';
@@ -73,6 +75,11 @@
 		</div>
 	{:else if settings.current}
 		{@const current = settings.current}
+		<VerificationSettings
+			settings={current}
+			disabled={busy || testBusy || setupBusy}
+			onbusychange={(value) => (verificationBusy = value)}
+		/>
 		{#if !current.configured}
 			<p class="alert alert-warning" role="status">
 				File storage is not configured. Configure storage before uploading a template.

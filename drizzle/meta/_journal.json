@@ -281,6 +281,13 @@
       "when": 1792448361820,
       "tag": "0039_curriculum_prerequisites",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1792468275092,
+      "tag": "0040_clearance_verification_settings",
+      "breakpoints": true
     }
   ]
 }

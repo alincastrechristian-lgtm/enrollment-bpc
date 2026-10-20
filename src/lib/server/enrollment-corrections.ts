@@ -225,7 +225,16 @@ export function correctStudentEnrollment(
 					meetingRequestSentAt: null,
 					meetingRequestStartedAt: null,
 					followUpCompletedAt: null,
-					submittedClearance: termChanged ? false : record.enrollment.submittedClearance
+					submittedClearance: termChanged ? false : record.enrollment.submittedClearance,
+					manualClearanceVerifiedAt: termChanged
+						? null
+						: record.enrollment.manualClearanceVerifiedAt,
+					manualClearanceVerifiedBy: termChanged
+						? null
+						: record.enrollment.manualClearanceVerifiedBy,
+					manualClearanceVerifierName: termChanged
+						? null
+						: record.enrollment.manualClearanceVerifierName
 				})
 				.where(eq(enrollment.id, record.enrollment.id))
 				.run();

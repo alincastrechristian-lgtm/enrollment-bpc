@@ -1,4 +1,5 @@
 <!-- Editable source for Enrollment-System-Complete-Guide.docx. Source inspection: 20 October 2026. -->
+
 # 1. What the system does
 
 The BPC Enrollment Portal coordinates student accounts, academic catalogs, enrollment records, grades, clearance review, and preparation for another term. It gives administrators broad system control, registrars academic operating tools, and students access to their own academic information and clearance requests.
@@ -21,18 +22,18 @@ The central record is an enrollment for one student in one school year and semes
 
 ## 1.2 Records that sound similar but mean different things
 
-| Term | Meaning |
-| --- | --- |
-| User account | Authentication identity, name, email, role, setup state, access state, and security settings. |
-| Student record | Student number, personal details, linked user, and current-enrollment pointer. |
-| Program | A course/program catalog entry with an active status and optional selected curriculum. |
-| Curriculum | A program-specific plan containing subjects assigned to years and semesters, with units and publication state. |
-| Enrollment | One student's actual term registration. It contains its own class details and selected curriculum. |
-| Enrollment subject | One subject attempt in an enrollment. It stores subject snapshots, units, and a draft or released grade. |
-| Clearance submission | One currently saved image/report for an enrollment, with request and review state. |
-| Enrollment request | Student explicitly submits an eligible saved clearance for staff review; identity may be matched or awaiting human review. This does not create an enrollment. |
-| Completed enrollment | Term has finalized grades and verified clearance. Failed-grade follow-up may still block the next enrollment. |
-| Notification | A saved account or academic event. It is not proof that an email reached the recipient's inbox. |
+| Term                 | Meaning                                                                                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User account         | Authentication identity, name, email, role, setup state, access state, and security settings.                                                                  |
+| Student record       | Student number, personal details, linked user, and current-enrollment pointer.                                                                                 |
+| Program              | A course/program catalog entry with an active status and optional selected curriculum.                                                                         |
+| Curriculum           | A program-specific plan containing subjects assigned to years and semesters, with units and publication state.                                                 |
+| Enrollment           | One student's actual term registration. It contains its own class details and selected curriculum.                                                             |
+| Enrollment subject   | One subject attempt in an enrollment. It stores subject snapshots, units, and a draft or released grade.                                                       |
+| Clearance submission | One currently saved image/report for an enrollment, with request and review state.                                                                             |
+| Enrollment request   | Student explicitly submits an eligible saved clearance for staff review; identity may be matched or awaiting human review. This does not create an enrollment. |
+| Completed enrollment | Term has finalized grades and verified clearance. Failed-grade follow-up may still block the next enrollment.                                                  |
+| Notification         | A saved account or academic event. It is not proof that an email reached the recipient's inbox.                                                                |
 
 ## 1.3 Scope and evidence
 
@@ -50,28 +51,28 @@ There are exactly three application roles: `admin`, `registrar`, and `student`. 
 
 ## 2.1 Permission matrix
 
-| Capability | Administrator | Registrar | Student |
-| --- | --- | --- | --- |
-| Open dashboard and own profile/security | Yes | Yes | Yes |
-| Manage administrator accounts | Create, edit, disable/enable, delete, revoke sessions | No | No |
-| Manage registrar accounts | Create, edit, disable/enable, delete, revoke sessions | No account-management screen | No |
-| Create/edit student accounts and personal details | Yes | Yes | No |
-| Delete a student | Only unfinished setup with no current or historical enrollment | Same rule | No |
-| Revoke student sessions | Yes | Yes | No staff session controls |
-| Create first/subsequent enrollments | Yes | Yes | No; submits clearance review request only |
-| Edit/finalize grades | Current and historical, when allowed by lifecycle | Current only, when allowed by lifecycle | View released own grades only |
-| Correct an enrollment | Current/historical enrolled, unfinalized | Current enrolled, unfinalized | No |
-| Void an incorrect enrollment | Current/historical, unfinalized, not already voided | Current only, same lifecycle checks | No |
-| Reopen finalized grades | Yes, with reason | No | No |
-| Review/reject/verify clearance | Yes | Yes | Upload/request own eligible current enrollment |
-| Send meeting request and complete follow-up | Yes, with academic checks | Yes, with academic checks | Receives notice; cannot mark meeting completed |
-| Drop an enrollment | Current enrolled record only | Same | No |
-| Programs, subjects, curricula | Manage | View | No curriculum/catalog pages |
-| Required academic documents | Request and review | Request and review | Upload own requested copies; cannot verify |
-| Masterlist and reports | View, export, print | View, export, print | No |
-| Notifications | All recorded events | Events attributed to that registrar | Events addressed to own account |
-| Configure email, clearance template, storage | Yes | No | No |
-| Download COR | Eligible student enrollment | Eligible student enrollment | Own eligible enrollment only |
+| Capability                                        | Administrator                                                  | Registrar                               | Student                                        |
+| ------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------- |
+| Open dashboard and own profile/security           | Yes                                                            | Yes                                     | Yes                                            |
+| Manage administrator accounts                     | Create, edit, disable/enable, delete, revoke sessions          | No                                      | No                                             |
+| Manage registrar accounts                         | Create, edit, disable/enable, delete, revoke sessions          | No account-management screen            | No                                             |
+| Create/edit student accounts and personal details | Yes                                                            | Yes                                     | No                                             |
+| Delete a student                                  | Only unfinished setup with no current or historical enrollment | Same rule                               | No                                             |
+| Revoke student sessions                           | Yes                                                            | Yes                                     | No staff session controls                      |
+| Create first/subsequent enrollments               | Yes                                                            | Yes                                     | No; submits clearance review request only      |
+| Edit/finalize grades                              | Current and historical, when allowed by lifecycle              | Current only, when allowed by lifecycle | View released own grades only                  |
+| Correct an enrollment                             | Current/historical enrolled, unfinalized                       | Current enrolled, unfinalized           | No                                             |
+| Void an incorrect enrollment                      | Current/historical, unfinalized, not already voided            | Current only, same lifecycle checks     | No                                             |
+| Reopen finalized grades                           | Yes, with reason                                               | No                                      | No                                             |
+| Review/reject/verify clearance                    | Yes                                                            | Yes                                     | Upload/request own eligible current enrollment |
+| Send meeting request and complete follow-up       | Yes, with academic checks                                      | Yes, with academic checks               | Receives notice; cannot mark meeting completed |
+| Drop an enrollment                                | Current enrolled record only                                   | Same                                    | No                                             |
+| Programs, subjects, curricula                     | Manage                                                         | View                                    | No curriculum/catalog pages                    |
+| Required academic documents                       | Request and review                                             | Request and review                      | Upload own requested copies; cannot verify     |
+| Masterlist and reports                            | View, export, print                                            | View, export, print                     | No                                             |
+| Notifications                                     | All recorded events                                            | Events attributed to that registrar     | Events addressed to own account                |
+| Configure email, clearance template, storage      | Yes                                                            | No                                      | No                                             |
+| Download COR                                      | Eligible student enrollment                                    | Eligible student enrollment             | Own eligible enrollment only                   |
 
 Administrator self-protection blocks deleting or disabling the currently signed-in administrator account. It does not turn administrators into unrestricted editors of finalized academic records: even an administrator must explicitly reopen finalized grades before changing them.
 
@@ -195,16 +196,16 @@ Sources: S03, S04, S06.
 
 Administrators and registrars open Students and choose Add Student. The dialog collects personal information and offers immediate enrollment or enrollment later. The default create-and-enroll path opens the enrollment editor after successful account creation.
 
-| Field | Current rule |
-| --- | --- |
-| First name / last name | Required; trimmed; each 1–100 characters. |
-| Middle name | Optional; trimmed; maximum 100; stored as empty text when omitted. |
-| Email | Required valid email; trimmed/lowercased; unique across every account role. |
-| Address | Required trimmed text; maximum 500 characters. |
-| Contact number | Required trimmed text; maximum 30 characters; no country-specific phone pattern. |
-| Birth date | Valid calendar date in `YYYY-MM-DD`; cannot be after today's Manila date. |
-| Sex | Current stored options are `female` and `male`. |
-| Enrollment timing | Create and enroll now, or save the student and enroll later. |
+| Field                  | Current rule                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| First name / last name | Required; trimmed; each 1–100 characters.                                        |
+| Middle name            | Optional; trimmed; maximum 100; stored as empty text when omitted.               |
+| Email                  | Required valid email; trimmed/lowercased; unique across every account role.      |
+| Address                | Required trimmed text; maximum 500 characters.                                   |
+| Contact number         | Required trimmed text; maximum 30 characters; no country-specific phone pattern. |
+| Birth date             | Valid calendar date in `YYYY-MM-DD`; cannot be after today's Manila date.        |
+| Sex                    | Current stored options are `female` and `male`.                                  |
+| Enrollment timing      | Create and enroll now, or save the student and enroll later.                     |
 
 The display name is composed from the nonempty name parts. Program, year level, semester, school year, section, and subject selection are entered during enrollment, not during student-account creation.
 
@@ -240,13 +241,13 @@ Changing an email has additional consequences. The UI requests confirmation; the
 
 ## 5.4 Disable/enable, revoke sessions, and delete
 
-| Action | Effect and eligibility |
-| --- | --- |
-| Disable staff account | Administrator only; confirms loss of access; bans target, revokes sessions, preserves account and activity. Current admin cannot disable self. No equivalent student-disable control is exposed. |
-| Enable staff account | Administrator only; removes ban so normal authentication can resume. It does not recreate a deleted account. |
-| Revoke sessions | Admin can target students/registrars/admins; registrar can target students only. Signs target out without changing password, account status, or enrollment history. |
-| Delete student | Admin/registrar only while setup is unfinished, current pointer is absent, and no enrollment history exists. Dropped or voided history still prevents deletion. |
-| Delete administrator/registrar | Administrator only; permanent removal of access, credentials, sessions, factor data, and reset tokens. Current admin cannot delete self. Academic records and student notifications remain. |
+| Action                         | Effect and eligibility                                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Disable staff account          | Administrator only; confirms loss of access; bans target, revokes sessions, preserves account and activity. Current admin cannot disable self. No equivalent student-disable control is exposed. |
+| Enable staff account           | Administrator only; removes ban so normal authentication can resume. It does not recreate a deleted account.                                                                                     |
+| Revoke sessions                | Admin can target students/registrars/admins; registrar can target students only. Signs target out without changing password, account status, or enrollment history.                              |
+| Delete student                 | Admin/registrar only while setup is unfinished, current pointer is absent, and no enrollment history exists. Dropped or voided history still prevents deletion.                                  |
+| Delete administrator/registrar | Administrator only; permanent removal of access, credentials, sessions, factor data, and reset tokens. Current admin cannot delete self. Academic records and student notifications remain.      |
 
 Deletion checks run again inside an immediate transaction. Linked auth data cascades as defined by the database. Academic author references become null when their staff account disappears; retained actor-name/audit snapshots preserve human-readable history where implemented.
 
@@ -274,16 +275,16 @@ When a curriculum changes, create a new draft and activate it. Published curricu
 
 ## 6.3 Exception ownership
 
-| Situation | Administrator action |
-| --- | --- |
-| Registrar cannot edit old enrollment | Open historical record as admin; obey grade/lifecycle locks. |
-| Finalized grade needs correction | Reopen with reason; review provisional grades; finalize again. |
-| Wrong active curriculum | Activate the correct plan; existing enrollment references remain historical. |
-| Setup email failed | Check provider settings; resend for the existing account. |
-| Student clearance repeatedly fails correct form | Inspect saved template/office boxes and report evidence; correct configuration and ask for fresh submission. |
-| Raw clearance file is missing | Inspect Garage and referenced object; restoring/replacing storage is an operational repair, not an automatic database fix. |
-| Capacity display is too small | Review physical disk and Garage layout; only confirmed increases are supported by the UI. |
-| Staff account must be removed | Check self-protection; confirm permanent delete; academic history remains. |
+| Situation                                       | Administrator action                                                                                                       |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Registrar cannot edit old enrollment            | Open historical record as admin; obey grade/lifecycle locks.                                                               |
+| Finalized grade needs correction                | Reopen with reason; review provisional grades; finalize again.                                                             |
+| Wrong active curriculum                         | Activate the correct plan; existing enrollment references remain historical.                                               |
+| Setup email failed                              | Check provider settings; resend for the existing account.                                                                  |
+| Student clearance repeatedly fails correct form | Inspect saved template/office boxes and report evidence; correct configuration and ask for fresh submission.               |
+| Raw clearance file is missing                   | Inspect Garage and referenced object; restoring/replacing storage is an operational repair, not an automatic database fix. |
+| Capacity display is too small                   | Review physical disk and Garage layout; only confirmed increases are supported by the UI.                                  |
+| Staff account must be removed                   | Check self-protection; confirm permanent delete; academic history remains.                                                 |
 
 Sources: S02, S07–S16, S21–S25.
 
@@ -406,16 +407,16 @@ Future ordinary enrollments use the program's selected usable published curricul
 
 ## 9.5 Derived curriculum states
 
-| State/action | Behavior |
-| --- | --- |
-| Draft | Never published and not archived; editable. |
-| Active | Published, not archived, and selected by its program. |
-| Inactive | Published, unarchived, not currently selected. It remains read-only. |
-| Archived | Has an archive timestamp; cannot be the usable selected plan. |
-| Deactivate | Clears the program's active-curriculum selection. |
-| Archive | Sets archive timestamp and clears selection when necessary. |
-| Restore/unarchive | Removes archive timestamp; does not automatically activate or make a published plan editable. |
-| Delete | Allowed only when not selected and never referenced by an enrollment, including dropped/voided history. |
+| State/action      | Behavior                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| Draft             | Never published and not archived; editable.                                                             |
+| Active            | Published, not archived, and selected by its program.                                                   |
+| Inactive          | Published, unarchived, not currently selected. It remains read-only.                                    |
+| Archived          | Has an archive timestamp; cannot be the usable selected plan.                                           |
+| Deactivate        | Clears the program's active-curriculum selection.                                                       |
+| Archive           | Sets archive timestamp and clears selection when necessary.                                             |
+| Restore/unarchive | Removes archive timestamp; does not automatically activate or make a published plan editable.           |
+| Delete            | Allowed only when not selected and never referenced by an enrollment, including dropped/voided history. |
 
 The interface's “create a revision” guidance means manually creating another curriculum and activating it. There is no dedicated curriculum-clone or automatic revision-copy command. Published edit routes send the operator back to read-only details. An archived unpublished draft must be restored before editing.
 
@@ -435,17 +436,17 @@ Ordinary new enrollment needs an active program with its selected active, publis
 
 ## 10.2 What staff can edit
 
-| Editor value/control | Behavior |
-| --- | --- |
-| Program | Loads allowed curriculum; changed draft requires discard confirmation. |
-| School-year start | Positive integer; identifies the first year of the displayed year pair. |
-| Year level / semester | Positive integers within selected curriculum limits. Initial defaults are clamped to those limits. |
-| Section | Required trimmed text; enrollment can store custom sections. Some student-directory filters expose only A–D. |
-| Subject row | Select a catalog subject; duplicate subject IDs forbidden. |
-| Units | Finite positive number; enrollment units can be fractional. |
-| Remove row | Removes from local draft before save. |
-| Use term subjects | Explicitly replaces draft with selected term's plan subjects; confirms replacement if draft changed. |
-| Failed / INC list | Displays outstanding latest finalized subject concerns and permits explicit retake insertion. |
+| Editor value/control  | Behavior                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Program               | Loads allowed curriculum; changed draft requires discard confirmation.                                       |
+| School-year start     | Positive integer; identifies the first year of the displayed year pair.                                      |
+| Year level / semester | Positive integers within selected curriculum limits. Initial defaults are clamped to those limits.           |
+| Section               | Required trimmed text; enrollment can store custom sections. Some student-directory filters expose only A–D. |
+| Subject row           | Select a catalog subject; duplicate subject IDs forbidden.                                                   |
+| Units                 | Finite positive number; enrollment units can be fractional.                                                  |
+| Remove row            | Removes from local draft before save.                                                                        |
+| Use term subjects     | Explicitly replaces draft with selected term's plan subjects; confirms replacement if draft changed.         |
+| Failed / INC list     | Displays outstanding latest finalized subject concerns and permits explicit retake insertion.                |
 
 Changing year/semester updates the term selection but does not silently replace an existing draft's subjects. Staff decides whether to keep custom rows or use the selected term's prescribed rows. At least one subject is required at enrollment save.
 
@@ -485,13 +486,13 @@ Sources: S07, S10, S18, S24, S34.
 
 ## 11.1 Grade meanings
 
-| Saved value and release state | Meaning |
-| --- | --- |
-| Unfinalized enrollment | Student-facing outcome remains Pending; draft numeric values are masked from students. |
-| Finalized numeric 1.00–3.00 | Passed. |
-| Finalized numeric above 3.00 through 5.00 | Failed. |
-| Finalized null/blank | INC, meaning Incomplete. |
-| Dropped/voided attempt | Preserved history; excluded from ordinary outstanding-subject calculations. |
+| Saved value and release state             | Meaning                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| Unfinalized enrollment                    | Student-facing outcome remains Pending; draft numeric values are masked from students. |
+| Finalized numeric 1.00–3.00               | Passed.                                                                                |
+| Finalized numeric above 3.00 through 5.00 | Failed.                                                                                |
+| Finalized null/blank                      | INC, meaning Incomplete.                                                               |
+| Dropped/voided attempt                    | Preserved history; excluded from ordinary outstanding-subject calculations.            |
 
 Grades must be finite numeric values from 1 through 5, or null. Numeric display uses two decimals. A draft blank is not yet a released INC. Finalization changes the interpretation of saved nulls without inventing numeric grades.
 
@@ -536,7 +537,7 @@ Sources: S10, S11, S24.
 
 Settings > Clearance is administrator-only. Configure the blank reference image, form outline, permanent printed areas, office Cleared/signature regions, and student-name/number writing regions. Production office names remain configurable. Diagnostic prototype departments are not the production office list.
 
-Garage must be available to save reference objects. Production handwriting recognition also requires a server-side Gemini key. Each saved reference/definition has a UUID revision; upload and request actions reject stale template state.
+Garage must be available to save reference objects. When personal information verification is enabled, production handwriting recognition also requires a saved Gemini key. Each saved reference/definition has a UUID revision; upload and request actions reject stale template state.
 
 ## 12.2 Reference replacement and four setup steps
 
@@ -551,13 +552,13 @@ The final save validates the combined definition and issues a fresh revision. Ge
 
 ## 12.3 Definition validation
 
-| Configuration | Current rule |
-| --- | --- |
-| Printed areas | 4–20, unique UUIDs/labels, boxes inside the rectified form. |
-| Area mix | At least two text areas, exactly one semester area, exactly one academic-year area. Logo/image/structure is optional. |
-| Expected values | Text areas need nonempty text. Semester/year come from the current enrollment or explicit diagnostic test inputs. |
-| Box size | Width and height each at least 1.5% of form dimensions. |
-| Offices | Up to 30; unique IDs and case-insensitive names. Production requires at least one office and both Cleared/signature boxes for each. |
+| Configuration     | Current rule                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Printed areas     | 4–20, unique UUIDs/labels, boxes inside the rectified form.                                                                                      |
+| Area mix          | At least two text areas, exactly one semester area, exactly one academic-year area. Logo/image/structure is optional.                            |
+| Expected values   | Text areas need nonempty text. Semester/year come from the current enrollment or explicit diagnostic test inputs.                                |
+| Box size          | Width and height each at least 1.5% of form dimensions.                                                                                          |
+| Offices           | Up to 30; unique IDs and case-insensitive names. Production requires at least one office and both Cleared/signature boxes for each.              |
 | Personal mappings | Up to five, with supported name/number/course/year/section/combined kinds and conflict rules. Production requires studentName and studentNumber. |
 
 There is still no production Not Cleared region. Contradictory marks, genuine office authorization, and signature authenticity remain matters for staff reviewing the original.
@@ -608,13 +609,13 @@ Sharp validates actual format against MIME, single-page image, and at most 40 mi
 
 Reference and upload are perspective-rectified to the reference aspect ratio, maximum normalized dimension 1800. One production OCR check runs per process; busy attempts receive 429. Tesseract English uses installed local language data and a 120-second worker timeout. Worker cleanup releases the local lock.
 
-| Printed evidence | Rule |
-| --- | --- |
-| Ordinary text | Search expected normalized wording near the configured box, expanded by 5% form width/3.5% height. Adjacent labels need not invalidate an expected phrase; distant text cannot satisfy it. |
-| Confidence | Matched phrase uses its relevant word confidence; unreadable, confidence below 65, or ambiguous term values lead to review. |
-| Semester/year | Extract the expected term from nearby words and compare with current enrollment; distinct contradictory values require review. |
-| Optional image/structure | Otsu black-and-white shape correlation, with local scale/translation tolerance. At least 0.65 passes; below 0.45 fails; the interval between reviews. |
-| Blank/insufficient-detail visual evidence | Review; two blank regions cannot establish matching structure. |
+| Printed evidence                          | Rule                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ordinary text                             | Search expected normalized wording near the configured box, expanded by 5% form width/3.5% height. Adjacent labels need not invalidate an expected phrase; distant text cannot satisfy it. |
+| Confidence                                | Matched phrase uses its relevant word confidence; unreadable, confidence below 65, or ambiguous term values lead to review.                                                                |
+| Semester/year                             | Extract the expected term from nearby words and compare with current enrollment; distinct contradictory values require review.                                                             |
+| Optional image/structure                  | Otsu black-and-white shape correlation, with local scale/translation tolerance. At least 0.65 passes; below 0.45 fails; the interval between reviews.                                      |
+| Blank/insufficient-detail visual evidence | Review; two blank regions cannot establish matching structure.                                                                                                                             |
 
 Template non-pass prevents proceeding to office acceptance and the Gemini identity pipeline. Template review is not the identity-review exception.
 
@@ -632,21 +633,27 @@ Name and number have a separate physical writing-presence prerequisite. Aligned 
 
 ## 13.5 Gemini service, privacy, and outcomes
 
-The shared server helper requires `GEMINI_API_KEY`. It sends one direct request to Google `gemini-2.5-flash:generateContent` containing two base64 PNG field crops: name then student number. Production crops are grayscale; diagnostic browser crops can retain RGB and are forwarded unchanged. It does not send the original whole clearance or expected database identity. The crops themselves contain personal information and leave the server for Google processing; the code does not establish provider retention policy or legal compliance.
+Administrators can disable personal information verification independently. New uploads then skip writing-presence and Gemini checks, do not require name/number regions, and explicitly record personal verification as disabled. Template and office checks remain mandatory. Saved reports retain the policy used when uploaded; switching this option does not invalidate prior approvals.
+
+The **Automated clearance verification** switch disables online upload and request actions. Students instead receive dashboard and enrollment reminders to submit paper clearance. Registrar/admin must still click **Verify clearance**, explicitly confirm receipt and review, and finalize grades before approval. Paper approvals record staff identity/name and time. Enrollment remains blocked until approval; document, prerequisite and academic follow-up requirements still apply. Paper approval survives same-term reopening/correction and re-enabling automation, while school-year/semester corrections clear it.
+
+The **Test Gemini** button sends two fixed blank PNG samples through the same vision service. It uses the entered unsaved key, or the saved key if blank, without saving changes or sending student data. Provider errors expose only safe messages.
+
+Administrators manage the Gemini key in Settings > Clearance. It is stored in system_settings and never returned to the browser. Optional GEMINI_API_KEY is imported only when the saved value is null; removing the key explicitly prevents environment re-import. It sends one direct request to Google `gemini-2.5-flash:generateContent` containing two base64 PNG field crops: name then student number. Production crops are grayscale; diagnostic browser crops can retain RGB and are forwarded unchanged. It does not send the original whole clearance or expected database identity. The crops themselves contain personal information and leave the server for Google processing; the code does not establish provider retention policy or legal compliance.
 
 Prompt instructions require visible characters only, ignore image instructions/signatures, preserve leading zeros, and read the numeric student-number suffix without fixed/repeated MA- prefixes. Configuration uses temperature 0, a 1024-token output limit, no thinking budget, and structured JSON. Only completed STOP output is parsed; thought parts are ignored, and each trimmed field is at most 200 characters. Invalid/incomplete fields produce warnings rather than guessed values.
 
 One shared recognition request runs per process, with a 60-second timeout. Missing configuration returns 503; a busy request returns 429. Network/provider/unexpected timeout failures fail the new upload safely with a public error. There is no automatic retry, fallback provider, local Ollama path, or outage-to-manual-review bypass. The user may retry; an already-saved eligible report does not need a new provider call just to request/review it.
 
-| Identity comparison | Consequence |
-| --- | --- |
-| Exact numeric number and name not different | Match; name may be close or unreadable. Production still requires added name writing beforehand. |
-| Exact digits without MA- | Exact, not a fuzzy exception; one/two leading MA prefixes are ignored and leading zeros preserved. Other arbitrary letter prefixes are not discarded. |
-| One-edit-close number | Same length with digits/question mark and sufficiently long expected value; supports review rather than exact match. |
-| Close name | Normalized strings at least six characters and rounded Levenshtein similarity at least 80%; supports review. |
-| Any exact/close field without full match | Review. An exact name with a different number can therefore enter human review. |
-| Both unreadable, or model warnings | Review after local prerequisites pass; not proof of identity. |
-| Remaining incompatible evidence | Mismatch; no new ready submission. |
+| Identity comparison                         | Consequence                                                                                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exact numeric number and name not different | Match; name may be close or unreadable. Production still requires added name writing beforehand.                                                      |
+| Exact digits without MA-                    | Exact, not a fuzzy exception; one/two leading MA prefixes are ignored and leading zeros preserved. Other arbitrary letter prefixes are not discarded. |
+| One-edit-close number                       | Same length with digits/question mark and sufficiently long expected value; supports review rather than exact match.                                  |
+| Close name                                  | Normalized strings at least six characters and rounded Levenshtein similarity at least 80%; supports review.                                          |
+| Any exact/close field without full match    | Review. An exact name with a different number can therefore enter human review.                                                                       |
+| Both unreadable, or model warnings          | Review after local prerequisites pass; not proof of identity.                                                                                         |
+| Remaining incompatible evidence             | Mismatch; no new ready submission.                                                                                                                    |
 
 ## 13.6 Automatic pass versus requestable evidence
 
@@ -674,14 +681,14 @@ Rejection requires the exact current requested file and a 5–1000-character rea
 
 ## 13.8 Submission state reference
 
-| State | Meaning |
-| --- | --- |
-| No saved submission | No current eligible evidence saved; blocked analysis does not create another row. |
-| ready | Local checks passed and identity matched or needs review; student may explicitly request when other request gates allow. |
-| requested | Waiting for staff; current complete reports locked against replacement. |
-| verified | Staff accepted evidence, including explicit identity confirmation when required. |
-| rejected | Staff reason recorded; new eligible upload and request needed. |
-| invalidated | Dropping or changing the enrollment term invalidated prior evidence; restore eligibility before uploading again. |
+| State               | Meaning                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| No saved submission | No current eligible evidence saved; blocked analysis does not create another row.                                        |
+| ready               | Local checks passed and identity matched or needs review; student may explicitly request when other request gates allow. |
+| requested           | Waiting for staff; current complete reports locked against replacement.                                                  |
+| verified            | Staff accepted evidence, including explicit identity confirmation when required.                                         |
+| rejected            | Staff reason recorded; new eligible upload and request needed.                                                           |
+| invalidated         | Dropping or changing the enrollment term invalidated prior evidence; restore eligibility before uploading again.         |
 
 Reopening and same-term corrections preserve the existing clearance file, submission state and verification. Changing the semester or school year clears the enrollment clearance flag and invalidates the saved submission while retaining its file. Dropping also invalidates clearance. Changing the global template blocks requesting old ready evidence; already-requested verification uses saved evidence.
 
@@ -711,15 +718,15 @@ INC-only results retain the acknowledgment warning but do not force completed fo
 
 If an uploaded clearance submission exists for the current enrollment, enrollment save additionally requires it to be verified with a request timestamp. This prevents legacy flags or stale state from bypassing the uploaded-document workflow.
 
-| Current situation | Ordinary next enrollment |
-| --- | --- |
-| Grades unfinalized | Blocked. |
-| Finalized grades, clearance not verified | Blocked. |
-| Finalized + verified + no failures | Eligible, subject to normal program/term/subject checks. |
-| Finalized + verified + INC only | Eligible with concern acknowledgment; meeting completion not mandatory. |
-| Finalized + verified + failures, follow-up not completed | Blocked even if request email was sent. |
-| Finalized + verified + failures, follow-up completed | Eligible with concern acknowledgment. Failed subjects remain outstanding until resolved academically. |
-| Dropped current enrollment | Separate Enroll again path; completion and meeting gates bypassed, same-term restoration permitted. |
+| Current situation                                        | Ordinary next enrollment                                                                              |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Grades unfinalized                                       | Blocked.                                                                                              |
+| Finalized grades, clearance not verified                 | Blocked.                                                                                              |
+| Finalized + verified + no failures                       | Eligible, subject to normal program/term/subject checks.                                              |
+| Finalized + verified + INC only                          | Eligible with concern acknowledgment; meeting completion not mandatory.                               |
+| Finalized + verified + failures, follow-up not completed | Blocked even if request email was sent.                                                               |
+| Finalized + verified + failures, follow-up completed     | Eligible with concern acknowledgment. Failed subjects remain outstanding until resolved academically. |
+| Dropped current enrollment                               | Separate Enroll again path; completion and meeting gates bypassed, same-term restoration permitted.   |
 
 ## 14.3 Next-term default algorithm
 
@@ -748,12 +755,12 @@ Sources: S10, S11, S15, S16.
 
 ## 15.1 Choose the action by meaning
 
-| Action | Intended meaning |
-| --- | --- |
-| Correct enrollment | Fix incorrect term/class/subject details in a permitted unfinalized enrolled record. |
-| Void enrollment | Mark an incorrectly entered enrollment attempt as invalid while preserving evidence. |
-| Reopen enrollment | Administrator unlocks a finalized enrolled/completed record for grade review and correction. |
-| Drop enrollment | Record an actual withdrawal from the current enrolled term. |
+| Action             | Intended meaning                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| Correct enrollment | Fix incorrect term/class/subject details in a permitted unfinalized enrolled record.         |
+| Void enrollment    | Mark an incorrectly entered enrollment attempt as invalid while preserving evidence.         |
+| Reopen enrollment  | Administrator unlocks a finalized enrolled/completed record for grade review and correction. |
+| Drop enrollment    | Record an actual withdrawal from the current enrolled term.                                  |
 
 Corrections, voiding, and reopening require a trimmed reason of 5–1000 characters, exact revision, and their role/lifecycle checks. An active meeting email claim blocks these changes for its 15-minute window so an in-progress send cannot race the record transition.
 
@@ -787,14 +794,14 @@ Preserved clearance does not remove the grade-finalization gate. While reopened 
 
 The correction's term-change check compares only school-year start and semester. Program, year level, section, subject-list, or unit changes alone do not invalidate clearance when those two term values remain unchanged. Staff still follows every other correction, prerequisite, and chronology restriction.
 
-| Action or starting state | Clearance effect and next step |
-| --- | --- |
-| Reopen with verified clearance | Preserve file, findings, submission state, request/reviewer metadata, and approval. Re-finalize grades; no duplicate clearance approval for the unchanged term. |
-| Reopen with ready/requested/rejected/invalidated evidence | Preserve its current state without granting approval. Clearance upload/request/review operations still require finalized grades and their normal eligibility. |
-| Reopen with no submission | Do not create a clearance record or grant approval. |
-| Correct without changing school-year start or semester | Preserve existing submission and clearance flag, including when program/class/subjects change. Meeting/follow-up timestamps still reset. |
-| Correct school-year start or semester | Set clearance flag false and saved submission invalidated; retain original file/findings/reviewer metadata as evidence. After grade finalization, obtain new eligible clearance for the corrected term. |
-| Refinalize after reopening | Completed if retained clearance flag is true; enrolled otherwise. Next enrollment must still satisfy meetings, documents, prerequisites, and other save checks. |
+| Action or starting state                                  | Clearance effect and next step                                                                                                                                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reopen with verified clearance                            | Preserve file, findings, submission state, request/reviewer metadata, and approval. Re-finalize grades; no duplicate clearance approval for the unchanged term.                                         |
+| Reopen with ready/requested/rejected/invalidated evidence | Preserve its current state without granting approval. Clearance upload/request/review operations still require finalized grades and their normal eligibility.                                           |
+| Reopen with no submission                                 | Do not create a clearance record or grant approval.                                                                                                                                                     |
+| Correct without changing school-year start or semester    | Preserve existing submission and clearance flag, including when program/class/subjects change. Meeting/follow-up timestamps still reset.                                                                |
+| Correct school-year start or semester                     | Set clearance flag false and saved submission invalidated; retain original file/findings/reviewer metadata as evidence. After grade finalization, obtain new eligible clearance for the corrected term. |
+| Refinalize after reopening                                | Completed if retained clearance flag is true; enrolled otherwise. Next enrollment must still satisfy meetings, documents, prerequisites, and other save checks.                                         |
 
 ![Flowchart 23. Correct, void, and reopen each preserve evidence and require current state checks. Reopening is administrator-only.](system-guide-assets/15-corrections.png)
 
@@ -824,13 +831,13 @@ Sources: S10, S11, S16, S24.
 
 Both staff roles see totals and work queues derived from explicit current-enrollment links, excluding voided current rows. Summary metrics include student accounts, current enrolled/completed/dropped counts, no-current-enrollment count, grades awaiting finalization, clearance pending, next-term ready, and unfinished setup.
 
-| Worklist | Selection rule |
-| --- | --- |
-| Grades | Current enrolled record, grades unfinalized, student setup complete. |
-| Clearance | Current enrolled record, grades finalized, clearance flag false. This is broader than the explicit requested-submission queue. |
-| Account setup | Student setup incomplete, even without enrollment. |
-| Next term | Current completed record with finalized grades, verified clearance, and no unresolved mandatory failed-grade follow-up. |
-| Follow-ups | Finalized non-dropped/non-voided terms with failures/INC and no completed follow-up; can include history and already-sent requests. |
+| Worklist      | Selection rule                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Grades        | Current enrolled record, grades unfinalized, student setup complete.                                                                |
+| Clearance     | Current enrolled record, grades finalized, clearance flag false. This is broader than the explicit requested-submission queue.      |
+| Account setup | Student setup incomplete, even without enrollment.                                                                                  |
+| Next term     | Current completed record with finalized grades, verified clearance, and no unresolved mandatory failed-grade follow-up.             |
+| Follow-ups    | Finalized non-dropped/non-voided terms with failures/INC and no completed follow-up; can include history and already-sent requests. |
 
 Next term worklist readiness still uses the grade/clearance/follow-up conditions above. It does not include required-document verification or the eligibility of a future selected subject set. A ready card is not a guarantee that final enrollment save will pass every newer gate. Queue counts cover all matching records; previews show six older terms for action. Worklist links open scoped student views rather than changing data automatically.
 
@@ -870,13 +877,13 @@ Reports is a separate read-only staff screen with report type, school year, seme
 
 All report/filter-option queries exclude voided enrollments. Defaults use the latest nonvoided term or current Manila year when empty. Selected academic values come from the term record, while names come from current user records.
 
-| Report | Contents and interpretation |
-| --- | --- |
-| Enrollment summary | Groups program/year/section. Shows enrolled, completed, dropped, enrollment-record totals, and distinct students. Includes dropped attempts. Record counts and person counts can differ. |
-| Grade report | One subject attempt per row: student, class, code/name, units, grade, outcome, release state. Excludes dropped. Draft outcome remains Pending; finalized null is INC. |
-| Students needing attention | Student/class plus failure/INC counts, follow-up state, and reasons. Includes unfinalized grades, failures, INC, pending follow-up, or unverified clearance. Excludes dropped. |
-| Enrollment completion | Finalization, clearance, follow-up, and next-term state. Historical records are labeled Historical enrollment instead of being presented as current readiness. |
-| Dropped enrollments | Dropped attempts with dropped timestamp or Not recorded and current/historical indicator. |
+| Report                     | Contents and interpretation                                                                                                                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enrollment summary         | Groups program/year/section. Shows enrolled, completed, dropped, enrollment-record totals, and distinct students. Includes dropped attempts. Record counts and person counts can differ. |
+| Grade report               | One subject attempt per row: student, class, code/name, units, grade, outcome, release state. Excludes dropped. Draft outcome remains Pending; finalized null is INC.                    |
+| Students needing attention | Student/class plus failure/INC counts, follow-up state, and reasons. Includes unfinalized grades, failures, INC, pending follow-up, or unverified clearance. Excludes dropped.           |
+| Enrollment completion      | Finalization, clearance, follow-up, and next-term state. Historical records are labeled Historical enrollment instead of being presented as current readiness.                           |
+| Dropped enrollments        | Dropped attempts with dropped timestamp or Not recorded and current/historical indicator.                                                                                                |
 
 Follow-up labels are Completed when completed timestamp exists; otherwise Requested/Not requested for finalized concerns, or Not required without concerns. Only failed grades make completed follow-up a mandatory next-term gate. INC alone can still appear as a follow-up concern.
 
@@ -906,11 +913,11 @@ Clearance request/review states are displayed by their queue and enrollment work
 
 ## 18.2 Visibility and read controls
 
-| Viewer | Events visible | Read/unread behavior |
-| --- | --- | --- |
-| Student | Only records whose recipient is that student's user ID. | Own unread count, unread filter, mark one read, mark all own unread read. |
-| Registrar | Only records whose actor ID is the current registrar. | Activity view; no recipient unread count or mark-read controls. |
-| Administrator | All recorded events. | Activity view; no student inbox read mutation. |
+| Viewer        | Events visible                                          | Read/unread behavior                                                      |
+| ------------- | ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Student       | Only records whose recipient is that student's user ID. | Own unread count, unread filter, mark one read, mark all own unread read. |
+| Registrar     | Only records whose actor ID is the current registrar.   | Activity view; no recipient unread count or mark-read controls.           |
+| Administrator | All recorded events.                                    | Activity view; no student inbox read mutation.                            |
 
 The inbox searches title, message, and recipient name and filters by event type. Student views additionally offer all/unread. Results use 20-record pages ordered newest timestamp then ID. Marking one inaccessible notification returns not found; mark all applies only to the current student's unread addressed events. Existing read timestamps are preserved.
 
@@ -1028,19 +1035,19 @@ The request hook resolves authentication and fills server locals. Protected rout
 
 ## 21.2 Main relationships and invariants
 
-| Relationship/invariant | Why it matters |
-| --- | --- |
-| One student personal row per student user | Prevents multiple student identities for one account. |
-| Student has one unique current-enrollment pointer | Current workflow follows explicit ownership rather than latest-date guessing. |
-| Enrollment references one student and curriculum | Term registration owns its own academic assignment. |
-| Enrollment has many unique subject attempts | One subject ID per enrollment; names/units saved historically. |
-| Partial unique student/year/semester index | At most one valid enrolled/completed attempt for a term; dropped/voided attempts exempt. |
-| Program selects optional curriculum | New ordinary enrollment needs a usable selected plan. |
-| Published curriculum subject snapshots | Later catalog edits do not rewrite plan history. |
-| One saved clearance submission per enrollment | Replacement updates evidence rather than retaining a full upload-attempt history. |
-| Revision field and original-value comparisons | Stale forms cannot silently overwrite newer grades or lifecycle changes. |
-| Restrictive academic foreign keys | Student/curriculum/subject deletion cannot discard referenced academic history. |
-| Nullable staff authors plus retained names | Deleting staff access preserves academic evidence. |
+| Relationship/invariant                            | Why it matters                                                                           |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| One student personal row per student user         | Prevents multiple student identities for one account.                                    |
+| Student has one unique current-enrollment pointer | Current workflow follows explicit ownership rather than latest-date guessing.            |
+| Enrollment references one student and curriculum  | Term registration owns its own academic assignment.                                      |
+| Enrollment has many unique subject attempts       | One subject ID per enrollment; names/units saved historically.                           |
+| Partial unique student/year/semester index        | At most one valid enrolled/completed attempt for a term; dropped/voided attempts exempt. |
+| Program selects optional curriculum               | New ordinary enrollment needs a usable selected plan.                                    |
+| Published curriculum subject snapshots            | Later catalog edits do not rewrite plan history.                                         |
+| One saved clearance submission per enrollment     | Replacement updates evidence rather than retaining a full upload-attempt history.        |
+| Revision field and original-value comparisons     | Stale forms cannot silently overwrite newer grades or lifecycle changes.                 |
+| Restrictive academic foreign keys                 | Student/curriculum/subject deletion cannot discard referenced academic history.          |
+| Nullable staff authors plus retained names        | Deleting staff access preserves academic evidence.                                       |
 
 Enrollment status is one of enrolled, completed, dropped, voided. Grade finalization, clearance verification, and meeting completion are additional independent facts. A completed term can still be blocked from next enrollment by failed-grade follow-up; status alone is insufficient.
 
@@ -1056,19 +1063,19 @@ Claims/leases coordinate specific shared operations. They do not create a genera
 
 ## 21.4 Configuration names
 
-| Setting name | Purpose |
-| --- | --- |
-| `DATABASE_URL` | SQLite database path; required by DB initialization/migration. |
-| `ORIGIN` | Public application origin used by authentication and deployment. |
-| `BETTER_AUTH_SECRET` | Authentication signing/security secret. |
-| `GARAGE_ADMIN_ENDPOINT`, `GARAGE_ADMIN_TOKEN` | Private Garage Admin API configuration. |
-| `GARAGE_API_ENDPOINT`, `GARAGE_REGION` | S3-compatible endpoint and matching region. Region fallback is `garage`. |
-| `BODY_SIZE_LIMIT` | Node request-body limit; Compose sets `12M` to cover bounded 10 MiB file multipart requests. |
-| `GEMINI_API_KEY` | Server-only key for Google Gemini handwriting transcription in production clearance and diagnostics. |
-| `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Seed-process inputs for initial administrator creation when running that seed process. |
-| Saved email settings | SMTP/Resend sender/provider/secret values are stored privately in system settings, not in page data. |
+| Setting name                                    | Purpose                                                                                                         |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                  | SQLite database path; required by DB initialization/migration.                                                  |
+| `ORIGIN`                                        | Public application origin used by authentication and deployment.                                                |
+| `BETTER_AUTH_SECRET`                            | Authentication signing/security secret.                                                                         |
+| `GARAGE_ADMIN_ENDPOINT`, `GARAGE_ADMIN_TOKEN`   | Private Garage Admin API configuration.                                                                         |
+| `GARAGE_API_ENDPOINT`, `GARAGE_REGION`          | S3-compatible endpoint and matching region. Region fallback is `garage`.                                        |
+| `BODY_SIZE_LIMIT`                               | Node request-body limit; Compose sets `12M` to cover bounded 10 MiB file multipart requests.                    |
+| `GEMINI_API_KEY`                                | Optional one-time import into system settings. Administrators can instead save the key in Settings > Clearance. |
+| `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Seed-process inputs for initial administrator creation when running that seed process.                          |
+| Saved email settings                            | SMTP/Resend sender/provider/secret values are stored privately in system settings, not in page data.            |
 
-Actual `.env` values, database credentials, generated account secrets, and object-store tokens were not copied into this guide. Compose currently forwards the declared core/Garage settings and body limit, but does not forward GEMINI_API_KEY. Supply that key to the running container explicitly for handwriting recognition; a host .env entry alone does not populate an undeclared container environment variable. Other seed inputs likewise need deployment wiring where absent.
+Actual `.env` values, database credentials, generated account secrets, and object-store tokens were not copied into this guide. Compose currently forwards the declared core/Garage settings and body limit, but does not forward GEMINI_API_KEY. Save the key through Settings > Clearance, or explicitly supply it to the running container for one-time import; a host .env entry alone does not populate an undeclared container environment variable. Other seed inputs likewise need deployment wiring where absent.
 
 ## 21.5 Build and container startup
 
@@ -1158,23 +1165,23 @@ If grades are already finalized, an administrator must reopen before academic co
 
 ## 23.4 Common blocked actions and resolution
 
-| Symptom | Meaning and next step |
-| --- | --- |
-| Setup invitation failed | Account may already be saved. Check provider settings and resend for existing account. |
-| Duplicate email | Account exists under some role; search/correct that account rather than create another. |
-| Grade controls locked | Check setup, current/historical permission, finalized flag, dropped/voided status. |
-| Conflict/reload message | Original values/revision changed. Reload and review the current record before retrying. |
-| Next term blocked despite completed status | Check failed-grade completed follow-up and any saved uploaded-submission state. |
-| OCR busy | Another check runs in that process; retry after it finishes. |
-| Clearance shows review | Evidence is insufficient for an automatic pass; improve alignment/image/form or correct administrator region setup. |
-| Ready clearance cannot request | Global template revision may have changed; upload against current settings. |
-| Requested clearance cannot replace | Current-version request is awaiting staff review; staff must reject when correction is needed. |
-| Template/clearance image missing | Stored object may be absent/deleted. Administrator must inspect storage/reference state. |
-| Meeting action temporarily blocked | Another send claim is active; refresh and avoid duplicate delivery. Expired claims are retryable after their window. |
-| Program unavailable | Check active status and usable selected published curriculum. |
-| Curriculum cannot edit/delete | Publication/archive/selection/enrollment references protect historical academic plans. |
-| COR unavailable | Check ownership, enrolled/completed status, and nonempty subject list. |
-| Storage unavailable | Check configured endpoints, initialization, permissions, and connectivity. |
+| Symptom                                    | Meaning and next step                                                                                                |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Setup invitation failed                    | Account may already be saved. Check provider settings and resend for existing account.                               |
+| Duplicate email                            | Account exists under some role; search/correct that account rather than create another.                              |
+| Grade controls locked                      | Check setup, current/historical permission, finalized flag, dropped/voided status.                                   |
+| Conflict/reload message                    | Original values/revision changed. Reload and review the current record before retrying.                              |
+| Next term blocked despite completed status | Check failed-grade completed follow-up and any saved uploaded-submission state.                                      |
+| OCR busy                                   | Another check runs in that process; retry after it finishes.                                                         |
+| Clearance shows review                     | Evidence is insufficient for an automatic pass; improve alignment/image/form or correct administrator region setup.  |
+| Ready clearance cannot request             | Global template revision may have changed; upload against current settings.                                          |
+| Requested clearance cannot replace         | Current-version request is awaiting staff review; staff must reject when correction is needed.                       |
+| Template/clearance image missing           | Stored object may be absent/deleted. Administrator must inspect storage/reference state.                             |
+| Meeting action temporarily blocked         | Another send claim is active; refresh and avoid duplicate delivery. Expired claims are retryable after their window. |
+| Program unavailable                        | Check active status and usable selected published curriculum.                                                        |
+| Curriculum cannot edit/delete              | Publication/archive/selection/enrollment references protect historical academic plans.                               |
+| COR unavailable                            | Check ownership, enrolled/completed status, and nonempty subject list.                                               |
+| Storage unavailable                        | Check configured endpoints, initialization, permissions, and connectivity.                                           |
 
 ## 23.5 Current limits and boundaries
 
@@ -1216,12 +1223,12 @@ Students can upload only their own requested/rejected row with the current revis
 
 Upload eligibility checks the student's identity, request ownership/state, and revision. It does not reapply the original request window, current term/status, setup, or grade-finalization conditions; an existing requested/rejected item remains uploadable after academic state changes.
 
-| Input | Validation |
-| --- | --- |
-| File count and size | One nonempty file per document request, at most 10 MiB. Combine multiple pages into a single supported PDF. |
-| PDF | `%PDF-n.n` header and `%%EOF` within the last 2048 bytes. Multiple pages allowed. |
-| JPEG/PNG/WebP | Actual decoded format matches MIME, single image page, successful decode/statistics, maximum 40 million input pixels. |
-| Other types | Rejected. No ZIP or multiple-file bundle for one request. |
+| Input               | Validation                                                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| File count and size | One nonempty file per document request, at most 10 MiB. Combine multiple pages into a single supported PDF.           |
+| PDF                 | `%PDF-n.n` header and `%%EOF` within the last 2048 bytes. Multiple pages allowed.                                     |
+| JPEG/PNG/WebP       | Actual decoded format matches MIME, single image page, successful decode/statistics, maximum 40 million input pixels. |
+| Other types         | Rejected. No ZIP or multiple-file bundle for one request.                                                             |
 
 PDF checking is bounded structural validation. It does not fully parse or authenticate a transcript, OCR its content, scan malware, or enforce a page count. Staff determines document validity manually.
 
@@ -1241,12 +1248,12 @@ Decision stores reviewer ID, retained reviewer name, timestamp, and revision inc
 
 ## 24.5 Two different progression gates
 
-| Gate | Exact condition and required state |
-| --- | --- |
+| Gate                             | Exact condition and required state                                                                                                                                                              |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Student clearance-review request | Current year equals current curriculum final year and current semester is at least `max(1, semesters - 1)`. Every existing requirement must be uploaded or verified. Requested/rejected blocks. |
-| Ordinary staff enrollment save | Target year equals selected curriculum final year and target semester equals selected curriculum final semester. Every existing requirement must be verified. Uploaded alone blocks. |
-| No request rows | Both document checks pass; no universal automatic all-three requirement. |
-| Enrollment correction | Explicitly exempt from document final-term gating in editor and server correction path. Subject prerequisites still apply. |
+| Ordinary staff enrollment save   | Target year equals selected curriculum final year and target semester equals selected curriculum final semester. Every existing requirement must be verified. Uploaded alone blocks.            |
+| No request rows                  | Both document checks pass; no universal automatic all-three requirement.                                                                                                                        |
+| Enrollment correction            | Explicitly exempt from document final-term gating in editor and server correction path. Subject prerequisites still apply.                                                                      |
 
 For a two-semester plan, final-year semester 1 already activates the student request upload gate, preparing for final semester. With three semesters it starts at semester 2; with one semester it starts at semester 1. The request-creation window nevertheless stays semester 1. The gate can also apply to an eligible request while the student is already in the final semester.
 
@@ -1534,57 +1541,56 @@ Use a prepared student and curriculum: show account setup, first enrollment, dra
 
 Sources: S01–S36. Answers should be revised when implementation or institutional policy changes.
 
-
 # Appendix A. Screen and endpoint reference
 
 Dynamic braces identify a record ID placeholder. Account user IDs and student numbers are distinct identifiers.
 
-| Route or screen | Authorized audience and purpose |
-| --- | --- |
-| `/` | Public landing page; portal information and dashboard/sign-in link. |
-| `/login` | Public login and second-factor/recovery challenge; signed-in users redirected. |
-| `/first-login` | Token-based first password setup. |
-| `/forgot-password` | Public generic recovery request. |
-| `/reset-password` | Token-based password reset and attempted sign-in. |
-| `/user` | Protected workspace entry redirect/view leading to dashboard. |
-| `/user/dashboard` | Role-specific staff or own-student dashboard. |
-| `/user/admins` | Admin-only administrator account management. |
-| `/user/registrars` | Admin-only registrar account management. |
-| `/user/students` | Staff student directory, create/edit, setup resend, eligible deletion, session revocation. |
-| `/user/students/{userId}` | Staff student personal information, current enrollment and history. |
-| `/user/students/{userId}/enroll` | Staff first/next/restoration enrollment editor. |
-| `/user/students/{userId}/enrollments/{enrollmentId}` | Staff term details, grades, review, lifecycle actions, audit. |
-| `/user/students/{userId}/enrollments/{enrollmentId}/edit` | Permitted staff correction editor. |
-| `/user/enrollment` | Student own current enrollment only, released grades, clearance and required-document uploads. |
-| `/user/enrollment/{enrollmentId}/cor` | Authorized staff or owning student private COR PDF. |
-| `/user/clearances` | Staff Enrollment requests review queue. |
-| `/user/clearance-template` | Authenticated supported roles fetch current reference, optional revision match. |
-| `/user/clearance-files/{id}` | Staff/owner retrieve saved original clearance image. |
-| `/user/document-files/{id}` | Staff/owner private download of a requested academic document copy. |
-| `/user/programs` | Staff catalog; admin writes. |
-| `/user/subjects` | Staff catalog; admin writes. |
-| `/user/curriculum` | Staff-only curriculum list; student requests forbidden. |
-| `/user/curriculum/new` | Admin draft creation. |
-| `/user/curriculum/{curriculumId}` | Staff-only plan detail; student requests forbidden. |
-| `/user/curriculum/{curriculumId}/edit` | Admin unpublished/unarchived draft editing. |
-| `/user/masterlist` | Staff selected historical-term roster. |
-| `/user/masterlist/rows` | Staff next lazy roster batch. |
-| `/user/masterlist/export` | Staff full matching roster CSV. |
-| `/user/reports` | Staff five academic report types. |
-| `/user/reports/export` | Staff matching report CSV. |
-| `/user/notifications` | Role-scoped saved event inbox/activity log. |
-| `/user/settings` | Settings entry redirects to an appropriate settings page. |
-| `/user/settings/profile` | Own read-only account/personal data. |
-| `/user/settings/security` | Own password/TOTP/recovery operations. |
-| `/user/settings/email` | Admin provider/sender configuration. |
-| `/user/settings/clearance` | Admin reference, region definition, browser test. |
-| `/user/settings/storage` | Admin whole-bucket browser, overview, confirmed deletion/capacity. |
-| `/user/settings/storage/upload` | Admin bounded multipart file upload. |
-| `/user/settings/storage/download` | Admin storage attachment stream. |
-| `/test` | Standalone browser scan/diagnostic prototype; optional signed-in tools. |
-| `/test/identity` | Authenticated same-origin diagnostic handwriting POST. |
-| `/test/files` | Authenticated private per-user test upload/list. |
-| `/test/files/download` | Authenticated own-prefix download. |
+| Route or screen                                           | Authorized audience and purpose                                                                |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `/`                                                       | Public landing page; portal information and dashboard/sign-in link.                            |
+| `/login`                                                  | Public login and second-factor/recovery challenge; signed-in users redirected.                 |
+| `/first-login`                                            | Token-based first password setup.                                                              |
+| `/forgot-password`                                        | Public generic recovery request.                                                               |
+| `/reset-password`                                         | Token-based password reset and attempted sign-in.                                              |
+| `/user`                                                   | Protected workspace entry redirect/view leading to dashboard.                                  |
+| `/user/dashboard`                                         | Role-specific staff or own-student dashboard.                                                  |
+| `/user/admins`                                            | Admin-only administrator account management.                                                   |
+| `/user/registrars`                                        | Admin-only registrar account management.                                                       |
+| `/user/students`                                          | Staff student directory, create/edit, setup resend, eligible deletion, session revocation.     |
+| `/user/students/{userId}`                                 | Staff student personal information, current enrollment and history.                            |
+| `/user/students/{userId}/enroll`                          | Staff first/next/restoration enrollment editor.                                                |
+| `/user/students/{userId}/enrollments/{enrollmentId}`      | Staff term details, grades, review, lifecycle actions, audit.                                  |
+| `/user/students/{userId}/enrollments/{enrollmentId}/edit` | Permitted staff correction editor.                                                             |
+| `/user/enrollment`                                        | Student own current enrollment only, released grades, clearance and required-document uploads. |
+| `/user/enrollment/{enrollmentId}/cor`                     | Authorized staff or owning student private COR PDF.                                            |
+| `/user/clearances`                                        | Staff Enrollment requests review queue.                                                        |
+| `/user/clearance-template`                                | Authenticated supported roles fetch current reference, optional revision match.                |
+| `/user/clearance-files/{id}`                              | Staff/owner retrieve saved original clearance image.                                           |
+| `/user/document-files/{id}`                               | Staff/owner private download of a requested academic document copy.                            |
+| `/user/programs`                                          | Staff catalog; admin writes.                                                                   |
+| `/user/subjects`                                          | Staff catalog; admin writes.                                                                   |
+| `/user/curriculum`                                        | Staff-only curriculum list; student requests forbidden.                                        |
+| `/user/curriculum/new`                                    | Admin draft creation.                                                                          |
+| `/user/curriculum/{curriculumId}`                         | Staff-only plan detail; student requests forbidden.                                            |
+| `/user/curriculum/{curriculumId}/edit`                    | Admin unpublished/unarchived draft editing.                                                    |
+| `/user/masterlist`                                        | Staff selected historical-term roster.                                                         |
+| `/user/masterlist/rows`                                   | Staff next lazy roster batch.                                                                  |
+| `/user/masterlist/export`                                 | Staff full matching roster CSV.                                                                |
+| `/user/reports`                                           | Staff five academic report types.                                                              |
+| `/user/reports/export`                                    | Staff matching report CSV.                                                                     |
+| `/user/notifications`                                     | Role-scoped saved event inbox/activity log.                                                    |
+| `/user/settings`                                          | Settings entry redirects to an appropriate settings page.                                      |
+| `/user/settings/profile`                                  | Own read-only account/personal data.                                                           |
+| `/user/settings/security`                                 | Own password/TOTP/recovery operations.                                                         |
+| `/user/settings/email`                                    | Admin provider/sender configuration.                                                           |
+| `/user/settings/clearance`                                | Admin reference, region definition, browser test.                                              |
+| `/user/settings/storage`                                  | Admin whole-bucket browser, overview, confirmed deletion/capacity.                             |
+| `/user/settings/storage/upload`                           | Admin bounded multipart file upload.                                                           |
+| `/user/settings/storage/download`                         | Admin storage attachment stream.                                                               |
+| `/test`                                                   | Standalone browser scan/diagnostic prototype; optional signed-in tools.                        |
+| `/test/identity`                                          | Authenticated same-origin diagnostic handwriting POST.                                         |
+| `/test/files`                                             | Authenticated private per-user test upload/list.                                               |
+| `/test/files/download`                                    | Authenticated own-prefix download.                                                             |
 
 `/user/applicants` has a remaining layout file but no implemented applicant page in the inspected route inventory. A metadata entry for a route name does not prove an implemented user workflow. Better Auth also handles its authentication API through the server hook; those library endpoints are separate from the application screen list.
 
@@ -1592,73 +1598,73 @@ Dynamic braces identify a record ID placeholder. Account user IDs and student nu
 
 This inventory groups exported application commands/queries by owner. Direct Better Auth client operations also perform login, password changes, factor management, sign-out, and the staff ban/session APIs described earlier.
 
-| Owner module | Commands and responsibility |
-| --- | --- |
-| `actions/user.remote.ts` | `createStudent`, `updateStudent`, `deleteStudent`: personal account lifecycle and protected deletion. |
-| same | `createRegistrar`, `updateRegistrar`, `deleteRegistrar`, `setRegistrarDisabled`: admin-managed registrar access. |
-| same | `createAdmin`, `updateAdmin`, `deleteAdmin`, `setAdminDisabled`: administrator account management with self-protection. |
-| same | `revokeAccountSessions`: role-scoped sign-out of target sessions. |
-| same | `resendMagicLink`: staff-initiated password-setup/reset invitation, despite historical name. |
-| same | `enrollStudent`: validate/save term, subjects, current pointer, notification; attempt email. |
-| `actions/password.remote.ts` | `resetPasswordAndSignIn`, `completeFirstLogin`: consume token, set password, attempt sign-in, finish account flags. |
-| `actions/enrollment.remote.ts` | `correctEnrollment`, `voidEnrollment`, `reopenEnrollment`: guarded academic changes with reasons/audits. |
-| `actions/grades.remote.ts` | `updateEnrollmentGrades`, `finalizeEnrollmentGrades`: drafts and reviewed release. |
-| same | `verifyEnrollmentClearance`: approve exact requested image and complete current clearance. |
-| same | `sendEnrollmentMeetingRequest`, `completeEnrollmentFollowUp`: delivery claim, sent state, completed discussion. |
-| same | `dropEnrollment`: current actual withdrawal and invalidation. |
-| `actions/clearance.remote.ts` | `getStudentClearance`, `uploadClearance`, `requestEnrollment`: own current production clearance information, analysis/save, explicit request. |
-| same | `rejectClearance`: staff reasoned rejection of requested submission. |
-| same | `getClearanceSettings`, `uploadClearanceTemplate`, `saveClearanceAreas`: admin template and saved definition management. |
-| `actions/documents.remote.ts` | `getStudentDocuments`, `getStudentDocumentReview`: own student requirements and staff review data. |
-| same | `requestDocuments`, `reviewDocument`, `uploadDocument`: role/ownership-scoped requests, manual decisions, and file submission with revision checks. |
-| `actions/curriculum.remote.ts` | `createCurriculum`, `updateCurriculum`, `activateCurriculum`, `changeCurriculumState`, `deleteCurriculum`: plan lifecycle and publication. |
-| `actions/program.remote.ts` | `createProgram`, `updateProgram`, `deleteProgram`, `setProgramStatus`: admin catalog and curriculum selection. |
-| `actions/subject.remote.ts` | `createSubject`, `updateSubject`, `deleteSubject`, `setSubjectStatus`: admin subject catalog, transactional prerequisite graph validation, protected deletion. |
-| `actions/settings.remote.ts` | `updateSystemSettings`: save validated email settings while preserving blank secrets. |
-| `actions/notifications.remote.ts` | `readNotifications`: supplied `id` marks that own event; omitted `id` marks all own unread events. |
-| `actions/storage.remote.ts` | `deleteGarageEntry`, `increaseGarageCapacity`: administrator-only validated confirmed mutations. |
-| `server/enrollment.ts` | Authoritative eligibility, allowed curriculum/subject mapping, outstanding finalized attempts. |
-| `server/enrollment-editor.ts` | Enrollment defaults and loading; restoration/ordinary progression. |
-| `server/enrollment-corrections.ts` | Revisions, chronological protection, snapshots, correction/void/reopen ownership. |
-| `server/student-enrollment.ts` | Grade/lifecycle permissions and student-facing grade masking/history. |
-| `server/clearance-workflow.ts` | Own-current eligibility, request state, queue, verification/rejection invariants. |
-| `server/clearance-upload.ts` | Server analysis/object save/recheck and safe replacement cleanup. |
-| `server/clearance-checker.ts` | Production decoding, rectification, OCR, printed and office findings. |
-| `server/handwriting.ts`, `clearance/identity*.ts` | Shared Gemini transcription, normalized comparison, and production writing-presence evidence. |
-| `server/documents.ts`, `server/document-upload.ts` | Student-scoped requirements, upload/verified term gates, manual review, private file replacement. |
-| `subject-prerequisites.ts`, `server/enrollment.ts` | Latest valid earlier attempt and all-direct-prerequisites checks; server enforcement for creation/restoration/correction. |
-| `server/masterlist.ts`, `server/reports.ts` | Validated historical scope, data queries, output generation. |
-| `server/notifications.ts`, `server/email/*` | Safe persisted events, role visibility, templates, provider delivery. |
-| `server/garage/*` | Provisioning lease, layout, S3 operations, explorer, overview/capacity. |
+| Owner module                                       | Commands and responsibility                                                                                                                                    |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actions/user.remote.ts`                           | `createStudent`, `updateStudent`, `deleteStudent`: personal account lifecycle and protected deletion.                                                          |
+| same                                               | `createRegistrar`, `updateRegistrar`, `deleteRegistrar`, `setRegistrarDisabled`: admin-managed registrar access.                                               |
+| same                                               | `createAdmin`, `updateAdmin`, `deleteAdmin`, `setAdminDisabled`: administrator account management with self-protection.                                        |
+| same                                               | `revokeAccountSessions`: role-scoped sign-out of target sessions.                                                                                              |
+| same                                               | `resendMagicLink`: staff-initiated password-setup/reset invitation, despite historical name.                                                                   |
+| same                                               | `enrollStudent`: validate/save term, subjects, current pointer, notification; attempt email.                                                                   |
+| `actions/password.remote.ts`                       | `resetPasswordAndSignIn`, `completeFirstLogin`: consume token, set password, attempt sign-in, finish account flags.                                            |
+| `actions/enrollment.remote.ts`                     | `correctEnrollment`, `voidEnrollment`, `reopenEnrollment`: guarded academic changes with reasons/audits.                                                       |
+| `actions/grades.remote.ts`                         | `updateEnrollmentGrades`, `finalizeEnrollmentGrades`: drafts and reviewed release.                                                                             |
+| same                                               | `verifyEnrollmentClearance`: approve exact requested image and complete current clearance.                                                                     |
+| same                                               | `sendEnrollmentMeetingRequest`, `completeEnrollmentFollowUp`: delivery claim, sent state, completed discussion.                                                |
+| same                                               | `dropEnrollment`: current actual withdrawal and invalidation.                                                                                                  |
+| `actions/clearance.remote.ts`                      | `getStudentClearance`, `uploadClearance`, `requestEnrollment`: own current production clearance information, analysis/save, explicit request.                  |
+| same                                               | `rejectClearance`: staff reasoned rejection of requested submission.                                                                                           |
+| same                                               | `getClearanceSettings`, `uploadClearanceTemplate`, `saveClearanceAreas`: admin template and saved definition management.                                       |
+| `actions/documents.remote.ts`                      | `getStudentDocuments`, `getStudentDocumentReview`: own student requirements and staff review data.                                                             |
+| same                                               | `requestDocuments`, `reviewDocument`, `uploadDocument`: role/ownership-scoped requests, manual decisions, and file submission with revision checks.            |
+| `actions/curriculum.remote.ts`                     | `createCurriculum`, `updateCurriculum`, `activateCurriculum`, `changeCurriculumState`, `deleteCurriculum`: plan lifecycle and publication.                     |
+| `actions/program.remote.ts`                        | `createProgram`, `updateProgram`, `deleteProgram`, `setProgramStatus`: admin catalog and curriculum selection.                                                 |
+| `actions/subject.remote.ts`                        | `createSubject`, `updateSubject`, `deleteSubject`, `setSubjectStatus`: admin subject catalog, transactional prerequisite graph validation, protected deletion. |
+| `actions/settings.remote.ts`                       | `updateSystemSettings`: save validated email settings while preserving blank secrets.                                                                          |
+| `actions/notifications.remote.ts`                  | `readNotifications`: supplied `id` marks that own event; omitted `id` marks all own unread events.                                                             |
+| `actions/storage.remote.ts`                        | `deleteGarageEntry`, `increaseGarageCapacity`: administrator-only validated confirmed mutations.                                                               |
+| `server/enrollment.ts`                             | Authoritative eligibility, allowed curriculum/subject mapping, outstanding finalized attempts.                                                                 |
+| `server/enrollment-editor.ts`                      | Enrollment defaults and loading; restoration/ordinary progression.                                                                                             |
+| `server/enrollment-corrections.ts`                 | Revisions, chronological protection, snapshots, correction/void/reopen ownership.                                                                              |
+| `server/student-enrollment.ts`                     | Grade/lifecycle permissions and student-facing grade masking/history.                                                                                          |
+| `server/clearance-workflow.ts`                     | Own-current eligibility, request state, queue, verification/rejection invariants.                                                                              |
+| `server/clearance-upload.ts`                       | Server analysis/object save/recheck and safe replacement cleanup.                                                                                              |
+| `server/clearance-checker.ts`                      | Production decoding, rectification, OCR, printed and office findings.                                                                                          |
+| `server/handwriting.ts`, `clearance/identity*.ts`  | Shared Gemini transcription, normalized comparison, and production writing-presence evidence.                                                                  |
+| `server/documents.ts`, `server/document-upload.ts` | Student-scoped requirements, upload/verified term gates, manual review, private file replacement.                                                              |
+| `subject-prerequisites.ts`, `server/enrollment.ts` | Latest valid earlier attempt and all-direct-prerequisites checks; server enforcement for creation/restoration/correction.                                      |
+| `server/masterlist.ts`, `server/reports.ts`        | Validated historical scope, data queries, output generation.                                                                                                   |
+| `server/notifications.ts`, `server/email/*`        | Safe persisted events, role visibility, templates, provider delivery.                                                                                          |
+| `server/garage/*`                                  | Provisioning lease, layout, S3 operations, explorer, overview/capacity.                                                                                        |
 
 Dedicated catalog status commands exist even where the current interface saves active status through a full edit form. Commands listed here are implementation entry points; ordinary users operate the corresponding UI.
 
 # Appendix C. Data dictionary and state ownership
 
-| Table/record | Important data and ownership |
-| --- | --- |
-| `user` | Identity, name parts/display name, unique email, role, setup/email flags, ban state, factor flag, timestamps. |
-| `student` | Student number primary key, unique user link, address/contact/birth/sex, unique current enrollment, creation time. |
-| `student_sequence` | Year/month primary key and last allocated monthly number. |
-| `program` | Unique code, name/description, active status, selected curriculum ID. |
-| `subject` | Unique catalog code, name/description, active status; no universal unit value. |
-| `subject_prerequisite` | Composite subject/required-subject pair, reverse index, self check, cascade/restrict links. Global mutable rules, not published curriculum snapshots. |
-| `curriculum` | Program-code link, unique program/name pair, year/semester bounds, publication/archive state. |
-| `curriculum_subject` | Unique subject in a curriculum, placement, units, published name/code snapshots. |
-| `enrollment` | Student/curriculum, section/year/semester/school-year, status, finalization/clearance, meeting/follow-up/drop times, revision. |
-| `enrollment_subject` | Unique subject per enrollment, source curriculum/extra, optional placement link, grade, name/code/units snapshot, staff/time. |
-| `enrollment_audit` | Corrected/voided/reopened event, actor ID/name, reason, before/after JSON snapshots, timestamp. |
-| `clearance_template` | Singleton 1; revision/object metadata, optional saved definition, uploader/time. |
+| Table/record           | Important data and ownership                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user`                 | Identity, name parts/display name, unique email, role, setup/email flags, ban state, factor flag, timestamps.                                                                               |
+| `student`              | Student number primary key, unique user link, address/contact/birth/sex, unique current enrollment, creation time.                                                                          |
+| `student_sequence`     | Year/month primary key and last allocated monthly number.                                                                                                                                   |
+| `program`              | Unique code, name/description, active status, selected curriculum ID.                                                                                                                       |
+| `subject`              | Unique catalog code, name/description, active status; no universal unit value.                                                                                                              |
+| `subject_prerequisite` | Composite subject/required-subject pair, reverse index, self check, cascade/restrict links. Global mutable rules, not published curriculum snapshots.                                       |
+| `curriculum`           | Program-code link, unique program/name pair, year/semester bounds, publication/archive state.                                                                                               |
+| `curriculum_subject`   | Unique subject in a curriculum, placement, units, published name/code snapshots.                                                                                                            |
+| `enrollment`           | Student/curriculum, section/year/semester/school-year, status, finalization/clearance, meeting/follow-up/drop times, revision.                                                              |
+| `enrollment_subject`   | Unique subject per enrollment, source curriculum/extra, optional placement link, grade, name/code/units snapshot, staff/time.                                                               |
+| `enrollment_audit`     | Corrected/voided/reopened event, actor ID/name, reason, before/after JSON snapshots, timestamp.                                                                                             |
+| `clearance_template`   | Singleton 1; revision/object metadata, optional saved definition, uploader/time.                                                                                                            |
 | `clearance_submission` | Unique enrollment; file/template/definition/corners/report snapshot including writing presence and identity result, request/reviewer/rejection state. Review need is not a separate status. |
-| `required_document` | Unique student user/kind, original request-enrollment/due snapshots, requested/uploaded/verified/rejected status, revision, current file metadata and reviewer/reason. |
-| `notification` | Recipient, optional actor/enrollment, event type, safe text, creation/read times. |
-| `system_settings` | Singleton 1; seed flag, provider, sender, SMTP settings/password and Resend API key. Secrets are private. |
-| `garage_storage` | Endpoint, stable key name/ID, lease token/expiry. S3 secret stays in server memory. |
-| `session` | Unique session token, user, expiry, client metadata. Cascades on user removal. |
-| `account` | Auth provider account/credential data and hashed password handled by authentication. |
-| `verification` | Expiring authentication verification/reset records. |
-| `two_factor` | Factor secret, backup-code data, verification/lock bookkeeping. |
-| `task` | Existing small task table without an active documented enrollment UI workflow. |
+| `required_document`    | Unique student user/kind, original request-enrollment/due snapshots, requested/uploaded/verified/rejected status, revision, current file metadata and reviewer/reason.                      |
+| `notification`         | Recipient, optional actor/enrollment, event type, safe text, creation/read times.                                                                                                           |
+| `system_settings`      | Singleton 1; seed flag, provider, sender, SMTP settings/password and Resend API key. Secrets are private.                                                                                   |
+| `garage_storage`       | Endpoint, stable key name/ID, lease token/expiry. S3 secret stays in server memory.                                                                                                         |
+| `session`              | Unique session token, user, expiry, client metadata. Cascades on user removal.                                                                                                              |
+| `account`              | Auth provider account/credential data and hashed password handled by authentication.                                                                                                        |
+| `verification`         | Expiring authentication verification/reset records.                                                                                                                                         |
+| `two_factor`           | Factor secret, backup-code data, verification/lock bookkeeping.                                                                                                                             |
+| `task`                 | Existing small task table without an active documented enrollment UI workflow.                                                                                                              |
 
 The database and commands apply uniqueness, positive units/placement rules, grade range, status enums, and restrictive/cascading/set-null relationships according to their owners. Validated inputs complement those constraints; UI-only validation is not the enforcement boundary.
 
@@ -1666,64 +1672,64 @@ The database and commands apply uniqueness, positive units/placement rules, grad
 
 Paths are repository-relative. Line references identify representative inspected entry points and may move as code changes.
 
-| ID | Source locations |
-| --- | --- |
-| S01 | `src/lib/schema.ts:1`, `src/lib/Roles.ts:1`, `src/lib/server/db/index.ts:1`. Core records, roles, database. |
-| S02 | `src/lib/components/Sidebar/navigation.ts:39`, `src/routes/user/+layout.server.ts:7`, `src/lib/components/Topbar/Topbar.svelte:1`. Role navigation/workspace. |
-| S03 | `src/lib/server/auth.ts:18`, `src/lib/auth-permissions.ts:10`, `src/lib/server/auth-names.ts:22`, `src/hooks.server.ts:12`. Auth boundary/hooks. |
-| S04 | `src/routes/login/+page.svelte:16`, `src/routes/first-login/+page.svelte:13`, `src/routes/reset-password/+page.svelte:13`, `src/routes/user/settings/security/+page.svelte:65`. Login/password/TOTP UI. |
-| S05 | `src/lib/errors.ts:1`, `src/hooks.client.ts:1`, `src/lib/components/Popup/`, `src/lib/components/ThemeController/`. Safe errors/shared controls/theme. |
-| S06 | `src/lib/actions/password.remote.ts:11`, `src/lib/server/email/account-setup.ts:1`, `src/routes/forgot-password/+page.svelte:13`. Tokens/setup/delivery tracking. |
-| S07 | `src/lib/actions/user.remote.ts:32`, `src/lib/students.ts:5`, `src/lib/person-name.ts:3`, `src/routes/user/students/StudentDialog.svelte:37`. Account/student lifecycle. |
-| S08 | `src/lib/actions/program.remote.ts:12`, `src/lib/actions/subject.remote.ts:11`, `src/routes/user/programs/`, `src/routes/user/subjects/`. Catalogs. |
-| S09 | `src/lib/actions/curriculum.remote.ts:12`, `src/lib/server/curriculum.ts:35`, `src/routes/user/curriculum/`. Draft/publication/history. |
-| S10 | `src/lib/server/enrollment.ts:24`, `src/lib/server/enrollment-editor.ts:36`, `src/routes/user/students/EnrollmentEditor.svelte:35`. Enrollment/retakes/defaults. |
-| S11 | `src/lib/actions/grades.remote.ts:34`, `src/lib/server/student-enrollment.ts:9`, `src/lib/enrollment-grades.ts:3`. Grades/meeting/drop/clearance flags. |
-| S12 | `src/lib/actions/clearance.remote.ts:25`, `src/lib/server/clearance-template.ts:34`, `src/routes/user/settings/clearance/`. Admin template definition/setup. |
-| S13 | `src/lib/server/clearance-upload.ts:31`, `src/lib/server/clearance-workflow.ts:42`, `src/routes/user/enrollment/StudentClearance.svelte:35`. Production submission/request/review. |
-| S14 | `src/lib/server/clearance-checker.ts:29`, `src/lib/clearance/definition.ts:107`, `src/lib/clearance/report.ts:14`, `src/lib/clearance/checkbox.ts:165`. OCR/geometry/mark thresholds. |
-| S15 | `src/routes/user/clearances/+page.server.ts:6`, `src/routes/user/students/EnrollmentDetails.svelte:317`, `src/routes/user/clearance-files/[id]/+server.ts:10`. Queue/reviewer/file access. |
-| S16 | `src/lib/server/enrollment-corrections.ts:22`, `src/lib/actions/enrollment.remote.ts:1`, `src/routes/user/students/EnrollmentRecordActions.svelte:126`. Changes/audit. |
-| S17 | `src/lib/server/staff-dashboard.ts:34`, `src/lib/server/enrollment-worklist.ts:8`, `src/lib/pages/Dashboard/Staff/Dashboard.svelte:133`. Staff metrics/queues. |
-| S18 | `src/lib/server/student-dashboard.ts:6`, `src/lib/pages/Dashboard/Student/`, `src/routes/user/enrollment/`, `src/routes/user/settings/profile/`. Own academic views. |
-| S19 | `src/lib/server/masterlist.ts:10`, `src/routes/user/masterlist/MasterlistTable.svelte:19`, `src/routes/user/masterlist/export/+server.ts:4`. Masterlist. |
-| S20 | `src/lib/server/reports.ts:23`, `src/lib/reports.ts:1`, `src/routes/user/reports/+page.svelte:116`, `src/lib/server/csv.ts:1`. Reports/exports. |
-| S21 | `src/lib/server/notifications.ts:12`, `src/lib/actions/notifications.remote.ts:8`, `src/lib/email.ts:6`, `src/routes/user/notifications/`. Events/visibility. |
-| S22 | `src/lib/server/garage/index.ts:13`, `src/lib/server/garage/files.ts:39`, `src/lib/server/garage/credentials.ts:15`. Provisioning/files/lease. |
-| S23 | `src/lib/server/email/index.ts:10`, `src/lib/server/email/templates.ts:124`, `src/lib/server/settings.ts:5`, `src/lib/actions/settings.remote.ts:12`. Email configuration/delivery. |
-| S24 | `src/lib/schema.ts:176`, `src/lib/schema.ts:210`, `src/lib/schema.ts:275`, `src/lib/server/staff-accounts.ts:11`. Persistence/constraints/lists. |
-| S25 | `src/lib/server/garage/admin.ts:14`, `src/lib/server/garage/explorer.ts:23`, `src/lib/server/garage/layout.ts:72`, `src/routes/user/settings/storage/`. Storage admin/capacity. |
-| S26 | `src/lib/server/filters.ts:20`, `src/lib/components/Filter/fields.ts:18`, `src/lib/components/Table/TableValues.ts:1`. Common filters/pagination. |
-| S27 | `src/lib/server/cor.ts:15`, `src/lib/server/cor-pdf.ts:13`, `src/routes/user/enrollment/[enrollmentId]/cor/+server.ts:6`. Certificate output. |
-| S28 | `src/routes/test/files/+page.server.ts:12`, `src/lib/server/garage/files.ts:126`, `README.md`. Diagnostic personal storage/configuration notes. |
-| S29 | `Dockerfile:1`, `docker-entrypoint.sh:1`, `docker-compose.yml:1`, `scripts/migrate.mjs:1`, `src/lib/server/db/seed.ts:1`, `.github/workflows/docker-publish.yml:1`, `src/env.ts:1`. Runtime/seed/configuration. |
-| S30 | `src/routes/test/+page.svelte:220`, `src/routes/test/IdentityCheck.svelte:51`, `src/routes/test/identity.server.ts:11`, `src/lib/clearance/identity.ts`, `src/lib/server/handwriting.ts`. Diagnostic scan/identity. |
-| S31 | `src/lib/server/handwriting.ts:14`, `src/lib/clearance/identity.ts:38`, `src/lib/clearance/identity-presence.ts:61`, `src/lib/clearance/report.ts:17`. Gemini, comparison, writing presence, submit/review helpers. |
-| S32 | `src/lib/clearance/anchors.ts:69`, `src/lib/clearance/scan.client.ts:425`, `src/lib/clearance/BorderEditor.svelte:57`, `src/lib/clearance/definition.ts:124`, `src/lib/clearance/checkbox.ts:16`. Current alignment, definition, and mark checks. |
-| S33 | `src/lib/server/documents.ts:15`, `src/lib/server/document-upload.ts:17`, `src/lib/actions/documents.remote.ts:16`, `src/lib/components/documents/`, `src/routes/user/document-files/[id]/+server.ts:10`. Required documents and exact gates. |
-| S34 | `src/lib/subject-prerequisites.ts:16`, `src/lib/actions/subject.remote.ts:29`, `src/lib/server/enrollment.ts:27`, `src/lib/server/enrollment-corrections.ts:179`, `src/lib/server/db/seed-data.ts:63`, `drizzle/0038_subject_prerequisites.sql:1`. Prerequisite graph, enforcement, samples, migration. |
-| S35 | `src/routes/user/enrollment/+page.server.ts:6`, `src/lib/components/EnrollmentHistory.svelte:70`, `src/lib/components/Sidebar/navigation.ts:58`, `src/routes/user/curriculum/+page.server.ts:13`, `src/routes/user/curriculum/[curriculumId]/+page.server.ts:7`. Current-only student page and staff-only curriculum. |
+| ID  | Source locations                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S01 | `src/lib/schema.ts:1`, `src/lib/Roles.ts:1`, `src/lib/server/db/index.ts:1`. Core records, roles, database.                                                                                                                                                                                                                                                                                                          |
+| S02 | `src/lib/components/Sidebar/navigation.ts:39`, `src/routes/user/+layout.server.ts:7`, `src/lib/components/Topbar/Topbar.svelte:1`. Role navigation/workspace.                                                                                                                                                                                                                                                        |
+| S03 | `src/lib/server/auth.ts:18`, `src/lib/auth-permissions.ts:10`, `src/lib/server/auth-names.ts:22`, `src/hooks.server.ts:12`. Auth boundary/hooks.                                                                                                                                                                                                                                                                     |
+| S04 | `src/routes/login/+page.svelte:16`, `src/routes/first-login/+page.svelte:13`, `src/routes/reset-password/+page.svelte:13`, `src/routes/user/settings/security/+page.svelte:65`. Login/password/TOTP UI.                                                                                                                                                                                                              |
+| S05 | `src/lib/errors.ts:1`, `src/hooks.client.ts:1`, `src/lib/components/Popup/`, `src/lib/components/ThemeController/`. Safe errors/shared controls/theme.                                                                                                                                                                                                                                                               |
+| S06 | `src/lib/actions/password.remote.ts:11`, `src/lib/server/email/account-setup.ts:1`, `src/routes/forgot-password/+page.svelte:13`. Tokens/setup/delivery tracking.                                                                                                                                                                                                                                                    |
+| S07 | `src/lib/actions/user.remote.ts:32`, `src/lib/students.ts:5`, `src/lib/person-name.ts:3`, `src/routes/user/students/StudentDialog.svelte:37`. Account/student lifecycle.                                                                                                                                                                                                                                             |
+| S08 | `src/lib/actions/program.remote.ts:12`, `src/lib/actions/subject.remote.ts:11`, `src/routes/user/programs/`, `src/routes/user/subjects/`. Catalogs.                                                                                                                                                                                                                                                                  |
+| S09 | `src/lib/actions/curriculum.remote.ts:12`, `src/lib/server/curriculum.ts:35`, `src/routes/user/curriculum/`. Draft/publication/history.                                                                                                                                                                                                                                                                              |
+| S10 | `src/lib/server/enrollment.ts:24`, `src/lib/server/enrollment-editor.ts:36`, `src/routes/user/students/EnrollmentEditor.svelte:35`. Enrollment/retakes/defaults.                                                                                                                                                                                                                                                     |
+| S11 | `src/lib/actions/grades.remote.ts:34`, `src/lib/server/student-enrollment.ts:9`, `src/lib/enrollment-grades.ts:3`. Grades/meeting/drop/clearance flags.                                                                                                                                                                                                                                                              |
+| S12 | `src/lib/actions/clearance.remote.ts:25`, `src/lib/server/clearance-template.ts:34`, `src/routes/user/settings/clearance/`. Admin template definition/setup.                                                                                                                                                                                                                                                         |
+| S13 | `src/lib/server/clearance-upload.ts:31`, `src/lib/server/clearance-workflow.ts:42`, `src/routes/user/enrollment/StudentClearance.svelte:35`. Production submission/request/review.                                                                                                                                                                                                                                   |
+| S14 | `src/lib/server/clearance-checker.ts:29`, `src/lib/clearance/definition.ts:107`, `src/lib/clearance/report.ts:14`, `src/lib/clearance/checkbox.ts:165`. OCR/geometry/mark thresholds.                                                                                                                                                                                                                                |
+| S15 | `src/routes/user/clearances/+page.server.ts:6`, `src/routes/user/students/EnrollmentDetails.svelte:317`, `src/routes/user/clearance-files/[id]/+server.ts:10`. Queue/reviewer/file access.                                                                                                                                                                                                                           |
+| S16 | `src/lib/server/enrollment-corrections.ts:22`, `src/lib/actions/enrollment.remote.ts:1`, `src/routes/user/students/EnrollmentRecordActions.svelte:126`. Changes/audit.                                                                                                                                                                                                                                               |
+| S17 | `src/lib/server/staff-dashboard.ts:34`, `src/lib/server/enrollment-worklist.ts:8`, `src/lib/pages/Dashboard/Staff/Dashboard.svelte:133`. Staff metrics/queues.                                                                                                                                                                                                                                                       |
+| S18 | `src/lib/server/student-dashboard.ts:6`, `src/lib/pages/Dashboard/Student/`, `src/routes/user/enrollment/`, `src/routes/user/settings/profile/`. Own academic views.                                                                                                                                                                                                                                                 |
+| S19 | `src/lib/server/masterlist.ts:10`, `src/routes/user/masterlist/MasterlistTable.svelte:19`, `src/routes/user/masterlist/export/+server.ts:4`. Masterlist.                                                                                                                                                                                                                                                             |
+| S20 | `src/lib/server/reports.ts:23`, `src/lib/reports.ts:1`, `src/routes/user/reports/+page.svelte:116`, `src/lib/server/csv.ts:1`. Reports/exports.                                                                                                                                                                                                                                                                      |
+| S21 | `src/lib/server/notifications.ts:12`, `src/lib/actions/notifications.remote.ts:8`, `src/lib/email.ts:6`, `src/routes/user/notifications/`. Events/visibility.                                                                                                                                                                                                                                                        |
+| S22 | `src/lib/server/garage/index.ts:13`, `src/lib/server/garage/files.ts:39`, `src/lib/server/garage/credentials.ts:15`. Provisioning/files/lease.                                                                                                                                                                                                                                                                       |
+| S23 | `src/lib/server/email/index.ts:10`, `src/lib/server/email/templates.ts:124`, `src/lib/server/settings.ts:5`, `src/lib/actions/settings.remote.ts:12`. Email configuration/delivery.                                                                                                                                                                                                                                  |
+| S24 | `src/lib/schema.ts:176`, `src/lib/schema.ts:210`, `src/lib/schema.ts:275`, `src/lib/server/staff-accounts.ts:11`. Persistence/constraints/lists.                                                                                                                                                                                                                                                                     |
+| S25 | `src/lib/server/garage/admin.ts:14`, `src/lib/server/garage/explorer.ts:23`, `src/lib/server/garage/layout.ts:72`, `src/routes/user/settings/storage/`. Storage admin/capacity.                                                                                                                                                                                                                                      |
+| S26 | `src/lib/server/filters.ts:20`, `src/lib/components/Filter/fields.ts:18`, `src/lib/components/Table/TableValues.ts:1`. Common filters/pagination.                                                                                                                                                                                                                                                                    |
+| S27 | `src/lib/server/cor.ts:15`, `src/lib/server/cor-pdf.ts:13`, `src/routes/user/enrollment/[enrollmentId]/cor/+server.ts:6`. Certificate output.                                                                                                                                                                                                                                                                        |
+| S28 | `src/routes/test/files/+page.server.ts:12`, `src/lib/server/garage/files.ts:126`, `README.md`. Diagnostic personal storage/configuration notes.                                                                                                                                                                                                                                                                      |
+| S29 | `Dockerfile:1`, `docker-entrypoint.sh:1`, `docker-compose.yml:1`, `scripts/migrate.mjs:1`, `src/lib/server/db/seed.ts:1`, `.github/workflows/docker-publish.yml:1`, `src/env.ts:1`. Runtime/seed/configuration.                                                                                                                                                                                                      |
+| S30 | `src/routes/test/+page.svelte:220`, `src/routes/test/IdentityCheck.svelte:51`, `src/routes/test/identity.server.ts:11`, `src/lib/clearance/identity.ts`, `src/lib/server/handwriting.ts`. Diagnostic scan/identity.                                                                                                                                                                                                  |
+| S31 | `src/lib/server/handwriting.ts:14`, `src/lib/clearance/identity.ts:38`, `src/lib/clearance/identity-presence.ts:61`, `src/lib/clearance/report.ts:17`. Gemini, comparison, writing presence, submit/review helpers.                                                                                                                                                                                                  |
+| S32 | `src/lib/clearance/anchors.ts:69`, `src/lib/clearance/scan.client.ts:425`, `src/lib/clearance/BorderEditor.svelte:57`, `src/lib/clearance/definition.ts:124`, `src/lib/clearance/checkbox.ts:16`. Current alignment, definition, and mark checks.                                                                                                                                                                    |
+| S33 | `src/lib/server/documents.ts:15`, `src/lib/server/document-upload.ts:17`, `src/lib/actions/documents.remote.ts:16`, `src/lib/components/documents/`, `src/routes/user/document-files/[id]/+server.ts:10`. Required documents and exact gates.                                                                                                                                                                        |
+| S34 | `src/lib/subject-prerequisites.ts:16`, `src/lib/actions/subject.remote.ts:29`, `src/lib/server/enrollment.ts:27`, `src/lib/server/enrollment-corrections.ts:179`, `src/lib/server/db/seed-data.ts:63`, `drizzle/0038_subject_prerequisites.sql:1`. Prerequisite graph, enforcement, samples, migration.                                                                                                              |
+| S35 | `src/routes/user/enrollment/+page.server.ts:6`, `src/lib/components/EnrollmentHistory.svelte:70`, `src/lib/components/Sidebar/navigation.ts:58`, `src/routes/user/curriculum/+page.server.ts:13`, `src/routes/user/curriculum/[curriculumId]/+page.server.ts:7`. Current-only student page and staff-only curriculum.                                                                                                |
 | S36 | `tests/subject-prerequisites.test.mjs`, `tests/enrollment-corrections.test.mjs`, `tests/required-documents.test.mjs`, `tests/required-documents.browser.mjs`, `tests/clearance-checker.test.ts`, `tests/clearance-identity-presence.test.ts`, `tests/clearance-identity.test.mjs`, `tests/clearance-review.browser.mjs`. Relevant regression evidence; this documentation update does not imply a new full test run. |
 
-| Term | Definition |
-| --- | --- |
-| Actor | Account responsible for a saved event/action. |
-| Current pointer | Student row's explicit link to its current enrollment. |
-| Draft | Unsaved local edit, or saved but unfinalized data, depending on context. |
-| Finalized | Saved grades released and locked until permitted admin reopening. |
-| INC | Incomplete; a finalized subject attempt with no numeric grade. |
-| Snapshot | Historical copy of names/codes/units or before/after state that later edits do not automatically rewrite. |
-| Revision | Counter/token compared during save to reject stale state. |
-| Lease/claim | Temporary ownership marker coordinating concurrent provisioning or meeting sends. |
-| OCR | Optical character recognition of text from an image. |
-| Rectification | Transforming photographed form corners into aligned reference geometry. |
-| TOTP | Time-based one-time password generated by an authenticator app. |
-| COR | Certificate of Registration PDF for an eligible saved enrollment. |
-| Provider acceptance | Email send request was accepted by SMTP/Resend; not inbox receipt. |
-| Voided | Incorrect enrollment preserved but excluded from valid-term operation. |
-| Dropped | Actual withdrawal attempt preserved historically. |
-| Ready clearance | Eligible saved evidence awaiting explicit request; identity may match or require staff review. |
-| Requested clearance | Evidence submitted for staff review, not automatic enrollment. |
-| Identity review | Requestable machine findings requiring explicit staff confirmation of original name/number; not an extra submission state. |
-| Prerequisite | Direct global subject requirement satisfied by the latest qualifying earlier finalized pass. |
+| Term                       | Definition                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Actor                      | Account responsible for a saved event/action.                                                                                   |
+| Current pointer            | Student row's explicit link to its current enrollment.                                                                          |
+| Draft                      | Unsaved local edit, or saved but unfinalized data, depending on context.                                                        |
+| Finalized                  | Saved grades released and locked until permitted admin reopening.                                                               |
+| INC                        | Incomplete; a finalized subject attempt with no numeric grade.                                                                  |
+| Snapshot                   | Historical copy of names/codes/units or before/after state that later edits do not automatically rewrite.                       |
+| Revision                   | Counter/token compared during save to reject stale state.                                                                       |
+| Lease/claim                | Temporary ownership marker coordinating concurrent provisioning or meeting sends.                                               |
+| OCR                        | Optical character recognition of text from an image.                                                                            |
+| Rectification              | Transforming photographed form corners into aligned reference geometry.                                                         |
+| TOTP                       | Time-based one-time password generated by an authenticator app.                                                                 |
+| COR                        | Certificate of Registration PDF for an eligible saved enrollment.                                                               |
+| Provider acceptance        | Email send request was accepted by SMTP/Resend; not inbox receipt.                                                              |
+| Voided                     | Incorrect enrollment preserved but excluded from valid-term operation.                                                          |
+| Dropped                    | Actual withdrawal attempt preserved historically.                                                                               |
+| Ready clearance            | Eligible saved evidence awaiting explicit request; identity may match or require staff review.                                  |
+| Requested clearance        | Evidence submitted for staff review, not automatic enrollment.                                                                  |
+| Identity review            | Requestable machine findings requiring explicit staff confirmation of original name/number; not an extra submission state.      |
+| Prerequisite               | Direct global subject requirement satisfied by the latest qualifying earlier finalized pass.                                    |
 | Uploaded academic document | File provided but awaiting manual acceptance; enough for the applicable student request upload gate, not final-term staff save. |

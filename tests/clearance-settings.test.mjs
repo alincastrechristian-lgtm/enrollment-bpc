@@ -15,7 +15,13 @@ function load(file, dependencies = {}, override) {
 	});
 	const exports = {};
 	new Function('require', 'exports', outputText)(
-		(id) => dependencies[id] ?? (id === '@sveltejs/kit' ? kit : require(id)),
+		(id) =>
+			dependencies[id] ??
+			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
+				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
+				: id === '@sveltejs/kit'
+					? kit
+					: require(id)),
 		exports
 	);
 	return exports;
@@ -93,6 +99,16 @@ function fixture(t) {
 		'./garage/files': files
 	});
 	const dependencies = {
+		'#lib/server/settings.js': load('src/lib/server/settings.ts', {
+			'../schema': schema,
+			'./db': { db }
+		}),
+		'#lib/server/handwriting.js': load('src/lib/server/handwriting.ts', {
+			'$app/env/private': { GEMINI_API_KEY: 'legacy-test-key' },
+			'./db': { db },
+			'#lib/schema.js': schema,
+			'./settings': load('src/lib/server/settings.ts', { '../schema': schema, './db': { db } })
+		}),
 		'#lib/server/db/index.js': { db },
 		'#lib/schema.js': schema,
 		'#lib/clearance/clearance.js': core,
@@ -104,9 +120,15 @@ function fixture(t) {
 		'#lib/server/clearance-template.js': service,
 		'#lib/server/garage/files.js': files,
 		'$app/server': {
-			getRequestEvent: () => ({ locals: state.viewer }),
-			query: (handler) => () =>
-				Object.assign(Promise.resolve(handler()), { refresh: async () => {} }),
+			getRequestEvent: () => ({ locals: state.viewer, request: new Request('http://localhost') }),
+			query: (handler) => () => {
+				const result = Promise.resolve(handler());
+				return Object.assign(result, {
+					refresh: async () => {
+						await result;
+					}
+				});
+			},
 			form: (validator, handler) => (data) => handler(validator.parse(data)),
 			command: (validator, handler) => (data) => handler(validator.parse(data))
 		}
@@ -120,6 +142,7 @@ function fixture(t) {
 		service,
 		remote: load('src/lib/actions/clearance.remote.ts', dependencies),
 		page: load('src/routes/user/settings/clearance/+page.server.ts', dependencies).load,
+		emailPage: load('src/routes/user/settings/email/+page.server.ts', dependencies).load,
 		image: load('src/routes/user/clearance-template/+server.ts', dependencies).GET
 	};
 }
@@ -218,7 +241,7 @@ test('non-admins cannot load settings, query metadata or call upload; anonymous 
 		const viewer = { user: { id: 'student', role }, session: {} };
 		f.state.viewer = viewer;
 		assert.throws(() => f.page({ locals: viewer, setHeaders() {} }), hasStatus(403));
-		assert.throws(() => f.remote.getClearanceSettings(), hasStatus(403));
+		await assert.rejects(f.remote.getClearanceSettings(), hasStatus(403));
 		await assert.rejects(
 			f.remote.uploadClearanceTemplate({ file: file(), revision: '' }),
 			hasStatus(403)
@@ -458,4 +481,107 @@ test('legacy saved term values are ignored without rewriting existing data; next
 	assert(!('schoolYear' in f.service.getClearanceTemplate().definition));
 	assert.equal(f.service.getClearanceTemplate().objectKey, before.objectKey);
 	assert.notEqual(saved.revision, before.revision);
+});
+
+const settingInput = (values = {}) => ({
+	automatedClearanceVerificationEnabled: true,
+	personalInfoVerificationEnabled: true,
+	...values
+});
+test('admin settings import legacy key once, never expose it, preserve blank input, and respect explicit removal', async (t) => {
+	const f = fixture(t);
+	let settings = await f.remote.getClearanceSettings();
+	assert.equal(settings.hasGeminiKey, true);
+	assert.equal(settings.automatedClearanceVerificationEnabled, true);
+	assert(!JSON.stringify(settings).includes('legacy-test-key'));
+	await f.remote.saveClearanceVerification(settingInput({ geminiApiKey: 'new-secret-key' }));
+	await f.remote.saveClearanceVerification(settingInput({ geminiApiKey: '' }));
+	assert.equal(f.db.select().from(schema.systemSettings).get().geminiApiKey, 'new-secret-key');
+	await assert.rejects(
+		f.remote.saveClearanceVerification(settingInput({ clearGeminiKey: true })),
+		hasStatus(400)
+	);
+	await f.remote.saveClearanceVerification(
+		settingInput({ clearGeminiKey: true, personalInfoVerificationEnabled: false })
+	);
+	settings = await f.remote.getClearanceSettings();
+	assert.equal(settings.hasGeminiKey, false);
+	assert.equal(f.db.select().from(schema.systemSettings).get().geminiApiKey, '');
+	await assert.rejects(f.remote.testClearanceGemini({}), hasStatus(400));
+	for (const role of ['student', 'registrar']) {
+		f.state.viewer = { user: { id: 'student', role }, session: {} };
+		await assert.rejects(f.remote.saveClearanceVerification(settingInput()), hasStatus(403));
+		await assert.rejects(f.remote.testClearanceGemini({ geminiApiKey: 'bad' }), hasStatus(403));
+	}
+});
+test('Gemini test uses unsaved or saved key, sends blank PNG samples, and keeps provider errors private', async (t) => {
+	const f = fixture(t);
+	const original = globalThis.fetch;
+	t.after(() => (globalThis.fetch = original));
+	await f.remote.getClearanceSettings();
+	const calls = [];
+	globalThis.fetch = async (url, input) => {
+		calls.push({ url, input });
+		return Response.json({
+			candidates: [
+				{
+					finishReason: 'STOP',
+					content: { parts: [{ text: JSON.stringify({ name: '', studentNumber: '' }) }] }
+				}
+			]
+		});
+	};
+	assert.equal((await f.remote.testClearanceGemini({ geminiApiKey: 'unsaved-key' })).success, true);
+	assert.equal(calls[0].input.headers['x-goog-api-key'], 'unsaved-key');
+	assert.equal(f.db.select().from(schema.systemSettings).get().geminiApiKey, 'legacy-test-key');
+	const parts = JSON.parse(calls[0].input.body).contents[0].parts;
+	assert.equal(parts.filter((p) => p.inlineData?.mimeType === 'image/png').length, 2);
+	assert(!JSON.stringify(parts).includes('Student User'));
+	assert.equal((await f.remote.testClearanceGemini({})).success, true);
+	assert.equal(calls[1].input.headers['x-goog-api-key'], 'legacy-test-key');
+	globalThis.fetch = async () =>
+		Response.json({ error: { message: 'PRIVATE KEY DETAILS' } }, { status: 403 });
+	const failed = await f.remote.testClearanceGemini({});
+	assert.equal(failed.success, false);
+	assert(!failed.message.includes('PRIVATE'));
+	globalThis.fetch = async () => {
+		throw Error('PRIVATE connectivity details');
+	};
+	assert(!JSON.stringify(await f.remote.testClearanceGemini({})).includes('PRIVATE'));
+});
+test('0040 preserves legacy data and defaults; rollback rejects credentials and paper approval evidence', async (t) => {
+	const f = fixture(t);
+	const rollback = readFileSync(
+		'drizzle/rollback/0040_clearance_verification_settings.sql',
+		'utf8'
+	);
+	f.sqlite.exec(rollback);
+	f.sqlite.exec('INSERT INTO system_settings(id,seeded) VALUES (1,1)');
+	const before = f.sqlite.prepare('SELECT * FROM system_settings').get();
+	migrate(f.db, { migrationsFolder: 'drizzle' });
+	const after = f.sqlite.prepare('SELECT * FROM system_settings').get();
+	for (const [key, value] of Object.entries(before)) assert.equal(after[key], value);
+	assert.equal(after.automated_clearance_verification_enabled, 1);
+	assert.equal(after.personal_info_verification_enabled, 1);
+	assert.equal(after.gemini_api_key, null);
+	f.sqlite.exec("UPDATE system_settings SET gemini_api_key='saved-key'");
+	assert.throws(() => f.sqlite.exec(rollback), /CHECK constraint/);
+	f.sqlite.exec('ROLLBACK');
+	assert.equal(
+		f.sqlite.prepare('SELECT gemini_api_key FROM system_settings').get().gemini_api_key,
+		'saved-key'
+	);
+	f.sqlite.exec('UPDATE system_settings SET gemini_api_key=NULL');
+	f.sqlite.exec(rollback);
+	assert.deepEqual(f.sqlite.prepare('SELECT * FROM system_settings').get(), before);
+	migrate(f.db, { migrationsFolder: 'drizzle' });
+	assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
+});
+
+test('email settings cannot expose saved Gemini credentials', async (t) => {
+	const f = fixture(t);
+	await f.remote.getClearanceSettings();
+	const response = await f.emailPage({ locals: f.state.viewer });
+	assert(!JSON.stringify(response).includes('legacy-test-key'));
+	assert(!Object.hasOwn(response.settings, 'geminiApiKey'));
 });

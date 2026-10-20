@@ -50,7 +50,12 @@
 			Office checks are outdated. Upload the clearance again before requesting or verifying it.
 		</p>
 	{/if}
-	{#if report.identityPresence}
+	{#if report.identity === 'disabled' && report.identityVerificationEnabled === false}
+		<p class="rounded-lg border border-base-300 bg-base-200/40 p-3 text-sm">
+			Personal information verification was disabled by an administrator for this upload. Student
+			name and number were not checked.
+		</p>
+	{:else if report.identityPresence}
 		<div class="space-y-2 rounded-lg border border-base-300 p-3">
 			<p class="text-sm font-semibold">Personal information writing</p>
 			{#each Object.values(report.identityPresence) as finding (finding.label)}
@@ -102,7 +107,7 @@
 				{/each}
 			</ul>
 		</details>
-	{:else}
+	{:else if report.identity !== 'disabled'}
 		<p class="rounded-lg bg-base-200 p-3 text-xs text-base-content/65">
 			Student name and number have not been read. Template, office and writing-presence checks must
 			pass first. Older uploads need rechecking before requesting enrollment.

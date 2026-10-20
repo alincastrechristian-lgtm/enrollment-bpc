@@ -11,7 +11,10 @@ import { command, form, getRequestEvent, query } from '$app/server';
 import { error, isHttpError } from '@sveltejs/kit';
 import { z } from 'zod';
 import { db } from '#lib/server/db/index.js';
-import { clearanceTemplate, enrollment, studentData } from '#lib/schema.js';
+import { clearanceTemplate, enrollment, studentData, systemSettings } from '#lib/schema.js';
+import { getClearancePolicy } from '#lib/server/clearance-settings.js';
+import { getGeminiApiKey, recognizeIdentity } from '#lib/server/handwriting.js';
+import sharp from 'sharp';
 import { and, eq } from 'drizzle-orm';
 import { validCorners } from '#lib/clearance/clearance.js';
 import {
@@ -40,6 +43,7 @@ export const getStudentClearance = query(() => {
 		: null;
 	const template = db.select().from(clearanceTemplate).where(eq(clearanceTemplate.id, 1)).get();
 	return {
+		...getClearancePolicy(db),
 		current,
 		template: template
 			? {
@@ -117,10 +121,99 @@ export const rejectClearance = command(
 	}
 );
 
-export const getClearanceSettings = query(() => {
+export const getClearanceSettings = query(async () => {
 	validateUser(getRequestEvent().locals, [Role.ADMIN]);
-	return { configured: fileStorageConfigured(), template: getClearanceTemplateInfo() };
+	const key = await getGeminiApiKey();
+	return {
+		configured: fileStorageConfigured(),
+		template: getClearanceTemplateInfo(),
+		...getClearancePolicy(db),
+		hasGeminiKey: !!key
+	};
 });
+
+const geminiKey = z
+	.string()
+	.trim()
+	.max(512)
+	.regex(/^[^\s]*$/, 'API key must not contain whitespace.');
+export const saveClearanceVerification = command(
+	z
+		.object({
+			automatedClearanceVerificationEnabled: z.boolean(),
+			personalInfoVerificationEnabled: z.boolean(),
+			geminiApiKey: geminiKey.optional(),
+			clearGeminiKey: z.boolean().default(false)
+		})
+		.strict(),
+	async (input) => {
+		validateUser(getRequestEvent().locals, [Role.ADMIN]);
+		await getGeminiApiKey();
+		db.transaction(
+			(tx) => {
+				const existingKey =
+					tx
+						.select({ key: systemSettings.geminiApiKey })
+						.from(systemSettings)
+						.where(eq(systemSettings.id, 1))
+						.get()?.key ?? '';
+				const key = input.clearGeminiKey ? '' : input.geminiApiKey || existingKey;
+				if (
+					input.automatedClearanceVerificationEnabled &&
+					input.personalInfoVerificationEnabled &&
+					!key
+				)
+					error(400, 'Enter a Gemini API key before enabling personal information verification.');
+				tx.update(systemSettings)
+					.set({
+						automatedClearanceVerificationEnabled: input.automatedClearanceVerificationEnabled,
+						personalInfoVerificationEnabled: input.personalInfoVerificationEnabled,
+						geminiApiKey: key
+					})
+					.where(eq(systemSettings.id, 1))
+					.run();
+			},
+			{ behavior: 'immediate' }
+		);
+		await getClearanceSettings().refresh();
+		return { success: true };
+	}
+);
+
+export const testClearanceGemini = command(
+	z.object({ geminiApiKey: geminiKey.optional() }).strict(),
+	async (input) => {
+		validateUser(getRequestEvent().locals, [Role.ADMIN]);
+		const key = input.geminiApiKey || (await getGeminiApiKey());
+		if (!key) error(400, 'Enter or save a Gemini API key first.');
+		// A blank sample exercises the same vision request without sending student information.
+		const png = (
+			await sharp({ create: { width: 128, height: 64, channels: 3, background: '#fff' } })
+				.png()
+				.toBuffer()
+		).toString('base64');
+		try {
+			const result = await recognizeIdentity(
+				{ name: png, studentNumber: png },
+				getRequestEvent().request.signal,
+				key
+			);
+			return {
+				success: !result.warnings,
+				message: result.warnings
+					? 'Gemini responded but returned an unusable transcription. Try again.'
+					: 'Gemini connection successful. The vision model accepted the test images.'
+			};
+		} catch (cause) {
+			return {
+				success: false,
+				message: isHttpError(cause)
+					? cause.body.message
+					: 'Could not reach Gemini. Check server connectivity and try again.'
+			};
+		}
+	}
+);
 
 export const saveClearanceAreas = command(
 	z.object({ revision: z.string().uuid(), definition: definitionSchema }).strict(),

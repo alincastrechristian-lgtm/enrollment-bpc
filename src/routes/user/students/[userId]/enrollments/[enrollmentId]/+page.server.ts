@@ -19,6 +19,7 @@ import { error } from '@sveltejs/kit';
 import { asc, desc, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { getSubmission, submissionInfo } from '#lib/server/clearance-workflow.js';
+import { getClearancePolicy } from '#lib/server/clearance-settings.js';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
@@ -37,6 +38,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const isCurrent = record.student.currentEnrollmentId === record.enrollment.id;
 	const gradeLockReason = getEnrollmentGradeLockReason(record);
 	return {
+		automatedClearanceVerificationEnabled:
+			getClearancePolicy(db).automatedClearanceVerificationEnabled,
 		clearance: submissionInfo(getSubmission(db, record.enrollment.id)),
 		canCorrect: canCorrectEnrollment(locals.user.role, record),
 		canVoid: canVoidEnrollment(locals.user.role, record),

@@ -15,7 +15,14 @@ function load(file, deps = {}, source) {
 		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	});
 	const exports = {};
-	new Function('require', 'exports', outputText)((id) => deps[id] ?? require(id), exports);
+	new Function('require', 'exports', outputText)(
+		(id) =>
+			deps[id] ??
+			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
+				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
+				: require(id)),
+		exports
+	);
 	return exports;
 }
 const roles = load('src/lib/Roles.ts');
@@ -409,7 +416,9 @@ test('additive migration preserves existing data; rollback refuses to erase docu
 		undefined
 	);
 	migrate(f.db, migrationConfigThrough(t, 37));
-	await f.request(['tor']);
+	f.sqlite.exec(
+		"INSERT INTO required_document(id,user_id,requested_enrollment_id,kind,due_year_level,due_semester,requested_at) VALUES ('rollback-proof','s','e','tor',4,2,1)"
+	);
 	assert.throws(() => f.sqlite.exec(rollback), /CHECK constraint failed/);
 	if (f.sqlite.inTransaction) f.sqlite.exec('ROLLBACK');
 	assert.equal(f.rows().length, 1);

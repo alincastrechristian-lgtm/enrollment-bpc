@@ -6,7 +6,8 @@ import type { IdentityResult } from './identity';
 export type ClearanceReport = {
 	template: Check[];
 	offices: Check[];
-	identity: 'deferred' | IdentityResult;
+	identity: 'deferred' | 'disabled' | IdentityResult;
+	identityVerificationEnabled?: boolean;
 	identityPresence?: Record<'name' | 'studentNumber', Check>;
 	identityCheckVersion?: number;
 	officeCheckVersion?: number;
@@ -18,27 +19,30 @@ export function hasCurrentClearanceChecks(report: ClearanceReport) {
 	return (
 		hasCurrentOfficeChecks(report) &&
 		report.identityCheckVersion === 1 &&
-		!!report.identityPresence &&
-		typeof report.identity === 'object' &&
-		report.identity !== null
+		((report.identity === 'disabled' && report.identityVerificationEnabled === false) ||
+			(!!report.identityPresence &&
+				typeof report.identity === 'object' &&
+				report.identity !== null))
 	);
 }
 export function clearancePassed(report: ClearanceReport) {
 	return (
 		clearanceCanSubmit(report) &&
-		typeof report.identity === 'object' &&
-		report.identity.verdict === 'match' &&
-		!report.identity.warnings
+		(report.identity === 'disabled' ||
+			(typeof report.identity === 'object' &&
+				report.identity.verdict === 'match' &&
+				!report.identity.warnings))
 	);
 }
 // Eligibility for a staff review request is distinct from passing automatic identity checks.
 export function clearanceCanSubmit(report: ClearanceReport) {
 	return (
 		hasCurrentClearanceChecks(report) &&
-		typeof report.identity === 'object' &&
-		['match', 'review'].includes(report.identity.verdict) &&
-		report.identityPresence?.name.verdict === 'pass' &&
-		report.identityPresence?.studentNumber.verdict === 'pass' &&
+		(report.identity === 'disabled' ||
+			(typeof report.identity === 'object' &&
+				['match', 'review'].includes(report.identity.verdict) &&
+				report.identityPresence?.name.verdict === 'pass' &&
+				report.identityPresence?.studentNumber.verdict === 'pass')) &&
 		overall(report.template) === 'pass' &&
 		overall(report.offices) === 'pass'
 	);

@@ -22,6 +22,7 @@ import { error } from '@sveltejs/kit';
 import { and, desc, eq, inArray, ne, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { documentEnrollmentBlock } from '#lib/server/documents.js';
+import { getClearancePolicy } from '#lib/server/clearance-settings.js';
 import { getMissingPrerequisites } from '#lib/subject-prerequisites.js';
 
 export function getEnrollmentPrerequisites(
@@ -197,6 +198,7 @@ export function getEnrollmentContext(
 
 // Validate enrollment ownership, term, curriculum, and subject selection inside the transaction.
 export function getEnrollmentPlan(database: typeof db | Transaction, data: EnrollStudentInput) {
+	const { automatedClearanceVerificationEnabled } = getClearancePolicy(database);
 	const context = getEnrollmentContext(database, data.userId, data.programCode);
 	const selectedCurriculum = context.curriculum;
 	if (selectedCurriculum.id !== data.curriculumId)
@@ -238,6 +240,8 @@ export function getEnrollmentPlan(database: typeof db | Transaction, data: Enrol
 			.get();
 		if (
 			current.status !== 'dropped' &&
+			!current.manualClearanceVerifiedAt &&
+			automatedClearanceVerificationEnabled &&
 			clearance &&
 			(clearance.status !== 'verified' || !clearance.requestedAt)
 		)

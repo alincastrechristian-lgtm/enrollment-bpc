@@ -35,7 +35,18 @@ export const systemSettings = sqliteTable('system_settings', {
 	emailApiType: text('email_api_type', { enum: [EmailApiType.SMTP, EmailApiType.RESEND] }).default(
 		EmailApiType.SMTP
 	),
-	resendApiKey: text('resend_api_key')
+	resendApiKey: text('resend_api_key'),
+	geminiApiKey: text('gemini_api_key'),
+	automatedClearanceVerificationEnabled: integer('automated_clearance_verification_enabled', {
+		mode: 'boolean'
+	})
+		.notNull()
+		.default(true),
+	personalInfoVerificationEnabled: integer('personal_info_verification_enabled', {
+		mode: 'boolean'
+	})
+		.notNull()
+		.default(true)
 });
 
 // Private provisioning metadata. S3 secrets are fetched from Garage into memory.
@@ -254,6 +265,11 @@ export const enrollment = sqliteTable(
 		submittedClearance: integer('submitted_clearance', { mode: 'boolean' })
 			.default(false)
 			.notNull(),
+		manualClearanceVerifiedAt: integer('manual_clearance_verified_at', { mode: 'timestamp_ms' }),
+		manualClearanceVerifiedBy: text('manual_clearance_verified_by').references(() => user.id, {
+			onDelete: 'set null'
+		}),
+		manualClearanceVerifierName: text('manual_clearance_verifier_name'),
 		meetingRequestSentAt: integer('meeting_request_sent_at', { mode: 'timestamp_ms' }),
 		followUpCompletedAt: integer('follow_up_completed_at', { mode: 'timestamp_ms' }),
 		// Claim a send without holding a database transaction open during email delivery.

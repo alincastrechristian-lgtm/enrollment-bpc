@@ -1,4 +1,5 @@
 import { Role } from '#lib/Roles.js';
+import { getClearancePolicy } from '#lib/server/clearance-settings.js';
 import { validateUser } from '#lib/server/auth.js';
 import { buildStudentDashboard } from '#lib/server/student-dashboard.js';
 import { getStudentEnrollmentHistory } from '#lib/server/student-enrollment.js';
@@ -19,7 +20,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const record = await getStudentEnrollmentHistory(locals.user.id);
 	return {
-		studentDashboard: buildStudentDashboard(locals.user.name, record),
+		studentDashboard: buildStudentDashboard(
+			locals.user.name,
+			record,
+			getClearancePolicy(db).automatedClearanceVerificationEnabled
+		),
 		notificationInbox: {
 			items: getNotifications(db, locals.user, { pageSize: 5 }).items,
 			unread: getNotificationCounts(db, locals.user).unread

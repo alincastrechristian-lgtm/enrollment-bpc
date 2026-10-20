@@ -20,6 +20,14 @@
 			submission?.status === 'verified'
 		)
 			return null;
+		if (progress.current?.automatedClearanceVerificationEnabled === false)
+			return {
+				title: 'Submit your paper clearance',
+				detail:
+					'Bring your completed clearance to the Registrar. Staff must verify it before your next enrollment.',
+				action: 'View clearance status',
+				waiting: false
+			};
 		const currentChecks = !submission || hasCurrentClearanceChecks(submission.report);
 		if (submission?.status === 'requested' && currentChecks)
 			return {
@@ -31,7 +39,8 @@
 			};
 		if (
 			!progress.current?.template?.definition ||
-			!hasIdentityAreas(progress.current.template.definition)
+			(progress.current?.personalInfoVerificationEnabled !== false &&
+				!hasIdentityAreas(progress.current.template.definition))
 		)
 			return {
 				title: 'Clearance upload is not available yet',

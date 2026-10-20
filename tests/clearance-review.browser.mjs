@@ -33,10 +33,10 @@ test(
 				'fixture.svelte.js': `const field=(detected,expected,status)=>({detected,expected,status,similarity:70,detail:'Read original document'});
 			 const report={officeCheckVersion:2,identityCheckVersion:1,identityPresence:{name:{label:'Name writing',verdict:'pass',detail:'Present'},studentNumber:{label:'Number writing',verdict:'pass',detail:'Present'}},template:[{label:'Upload: Template',verdict:'pass',detail:'Matches template'}],offices:[{label:'Library',verdict:'pass',detail:'Marked'}],identity:{verdict:'review',detail:'Name needs review',name:field('Studen','Student','close'),studentNumber:field('001','MA-001','exact')}};
 			 export const data=$state({student:{id:'s',name:'Student',studentId:'MA-001',email:'s@example.invalid'},enrollment:{id:'e',revision:0,status:'enrolled',finalizedGrades:true,submittedClearance:false,schoolYearStart:2025,semester:2,yearLevel:1,section:'A',enrolledAt:null,meetingRequestSentAt:null,followUpCompletedAt:null,curriculum:{programCode:'BSIS',name:'BSIS',program:{name:'Information Systems'}},subjects:[{id:'es',grade:1.5,units:3,subjectCode:'IS101',subjectName:'Information Systems'}]},clearance:{id:'upload-1',status:'requested',filename:'clearance.jpg',report},isCurrent:true,canEdit:false,canFinalize:false,canDrop:false,gradeLockReason:null});
-			 window.newRequest=()=>{data.clearance={id:'upload-2',status:'requested',filename:'clearance.jpg',report};data.enrollment.revision++;};window.bumpRevision=()=>data.enrollment.revision++;
+			 window.paperMode=()=>{data.automatedClearanceVerificationEnabled=false;data.clearance=null;data.enrollment.submittedClearance=false;data.enrollment.revision++;};window.newRequest=()=>{data.clearance={id:'upload-2',status:'requested',filename:'clearance.jpg',report};data.enrollment.revision++;};window.bumpRevision=()=>data.enrollment.revision++;
 			 window.verifyCalls=[];window.rejectCalls=[];`,
 				'grades.js': `import{data}from'./fixture.svelte.js';
-			 export async function verifyEnrollmentClearance(input){window.verifyCalls.push(input);data.clearance.status='verified';data.enrollment.submittedClearance=true;}
+			 export async function verifyEnrollmentClearance(input){window.verifyCalls.push(input);if(data.clearance)data.clearance.status='verified';data.enrollment.submittedClearance=true;}
 			 export const finalizeEnrollmentGrades=async()=>{};export const completeEnrollmentFollowUp=async()=>{};export const dropEnrollment=async()=>{};export const sendEnrollmentMeetingRequest=async()=>{};export const updateEnrollmentGrades=async()=>{};`,
 				'clearance.js': `import{data}from'./fixture.svelte.js';export async function rejectClearance(input){window.rejectCalls.push(input);data.clearance.status='rejected';data.clearance.rejectionReason=input.reason;data.enrollment.revision++;}`
 			};
@@ -138,6 +138,19 @@ test(
 			assert.match(
 				await page.evaluate(() => window.verifyDialogs.at(-1).message),
 				/Automated identity reading needs review/
+			);
+
+			await page.reload({ waitUntil: 'networkidle' });
+			await page.evaluate(() => window.paperMode());
+			await expect(verify).toBeEnabled();
+			await expect(enroll).toHaveCount(0);
+			await expect(acknowledge).toHaveCount(0);
+			await verify.click();
+			await expect(enroll).toBeVisible();
+			assert.equal(await page.evaluate(() => window.verifyCalls[0].manualClearanceConfirmed), true);
+			assert.match(
+				await page.evaluate(() => window.verifyDialogs.at(-1).message),
+				/completed paper clearance/
 			);
 			await page.setViewportSize({ width: 390, height: 844 });
 			assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));

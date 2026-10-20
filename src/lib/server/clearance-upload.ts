@@ -14,6 +14,7 @@ import { overall, type Corners } from '#lib/clearance/clearance.js';
 import { matchIdentity } from '#lib/clearance/identity.js';
 import { checkClearance, decodeClearance, clearanceIdentityCrops } from './clearance-checker';
 import { recognizeIdentity } from './handwriting';
+import { getClearancePolicy } from './clearance-settings';
 import {
 	getGarageS3Client,
 	downloadObject,
@@ -35,6 +36,7 @@ export async function uploadStudentClearance(
 	},
 	signal?: AbortSignal
 ) {
+	const policy = getClearancePolicy(db);
 	if (!fileStorageConfigured()) error(503, 'File storage is unavailable. Contact the Registrar.');
 	const record = requireClearanceEnrollment(db, userId, input.enrollmentId);
 	const previous = getSubmission(db, input.enrollmentId);
@@ -57,7 +59,7 @@ export async function uploadStudentClearance(
 	)
 		error(503, 'The Registrar must finish configuring the clearance template and office boxes.');
 	const definition = parsed.data;
-	if (!hasIdentityAreas(definition))
+	if (policy.personalInfoVerificationEnabled && !hasIdentityAreas(definition))
 		error(
 			503,
 			'The Registrar must mark the student name and student number areas in the clearance template.'
@@ -79,21 +81,29 @@ export async function uploadStudentClearance(
 		image,
 		input.corners,
 		definition,
-		clearanceTermFromEnrollment(record.enrollment)
+		clearanceTermFromEnrollment(record.enrollment),
+		policy.personalInfoVerificationEnabled
 	);
-	if (
-		overall(report.template) !== 'pass' ||
-		overall(report.offices) !== 'pass' ||
-		report.identityCheckVersion !== 1 ||
-		report.identityPresence?.name.verdict !== 'pass' ||
-		report.identityPresence?.studentNumber.verdict !== 'pass'
-	)
+	if (overall(report.template) !== 'pass' || overall(report.offices) !== 'pass')
 		return { success: false, report, submission: null };
-	const crops = await clearanceIdentityCrops(image, input.corners, definition);
-	report.identity = matchIdentity(
-		await recognizeIdentity(crops, signal ?? new AbortController().signal),
-		{ name: record.user.name, studentNumber: record.student.studentId }
-	);
+	if (policy.personalInfoVerificationEnabled) {
+		if (
+			report.identityCheckVersion !== 1 ||
+			report.identityPresence?.name.verdict !== 'pass' ||
+			report.identityPresence?.studentNumber.verdict !== 'pass'
+		)
+			return { success: false, report, submission: null };
+		const crops = await clearanceIdentityCrops(image, input.corners, definition);
+		report.identity = matchIdentity(
+			await recognizeIdentity(crops, signal ?? new AbortController().signal),
+			{ name: record.user.name, studentNumber: record.student.studentId }
+		);
+	} else {
+		report.identity = 'disabled';
+		report.identityVerificationEnabled = false;
+		report.identityCheckVersion = 1;
+		delete report.identityPresence;
+	}
 	if (!clearanceCanSubmit(report)) return { success: false, report, submission: null };
 	signal?.throwIfAborted();
 	const id = randomUUID(),
@@ -112,6 +122,11 @@ export async function uploadStudentClearance(
 		db.transaction(
 			(tx) => {
 				const current = requireClearanceEnrollment(tx, userId, input.enrollmentId);
+				if (
+					getClearancePolicy(tx).personalInfoVerificationEnabled !==
+					policy.personalInfoVerificationEnabled
+				)
+					error(409, 'Verification settings changed while checking. Upload again.');
 				const currentSubmission = getSubmission(tx, input.enrollmentId);
 				if (
 					current.enrollment.revision !== input.revision ||

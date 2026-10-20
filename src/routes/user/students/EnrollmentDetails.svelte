@@ -332,9 +332,10 @@
 			voided ||
 			!finalized ||
 			clearanceVerified ||
-			data.clearance?.status !== 'requested' ||
-			!clearanceReviewable ||
-			(identityReviewNeeded && !identityConfirmed)
+			(data.automatedClearanceVerificationEnabled !== false &&
+				(data.clearance?.status !== 'requested' ||
+					!clearanceReviewable ||
+					(identityReviewNeeded && !identityConfirmed)))
 		)
 			return;
 		busy = true;
@@ -344,7 +345,10 @@
 			if (
 				!(await showYesNo({
 					title: 'Verify clearance?',
-					message: `Confirm that you reviewed ${data.student.name}'s uploaded clearance and office marks. ${identityReviewNeeded ? 'Automated identity reading needs review. Your verification confirms that you checked the student name and number against the original document and student record.' : 'Automated checks compare the template, office marks, and student name/number.'} Confirm the document and office authorizations yourself. Reenrollment also requires a completed Registrar meeting if the current enrollment has failed grades.`,
+					message:
+						data.automatedClearanceVerificationEnabled === false
+							? `Confirm that you received and reviewed ${data.student.name}'s completed paper clearance, including office authorizations. Your approval is required before enrollment.`
+							: `Confirm that you reviewed ${data.student.name}'s uploaded clearance and office marks. ${identityReviewNeeded ? 'Automated identity reading needs review. Your verification confirms that you checked the student name and number against the original document and student record.' : data.clearance?.report.identity === 'disabled' ? 'Automated checks covered template and office marks. Personal information verification was disabled; check the student details yourself.' : 'Automated checks compare the template, office marks, and student name/number.'} Confirm the document and office authorizations yourself. Reenrollment also requires a completed Registrar meeting if the current enrollment has failed grades.`,
 					warning: true,
 					yesText: 'Verify clearance',
 					noText: 'Cancel'
@@ -352,7 +356,9 @@
 			)
 				return;
 			await verifyEnrollmentClearance({
-				submissionId: data.clearance.id,
+				submissionId:
+					data.automatedClearanceVerificationEnabled === false ? undefined : data.clearance?.id,
+				manualClearanceConfirmed: data.automatedClearanceVerificationEnabled === false,
 				identityConfirmed: identityReviewNeeded && identityConfirmed,
 				userId: data.student.id,
 				enrollmentId: data.enrollment.id,
@@ -544,7 +550,11 @@
 					<ClipboardCheck class="mt-0.5 size-4 shrink-0 text-base-content/45" aria-hidden="true" />
 					<div>
 						<h3 class="text-sm font-semibold">Clearance</h3>
-						{#if !clearanceVerified}
+						{#if data.automatedClearanceVerificationEnabled === false}
+							<p class="mt-1 text-xs text-base-content/55">
+								Paper clearance must be received and verified before enrollment.
+							</p>
+						{:else if !clearanceVerified}
 							<p class="mt-1 text-xs text-base-content/55">
 								{finalized
 									? data.clearance?.status === 'requested'
@@ -558,6 +568,13 @@
 				{#if clearanceVerified}
 					<span class="flex items-center gap-1.5 text-xs font-medium text-base-content/65">
 						<Check class="size-3.5 text-success" aria-hidden="true" />Clearance verified
+						{#if data.enrollment.manualClearanceVerifiedAt}
+							<span>
+								Paper clearance: {data.enrollment.manualClearanceVerifierName ?? 'Staff'}, {new Date(
+									data.enrollment.manualClearanceVerifiedAt
+								).toLocaleString()}
+							</span>
+						{/if}
 					</span>
 				{:else}
 					<button
@@ -570,9 +587,10 @@
 							voided ||
 							!finalized ||
 							!data.isCurrent ||
-							data.clearance?.status !== 'requested' ||
-							!clearanceReviewable ||
-							(identityReviewNeeded && !identityConfirmed)}
+							(data.automatedClearanceVerificationEnabled !== false &&
+								(data.clearance?.status !== 'requested' ||
+									!clearanceReviewable ||
+									(identityReviewNeeded && !identityConfirmed)))}
 						onclick={verifyClearance}
 					>
 						Verify clearance
@@ -635,7 +653,7 @@
 				</div>
 			{/if}
 		</div>
-		{#if data.clearance}
+		{#if data.clearance && !data.enrollment.manualClearanceVerifiedAt}
 			<details
 				class="space-y-4 border-t border-base-300 p-5 sm:px-6"
 				open={data.clearance.status === 'requested'}
@@ -670,7 +688,7 @@
 						{#if data.clearance.rejectionReason}
 							<p class="text-sm text-error">{data.clearance.rejectionReason}</p>
 						{/if}
-						{#if data.clearance.status === 'requested' && data.isCurrent && !dropped && !voided}
+						{#if data.automatedClearanceVerificationEnabled !== false && data.clearance.status === 'requested' && data.isCurrent && !dropped && !voided}
 							{#if identityReviewNeeded}
 								<div class="space-y-3 rounded-lg border border-warning/30 bg-warning/10 p-3">
 									<p class="text-sm font-semibold">Manual identity verification required</p>

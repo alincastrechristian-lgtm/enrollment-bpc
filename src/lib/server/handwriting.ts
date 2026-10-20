@@ -2,17 +2,39 @@ import { GEMINI_API_KEY } from '$app/env/private';
 import { error } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { IdentityReadings, IdentityStudent } from '#lib/clearance/identity.js';
+import { db } from './db';
+import { systemSettings } from '#lib/schema.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import { getSystemSettings } from './settings';
 
 const fields = ['name', 'studentNumber'] as const;
 const transcription = z.string().trim().max(200);
 let reading = false;
 
+// Import the old environment key once. An empty saved value means explicitly cleared.
+export async function getGeminiApiKey() {
+	const settings = await getSystemSettings();
+	if (settings.geminiApiKey !== null) return settings.geminiApiKey;
+	db.update(systemSettings)
+		.set({ geminiApiKey: GEMINI_API_KEY?.trim() ?? '' })
+		.where(and(eq(systemSettings.id, 1), isNull(systemSettings.geminiApiKey)))
+		.run();
+	return (
+		db
+			.select({ key: systemSettings.geminiApiKey })
+			.from(systemSettings)
+			.where(eq(systemSettings.id, 1))
+			.get()?.key ?? ''
+	);
+}
+
 export async function recognizeIdentity(
 	crops: Record<keyof IdentityStudent, string>,
-	signal: AbortSignal
+	signal: AbortSignal,
+	apiKey?: string
 ): Promise<IdentityReadings> {
-	if (!GEMINI_API_KEY)
-		error(503, 'Handwriting recognition is not configured. Contact the Registrar.');
+	const key = apiKey ?? (await getGeminiApiKey());
+	if (!key) error(503, 'Handwriting recognition is not configured. Contact the Registrar.');
 	if (reading) error(429, 'Another handwriting check is running. Try again shortly.');
 	reading = true;
 	try {
@@ -20,7 +42,7 @@ export async function recognizeIdentity(
 			'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
 			{
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+				headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
 				signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
 				body: JSON.stringify({
 					systemInstruction: {
@@ -57,7 +79,15 @@ export async function recognizeIdentity(
 				})
 			}
 		);
-		if (!response.ok) throw new Error('Handwriting service request failed.');
+		if (!response.ok)
+			error(
+				503,
+				response.status === 400 || response.status === 401 || response.status === 403
+					? 'Gemini rejected the API key or its permissions.'
+					: response.status === 429
+						? 'Gemini quota or rate limit reached. Try again later.'
+						: 'Gemini is unavailable. Try again shortly.'
+			);
 		const data = await response.json();
 		const candidate = data.candidates?.[0];
 		const result: IdentityReadings = { name: '', studentNumber: '' };

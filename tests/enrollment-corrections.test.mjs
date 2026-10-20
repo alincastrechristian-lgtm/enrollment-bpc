@@ -15,7 +15,14 @@ function load(file, dependencies = {}) {
 		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	});
 	const exports = {};
-	new Function('require', 'exports', outputText)((id) => dependencies[id] ?? require(id), exports);
+	new Function('require', 'exports', outputText)(
+		(id) =>
+			dependencies[id] ??
+			(id === '#lib/server/clearance-settings.js'
+				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
+				: require(id)),
+		exports
+	);
 	return exports;
 }
 const roles = load('src/lib/Roles.ts');
@@ -586,4 +593,20 @@ test('stale revisions, wrong student ownership and unauthorized actors cannot mu
 	);
 	f.sqlite.exec('ROLLBACK');
 	assert.deepEqual({ row: f.row(), subjects: f.subjects(), counts: f.counts() }, before);
+});
+
+test('paper clearance audit survives reopen and same-term correction but resets for another term', (t) => {
+	const f = fixture(t);
+	f.sqlite.exec(
+		"UPDATE enrollment SET finalized_grades=1,submitted_clearance=1,manual_clearance_verified_at=1000,manual_clearance_verified_by='registrar',manual_clearance_verifier_name='Registrar' WHERE id='current'"
+	);
+	f.reopenStudentEnrollment(f.db, f.change(), admin, url);
+	assert.equal(f.row().manual_clearance_verified_at, 1000);
+	f.correctStudentEnrollment(f.db, f.input({ revision: 1 }), admin, url);
+	assert.equal(f.row().manual_clearance_verified_at, 1000);
+	f.correctStudentEnrollment(f.db, f.input({ revision: 2, semester: 2 }), admin, url);
+	assert.equal(f.row().submitted_clearance, 0);
+	assert.equal(f.row().manual_clearance_verified_at, null);
+	assert.equal(f.row().manual_clearance_verified_by, null);
+	assert.equal(f.row().manual_clearance_verifier_name, null);
 });

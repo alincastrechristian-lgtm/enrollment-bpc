@@ -354,6 +354,8 @@ Migration `0030_smiling_microbe` adds `voided`, the revision counter, and enroll
 
 ## 8. Clearance and completion
 
+Settings > Clearance lets administrators save/test a hidden Gemini key, disable personal information checks for new uploads, or disable automated clearance verification. With automation off, students submit paper clearance to the Registrar. **Verify clearance remains required**: staff confirm receipt/review after grades are finalized, with approver and time recorded. Enrollment stays blocked until approval. Re-enabling automation honors paper approvals; changing the enrollment semester/year resets them.
+
 ```mermaid
 flowchart TD
     View[Open enrollment details as admin or registrar] --> Final{Grades finalized and enrollment neither dropped nor voided?}

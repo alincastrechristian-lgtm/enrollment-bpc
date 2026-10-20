@@ -14,7 +14,14 @@ function load(file, deps = {}, source) {
 		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	});
 	const exports = {};
-	new Function('require', 'exports', outputText)((id) => deps[id] ?? require(id), exports);
+	new Function('require', 'exports', outputText)(
+		(id) =>
+			deps[id] ??
+			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
+				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
+				: require(id)),
+		exports
+	);
 	return exports;
 }
 const { Role } = load('src/lib/Roles.ts');

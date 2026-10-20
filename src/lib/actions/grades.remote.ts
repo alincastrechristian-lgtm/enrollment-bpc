@@ -25,6 +25,7 @@ import {
 	getStudentEnrollment
 } from '#lib/server/student-enrollment.js';
 import { command, getRequestEvent } from '$app/server';
+import { getClearancePolicy } from '#lib/server/clearance-settings.js';
 import { resolve } from '$app/paths';
 import { ORIGIN } from '$app/env/private';
 import { error } from '@sveltejs/kit';
@@ -195,7 +196,8 @@ export const sendEnrollmentMeetingRequest = command(enrollmentReferenceSchema, a
 export const verifyEnrollmentClearance = command(
 	enrollmentReferenceSchema.extend({
 		submissionId: z.string().uuid().optional(),
-		identityConfirmed: z.boolean().optional()
+		identityConfirmed: z.boolean().optional(),
+		manualClearanceConfirmed: z.boolean().optional()
 	}),
 	(data) => {
 		const { locals } = getRequestEvent();
@@ -213,16 +215,30 @@ export const verifyEnrollmentClearance = command(
 					error(409, 'Clearance has already been verified. Refresh the page.');
 				if (record.student.currentEnrollmentId !== record.enrollment.id)
 					error(409, 'Only the current enrollment clearance can be verified.');
-				verifyClearanceSubmission(
-					tx,
-					record.enrollment.id,
-					data.submissionId,
-					locals.user,
-					data.identityConfirmed
-				);
+				const manual = !getClearancePolicy(tx).automatedClearanceVerificationEnabled;
+				if (manual) {
+					if (!data.manualClearanceConfirmed)
+						error(400, 'Confirm receipt and review of the completed paper clearance.');
+				} else {
+					if (data.manualClearanceConfirmed)
+						error(
+							409,
+							'Automated clearance verification is enabled. Review the uploaded clearance.'
+						);
+					verifyClearanceSubmission(
+						tx,
+						record.enrollment.id,
+						data.submissionId,
+						locals.user,
+						data.identityConfirmed
+					);
+				}
 				tx.update(enrollment)
 					.set({
 						submittedClearance: true,
+						manualClearanceVerifiedAt: manual ? new Date() : null,
+						manualClearanceVerifiedBy: manual ? locals.user.id : null,
+						manualClearanceVerifierName: manual ? locals.user.name : null,
 						status: 'completed',
 						revision: sql`${enrollment.revision} + 1`
 					})

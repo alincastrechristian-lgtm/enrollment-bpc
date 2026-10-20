@@ -122,8 +122,12 @@ function fixture(t, dev = true) {
 	 INSERT INTO student(id,user_id,birth_date,sex) VALUES
 	 ('MA-23016578','jonnel','2000-01-01','female'),('MA-99999999','other','2000-01-01','female');
 	`);
+	db.insert(schema.systemSettings).values({ id: 1, geminiApiKey: 'test-key' }).run();
 	const handwriting = load('src/lib/server/handwriting.ts', {
 		'$app/env/private': { GEMINI_API_KEY: 'test-key' },
+		'./db': { db },
+		'#lib/schema.js': schema,
+		'./settings': load('src/lib/server/settings.ts', { '../schema': schema, './db': { db } }),
 		'@sveltejs/kit': { error }
 	});
 	const service = load('src/routes/test/identity.server.ts', {
@@ -317,9 +321,10 @@ test('provider and transport errors stay private and release the handwriting slo
 	assert(!(await response.text()).includes('Private provider details'));
 	globalThis.fetch = async () =>
 		Response.json({ error: { message: 'private quota details' } }, { status: 429 });
-	response = await endpoint(event(locals()));
-	assert.equal(response.status, 502);
-	assert(!(await response.text()).includes('private quota details'));
+	await assert.rejects(
+		endpoint(event(locals())),
+		(cause) => cause.status === 503 && !cause.body.message.includes('private quota details')
+	);
 	globalThis.fetch = async () => reply();
 	assert.deepEqual(await service.recognizeIdentity(crops, new AbortController().signal), {
 		name: '',
@@ -348,6 +353,9 @@ test('concurrent inference is bounded; cancellation releases the handwriting slo
 test('missing Gemini key fails closed before sending images', async (t) => {
 	const service = load('src/lib/server/handwriting.ts', {
 		'$app/env/private': {},
+		'./db': {},
+		'#lib/schema.js': schema,
+		'./settings': { getSystemSettings: async () => ({ geminiApiKey: '' }) },
 		'@sveltejs/kit': { error }
 	});
 	mockTranscription(t, async () => {
