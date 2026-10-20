@@ -14,7 +14,12 @@ function load(file, dependencies = {}, override) {
 		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	});
 	const exports = {};
-	new Function('require', 'exports', outputText)((id) => dependencies[id] ?? require(id), exports);
+	new Function('require', 'exports', outputText)(
+		(id) =>
+			dependencies[id] ??
+			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : require(id)),
+		exports
+	);
 	return exports;
 }
 const core = load('src/lib/clearance/identity.ts');
@@ -316,9 +321,13 @@ test('provider and transport errors stay private and release the handwriting slo
 	mockTranscription(t, async () => {
 		throw Error('Private provider details');
 	});
-	let response = await endpoint(event(locals()));
-	assert.equal(response.status, 502);
-	assert(!(await response.text()).includes('Private provider details'));
+	await assert.rejects(
+		endpoint(event(locals())),
+		(cause) =>
+			cause.status === 503 &&
+			cause.body.message.includes('DNS') &&
+			!cause.body.message.includes('Private provider details')
+	);
 	globalThis.fetch = async () =>
 		Response.json({ error: { message: 'private quota details' } }, { status: 429 });
 	await assert.rejects(
@@ -362,4 +371,103 @@ test('missing Gemini key fails closed before sending images', async (t) => {
 		assert.fail('No provider request without a key');
 	});
 	await assert.rejects(service.recognizeIdentity(crops, new AbortController().signal), status(503));
+});
+
+test('Gemini errors identify HTTP status and remediation while keeping provider secrets private', async (t) => {
+	const { service } = fixture(t);
+	const original = globalThis.fetch;
+	t.after(() => (globalThis.fetch = original));
+	const cases = [
+		[
+			400,
+			{ status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] },
+			/does not recognize/
+		],
+		[400, { status: 'FAILED_PRECONDITION' }, /billing.*region/],
+		[402, { status: 'RESOURCE_EXHAUSTED' }, /credit balance/],
+		[
+			403,
+			{ status: 'PERMISSION_DENIED', details: [{ reason: 'SERVICE_DISABLED' }] },
+			/API is disabled/
+		],
+		[
+			403,
+			{ status: 'PERMISSION_DENIED', details: [{ reason: 'API_KEY_HTTP_REFERRER_BLOCKED' }] },
+			/restrictions block/
+		],
+		[
+			403,
+			{ status: 'PERMISSION_DENIED', message: 'Your API key was reported as leaked.' },
+			/Replace it with a new key/
+		],
+		[400, { status: 'INVALID_ARGUMENT', message: 'API key expired.' }, /key has expired/],
+		[403, { status: 'PERMISSION_DENIED' }, /lacks permission/],
+		[404, { status: 'NOT_FOUND' }, /model was not found/],
+		[
+			404,
+			{
+				status: 'NOT_FOUND',
+				message: 'This model is no longer available to new users. PRIVATE_PROJECT'
+			},
+			/unavailable to new Gemini users\/projects/
+		],
+		[429, { status: 'RESOURCE_EXHAUSTED' }, /daily.*limit/],
+		[500, { status: 'INTERNAL' }, /internal processing error/],
+		[503, { status: 'UNAVAILABLE' }, /capacity pressure/],
+		[504, { status: 'DEADLINE_EXCEEDED' }, /deadline/]
+	];
+	for (const [http, errorBody, expectedMessage] of cases) {
+		globalThis.fetch = async () =>
+			Response.json(
+				{
+					error: {
+						message: 'PRIVATE_KEY_AND_STUDENT_DATA',
+						...errorBody,
+						details: errorBody.details?.map((d) => ({
+							...d,
+							metadata: { project: 'PRIVATE_PROJECT' }
+						}))
+					}
+				},
+				{ status: http }
+			);
+		await assert.rejects(
+			service.recognizeIdentity(crops, new AbortController().signal),
+			(cause) => {
+				assert.equal(cause.status, 503);
+				assert.match(cause.body.message, new RegExp('HTTP ' + http));
+				assert.match(cause.body.message, expectedMessage);
+				assert(!cause.body.message.includes('PRIVATE'));
+				return true;
+			}
+		);
+	}
+	for (const payload of [
+		'not JSON',
+		JSON.stringify({ error: { status: 'PRIVATE_SECRET', message: 'PRIVATE_KEY' } })
+	]) {
+		globalThis.fetch = async () => new Response(payload, { status: 418 });
+		await assert.rejects(
+			service.recognizeIdentity(crops, new AbortController().signal),
+			(cause) =>
+				cause.status === 503 &&
+				cause.body.message.includes('HTTP 418') &&
+				!cause.body.message.includes('PRIVATE')
+		);
+	}
+	globalThis.fetch = async () => {
+		throw new DOMException('PRIVATE_TIMEOUT_DETAILS', 'TimeoutError');
+	};
+	await assert.rejects(
+		service.recognizeIdentity(crops, new AbortController().signal),
+		(cause) =>
+			cause.status === 503 &&
+			cause.body.message.includes('60 seconds') &&
+			!cause.body.message.includes('PRIVATE')
+	);
+	globalThis.fetch = async () => reply();
+	assert.deepEqual(await service.recognizeIdentity(crops, new AbortController().signal), {
+		name: '',
+		studentNumber: ''
+	});
 });

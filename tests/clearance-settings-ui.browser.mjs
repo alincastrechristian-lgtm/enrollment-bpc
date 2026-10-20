@@ -25,11 +25,11 @@ test(
 					'window.messages=[];export const showLoading=()=>{};export const showSuccess=message=>window.messages.push(message);export const showError=message=>window.messages.push(message);',
 				'fixture.js': `const area=(label,kind,x,y,width,height,expected='')=>({id:crypto.randomUUID(),label,kind,box:{x,y,width,height},expected});
 				export const definition={corners:[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],semester:'2',schoolYear:'2025-2026',areas:[area('School name','text',.3,.02,.4,.04,'BULACAN POLYTECHNIC COLLEGE'),area('Form title','text',.32,.12,.35,.04,'Student Clearance Form'),area('School seal','image',.08,.02,.16,.2),area('Semester','semester',.32,.17,.2,.04),area('Academic year','academicYear',.5,.17,.2,.04)],personalFields:[{id:crypto.randomUUID(),field:'studentName',box:{x:.1,y:.7,width:.5,height:.05}},{id:crypto.randomUUID(),field:'studentNumber',box:{x:.1,y:.8,width:.5,height:.05}}],officeRows:['Library','Registrar'].map((label,i)=>({id:crypto.randomUUID(),label,office:{x:.08,y:.3+i*.08,width:.12,height:.03},cleared:{x:.27,y:.3+i*.08,width:.045,height:.05},signature:{x:.62,y:.3+i*.08,width:.2,height:.05}}))};`,
-				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,hasGeminiKey:true,template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
+				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,hasGeminiKey:true,geminiModel:'gemini-3.1-flash-lite',template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
 				window.saved=[];window.uploads=[];window.failUpload=false;window.clearTemplate=()=>state={...state,template:null};
 				export function getClearanceSettings(){return{get current(){return state;}};}
                 window.verificationSaves=[];window.geminiTests=[];window.handwritingTests=[];
- export async function readClearanceTestHandwriting(input){window.handwritingTests.push(input);return window.blankHandwriting?{name:'',studentNumber:'',warnings:{name:'Gemini returned an unusable transcription.'}}:{name:'Jonnel Mrei Palileo',studentNumber:'23016578'};}
+ export async function readClearanceTestHandwriting(input){window.handwritingTests.push(input);return window.handwritingError?{success:false,message:'Gemini request failed (HTTP 404, NOT_FOUND; model gemini-2.5-flash). The configured model was not found.'}:{success:true,readings:window.blankHandwriting?{name:'',studentNumber:'',warnings:{name:'Gemini returned an unusable transcription.'}}:{name:'Jonnel Mrei Palileo',studentNumber:'23016578'}};}
                 export async function saveClearanceVerification(input){window.verificationSaves.push(input);state={...state,...input,hasGeminiKey:input.clearGeminiKey?false:!!input.geminiApiKey||state.hasGeminiKey};delete state.geminiApiKey;return{success:true};}
                 export async function testClearanceGemini(input){window.geminiTests.push(input);return{success:true,message:'Gemini connection successful.'};}
 
@@ -111,6 +111,9 @@ test(
 			const personal = page.getByRole('switch', { name: /Verify student name and number/ });
 			const key = page.getByLabel('Gemini API key', { exact: true });
 			await expect(key).toHaveValue('');
+			const model = page.getByLabel('Gemini model', { exact: true });
+			await expect(model).toHaveValue('gemini-3.1-flash-lite');
+			await model.selectOption('gemini-2.5-flash-lite');
 			await key.fill('browser-unsaved-key');
 			await page.getByRole('button', { name: 'Test Gemini', exact: true }).click();
 			await expect(page.getByText('Gemini connection successful.', { exact: true })).toBeVisible();
@@ -118,10 +121,18 @@ test(
 				await page.evaluate(() => window.geminiTests[0].geminiApiKey),
 				'browser-unsaved-key'
 			);
+			assert.equal(
+				await page.evaluate(() => window.geminiTests[0].geminiModel),
+				'gemini-2.5-flash-lite'
+			);
 			await automation.uncheck();
 			await expect(personal).toBeDisabled();
 			await page.getByRole('button', { name: 'Save verification settings', exact: true }).click();
 			await expect(key).toHaveValue('');
+			assert.equal(
+				await page.evaluate(() => window.verificationSaves[0].geminiModel),
+				'gemini-2.5-flash-lite'
+			);
 			assert.equal(
 				await page.evaluate(
 					() => window.verificationSaves[0].automatedClearanceVerificationEnabled
@@ -216,6 +227,11 @@ test(
 			await expect(
 				page.getByText('Gemini returned an unusable transcription.', { exact: true })
 			).toBeVisible();
+
+			await page.evaluate(() => (window.handwritingError = true));
+			await page.getByRole('button', { name: 'Read handwriting', exact: true }).click();
+			await expect(page.getByRole('alert').filter({ hasText: 'HTTP 404' })).toBeVisible();
+			await expect(page.getByLabel('Gemini handwriting result', { exact: true })).toHaveCount(0);
 			await page.getByRole('button', { name: 'Compare template', exact: true }).click();
 			await expect(page.getByText('Matches saved template', { exact: true })).toBeVisible();
 			assert.deepEqual(await page.evaluate(() => window.testTerm), {

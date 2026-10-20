@@ -16,6 +16,7 @@ function load(file, deps = {}) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			deps[id] ??
+			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : undefined) ??
 			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
 				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
 				: require(id)),

@@ -71,7 +71,10 @@
 					studentNumber: crops.studentNumber.toDataURL('image/png').split(',')[1]
 				}
 			});
-			if (!destroyed && version === readingVersion) handwriting = result;
+			if (!destroyed && version === readingVersion) {
+				if (result.success) handwriting = result.readings;
+				else handwritingError = result.message;
+			}
 		} catch (cause) {
 			if (!destroyed && version === readingVersion)
 				handwritingError = getErrorMessage(cause, 'Could not read handwriting. Try again.');
@@ -282,7 +285,7 @@
 									</dd>
 								</div>
 							</dl>
-						{#each Object.entries(handwriting.warnings ?? {}) as [field, warning] (field)}
+							{#each Object.entries(handwriting.warnings ?? {}) as [field, warning] (field)}
 								<p class="text-sm text-warning">{warning}</p>
 							{/each}
 						{/if}

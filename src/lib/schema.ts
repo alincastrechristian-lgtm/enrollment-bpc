@@ -37,6 +37,7 @@ export const systemSettings = sqliteTable('system_settings', {
 	),
 	resendApiKey: text('resend_api_key'),
 	geminiApiKey: text('gemini_api_key'),
+	geminiModel: text('gemini_model').notNull().default('gemini-3.1-flash-lite'),
 	automatedClearanceVerificationEnabled: integer('automated_clearance_verification_enabled', {
 		mode: 'boolean'
 	})

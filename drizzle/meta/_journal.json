@@ -288,6 +288,13 @@
       "when": 1792468275092,
       "tag": "0040_clearance_verification_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1792471701624,
+      "tag": "0041_gemini_model_selection",
+      "breakpoints": true
     }
   ]
 }

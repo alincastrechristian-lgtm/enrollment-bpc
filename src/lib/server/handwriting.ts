@@ -6,10 +6,137 @@ import { db } from './db';
 import { systemSettings } from '#lib/schema.js';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getSystemSettings } from './settings';
+import {
+	DEFAULT_GEMINI_MODEL,
+	geminiModelSchema,
+	type GeminiModel
+} from '#lib/clearance/gemini.js';
 
 const fields = ['name', 'studentNumber'] as const;
 const transcription = z.string().trim().max(200);
 let reading = false;
+
+async function geminiFailureMessage(response: Response, model: GeminiModel) {
+	const parsed = z
+		.object({
+			error: z.object({
+				status: z.string().optional(),
+				message: z.string().optional(),
+				details: z.array(z.object({ reason: z.string().optional() }).passthrough()).optional()
+			})
+		})
+		.safeParse(await response.json().catch(() => null));
+	const failure = parsed.success ? parsed.data.error : undefined;
+	const reasons = new Set(failure?.details?.map((detail) => detail.reason));
+	const providerMessage = failure?.message?.toLowerCase() ?? '';
+	const knownStatuses = [
+		'INVALID_ARGUMENT',
+		'FAILED_PRECONDITION',
+		'UNAUTHENTICATED',
+		'PERMISSION_DENIED',
+		'NOT_FOUND',
+		'RESOURCE_EXHAUSTED',
+		'INTERNAL',
+		'UNAVAILABLE',
+		'DEADLINE_EXCEEDED',
+		'CANCELLED'
+	];
+	const status =
+		failure?.status && knownStatuses.includes(failure.status) ? `, ${failure.status}` : '';
+	const prefix = `Gemini request failed (HTTP ${response.status}${status}; model ${model}). `;
+	// Classify provider details, but never expose its raw message or metadata.
+	if (providerMessage.includes('reported as leaked'))
+		return (
+			prefix +
+			'Google blocked this API key after detecting it as leaked. Replace it with a new key in Google AI Studio.'
+		);
+	if (reasons.has('API_KEY_EXPIRED') || providerMessage.includes('api key expired'))
+		return (
+			prefix +
+			'This API key has expired. Replace the saved key with an active key from Google AI Studio.'
+		);
+	if (reasons.has('API_KEY_INVALID'))
+		return (
+			prefix +
+			'Google does not recognize this API key. Check that the entire active key was copied correctly.'
+		);
+	if (reasons.has('SERVICE_DISABLED'))
+		return (
+			prefix +
+			"The Generative Language API is disabled for this key's project. Enable it in Google Cloud Console."
+		);
+	if ([...reasons].some((reason) => reason?.startsWith('API_KEY_') && reason.endsWith('_BLOCKED')))
+		return (
+			prefix +
+			"This key's API, server IP, or website restrictions block the request. Review its restrictions for server-side Generative Language API access."
+		);
+	if (response.status === 402 || reasons.has('BILLING_DISABLED'))
+		return (
+			prefix +
+			"Check this project's billing status and credit balance in Google AI Studio. Retrying will not resolve a billing block."
+		);
+	if (failure?.status === 'FAILED_PRECONDITION')
+		return (
+			prefix +
+			"Google reports an unmet project requirement. Check billing and whether the Gemini API free tier is supported in the project's region."
+		);
+	if (response.status === 404 && /new (users|projects|accounts)/.test(providerMessage))
+		return (
+			prefix +
+			'Google has made this model unavailable to new Gemini users/projects. Older projects may retain access. Select a newer supported model; replacing the key within the same project may not restore access.'
+		);
+	switch (response.status) {
+		case 400:
+			return (
+				prefix +
+				'Google rejected the request or model options. Check the API key, configured model, API version, and request format.'
+			);
+		case 401:
+			return (
+				prefix +
+				'Google could not authenticate the API key. Check that the saved key is active and complete.'
+			);
+		case 403:
+			return (
+				prefix +
+				'This key or its project lacks permission. Check key restrictions, Generative Language API access, and model access in Google AI Studio.'
+			);
+		case 404:
+			return (
+				prefix +
+				'The configured model was not found or is unavailable to this project/API version. Check model access in Google AI Studio.'
+			);
+		case 429:
+			return (
+				prefix +
+				'This project exceeded a request, token, daily, or spending limit. Check model quota and billing in Google AI Studio; retry after the relevant limit resets.'
+			);
+		case 499:
+			return (
+				prefix + 'Google reports that the request was cancelled. Run the test again when ready.'
+			);
+		case 500:
+			return (
+				prefix +
+				'Google encountered an internal processing error. Retry later and check the Gemini API status page if it persists.'
+			);
+		case 503:
+			return (
+				prefix +
+				'Google reports temporary service unavailability or model capacity pressure. Retry later and check the Gemini API status page.'
+			);
+		case 504:
+			return (
+				prefix +
+				'Google could not finish the request before its deadline. Retry with clearer, smaller field images or try again later.'
+			);
+		default:
+			return (
+				prefix +
+				'Google returned an unexpected response. Check the Gemini API status page and project settings before retrying.'
+			);
+	}
+}
 
 // Import the old environment key once. An empty saved value means explicitly cleared.
 export async function getGeminiApiKey() {
@@ -28,18 +155,28 @@ export async function getGeminiApiKey() {
 	);
 }
 
+export async function getGeminiModel(): Promise<GeminiModel> {
+	const settings = await getSystemSettings();
+	const parsed = geminiModelSchema.safeParse(settings.geminiModel ?? DEFAULT_GEMINI_MODEL);
+	if (!parsed.success)
+		error(503, 'The saved Gemini model is unsupported. Select a model in Clearance settings.');
+	return parsed.data;
+}
+
 export async function recognizeIdentity(
 	crops: Record<keyof IdentityStudent, string>,
 	signal: AbortSignal,
-	apiKey?: string
+	apiKey?: string,
+	modelOverride?: GeminiModel
 ): Promise<IdentityReadings> {
 	const key = apiKey ?? (await getGeminiApiKey());
 	if (!key) error(503, 'Handwriting recognition is not configured. Contact the Registrar.');
+	const model = geminiModelSchema.parse(modelOverride ?? (await getGeminiModel()));
 	if (reading) error(429, 'Another handwriting check is running. Try again shortly.');
 	reading = true;
 	try {
 		const response = await fetch(
-			'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+			`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
 			{
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
@@ -68,7 +205,9 @@ export async function recognizeIdentity(
 					generationConfig: {
 						temperature: 0,
 						maxOutputTokens: 1024,
-						thinkingConfig: { thinkingBudget: 0 },
+						thinkingConfig: model.startsWith('gemini-2.5-')
+							? { thinkingBudget: 0 }
+							: { thinkingLevel: 'minimal' },
 						responseMimeType: 'application/json',
 						responseSchema: {
 							type: 'OBJECT',
@@ -78,17 +217,24 @@ export async function recognizeIdentity(
 					}
 				})
 			}
-		);
-		if (!response.ok)
+		).catch((cause: unknown) => {
+			signal.throwIfAborted();
 			error(
 				503,
-				response.status === 400 || response.status === 401 || response.status === 403
-					? 'Gemini rejected the API key or its permissions.'
-					: response.status === 429
-						? 'Gemini quota or rate limit reached. Try again later.'
-						: 'Gemini is unavailable. Try again shortly.'
+				cause instanceof Error && cause.name === 'TimeoutError'
+					? 'Gemini did not respond within 60 seconds. Try again later or check server connectivity and the Gemini API status page.'
+					: "The server could not connect to Google's Gemini API. Check server internet access, DNS, firewall, and proxy settings."
 			);
-		const data = await response.json();
+		});
+		if (!response.ok) error(503, await geminiFailureMessage(response, model));
+		const data = await response
+			.json()
+			.catch(() =>
+				error(
+					503,
+					'Google returned an unreadable Gemini response. Retry later and check the Gemini API status page if it persists.'
+				)
+			);
 		const candidate = data.candidates?.[0];
 		const result: IdentityReadings = { name: '', studentNumber: '' };
 		let content: Record<string, unknown> = {};

@@ -1,0 +1,1 @@
+ALTER TABLE `system_settings` ADD `gemini_model` text DEFAULT 'gemini-3.1-flash-lite' NOT NULL;

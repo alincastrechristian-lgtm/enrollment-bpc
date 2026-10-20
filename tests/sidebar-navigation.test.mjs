@@ -66,7 +66,7 @@ for (const [role, expected] of [
 		if (role === 'admin') {
 			assert.deepEqual(
 				users.children.map((item) => item.label),
-				['Students', 'Registrars', 'Administrators']
+				['Admins', 'Registrars', 'Students']
 			);
 			for (const route of ['/user/students/123', '/user/registrars', '/user/admins'])
 				assert.equal(isActiveItem(users, route), true);

@@ -2,6 +2,12 @@
 	import { saveClearanceVerification, testClearanceGemini } from '#lib/actions/clearance.remote.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { untrack, onDestroy } from 'svelte';
+	import {
+		DEFAULT_GEMINI_MODEL,
+		geminiModelSchema,
+		GEMINI_MODEL_LABELS,
+		type GeminiModel
+	} from '#lib/clearance/gemini.js';
 	let {
 		settings,
 		disabled = false,
@@ -11,6 +17,7 @@
 			automatedClearanceVerificationEnabled: boolean;
 			personalInfoVerificationEnabled: boolean;
 			hasGeminiKey: boolean;
+			geminiModel: GeminiModel;
 		};
 		disabled?: boolean;
 		onbusychange: (busy: boolean) => void;
@@ -22,6 +29,9 @@
 		untrack(() => settings.personalInfoVerificationEnabled)
 	);
 	let geminiApiKey = $state('');
+	let geminiModel = $state<GeminiModel>(
+		untrack(() => settings.geminiModel ?? DEFAULT_GEMINI_MODEL)
+	);
 	let clearGeminiKey = $state(false);
 	let pending = $state<'save' | 'test' | null>(null);
 	let message = $state('');
@@ -30,6 +40,7 @@
 		automatedClearanceVerificationEnabled !== settings.automatedClearanceVerificationEnabled ||
 			personalInfoVerificationEnabled !== settings.personalInfoVerificationEnabled ||
 			!!geminiApiKey.trim() ||
+			geminiModel !== (settings.geminiModel ?? DEFAULT_GEMINI_MODEL) ||
 			clearGeminiKey
 	);
 	$effect(() => onbusychange(!!pending));
@@ -45,6 +56,7 @@
 				automatedClearanceVerificationEnabled,
 				personalInfoVerificationEnabled,
 				geminiApiKey: geminiApiKey.trim() || undefined,
+				geminiModel,
 				clearGeminiKey
 			});
 			geminiApiKey = '';
@@ -63,7 +75,10 @@
 		message = '';
 		failed = false;
 		try {
-			const result = await testClearanceGemini({ geminiApiKey: geminiApiKey.trim() || undefined });
+			const result = await testClearanceGemini({
+				geminiApiKey: geminiApiKey.trim() || undefined,
+				geminiModel
+			});
 			message = result.message;
 			failed = !result.success;
 		} catch (cause) {
@@ -127,6 +142,23 @@
 				/>
 			</label>
 			<div class="border-t border-base-300 pt-5">
+				<label for="gemini-model" class="block text-sm font-semibold">Gemini model</label>
+				<select
+					id="gemini-model"
+					class="select mt-2 w-full bg-base-200"
+					bind:value={geminiModel}
+					aria-describedby="gemini-model-help"
+				>
+					{#each geminiModelSchema.options as model (model)}
+						<option value={model}>{GEMINI_MODEL_LABELS[model]}</option>
+					{/each}
+				</select>
+				<p id="gemini-model-help" class="mt-2 mb-5 text-xs text-base-content/60">
+					3.1 Flash-Lite is the recommended low-cost default. 2.5 Flash-Lite costs less but may
+					reject newer projects. Legacy 2.5 models may reject newer projects. Test uses your
+					selected model without saving; save to apply it to handwriting checks. Model access and
+					quota depend on your Google project.
+				</p>
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<label for="gemini-api-key" class="text-sm font-semibold">Gemini API key</label>
 					<span class="badge badge-outline badge-sm">

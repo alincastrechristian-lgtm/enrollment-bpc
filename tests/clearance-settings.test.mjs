@@ -8,6 +8,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as kit from '@sveltejs/kit';
 import ts from 'typescript';
 import sharp from 'sharp';
+import { migrationConfigThrough } from './migration-config.mjs';
 
 const require = createRequire(import.meta.url);
 function load(file, dependencies = {}, override) {
@@ -18,6 +19,7 @@ function load(file, dependencies = {}, override) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			dependencies[id] ??
+			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : undefined) ??
 			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
 				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
 				: id === '@sveltejs/kit'
@@ -48,11 +50,14 @@ const hasStatus = (status) => (caught) => kit.isHttpError(caught) && caught.stat
 const jpeg = readFileSync('static/clearance-reference.jpg');
 const file = (name = 'clearance.jpg') => new File([jpeg], name, { type: 'image/jpeg' });
 
-function fixture(t) {
+function fixture(t, through) {
 	const sqlite = new Database(':memory:');
 	t.after(() => sqlite.close());
 	const db = drizzle(sqlite, { schema });
-	migrate(db, { migrationsFolder: 'drizzle' });
+	migrate(
+		db,
+		through === undefined ? { migrationsFolder: 'drizzle' } : migrationConfigThrough(t, through)
+	);
 	sqlite.exec(
 		"INSERT INTO user(id,name,email,role,first_name,last_name) VALUES ('admin','Admin','admin@example.invalid','admin','Admin','User'),('student','Student','s@example.invalid','student','Student','User')"
 	);
@@ -544,6 +549,7 @@ test('Gemini test uses unsaved or saved key, sends blank PNG samples, and keeps 
 		Response.json({ error: { message: 'PRIVATE KEY DETAILS' } }, { status: 403 });
 	const failed = await f.remote.testClearanceGemini({});
 	assert.equal(failed.success, false);
+	assert.match(failed.message, /HTTP 403.*lacks permission/);
 	assert(!failed.message.includes('PRIVATE'));
 	globalThis.fetch = async () => {
 		throw Error('PRIVATE connectivity details');
@@ -551,7 +557,7 @@ test('Gemini test uses unsaved or saved key, sends blank PNG samples, and keeps 
 	assert(!JSON.stringify(await f.remote.testClearanceGemini({})).includes('PRIVATE'));
 });
 test('0040 preserves legacy data and defaults; rollback rejects credentials and paper approval evidence', async (t) => {
-	const f = fixture(t);
+	const f = fixture(t, 40);
 	const rollback = readFileSync(
 		'drizzle/rollback/0040_clearance_verification_settings.sql',
 		'utf8'
@@ -559,7 +565,7 @@ test('0040 preserves legacy data and defaults; rollback rejects credentials and 
 	f.sqlite.exec(rollback);
 	f.sqlite.exec('INSERT INTO system_settings(id,seeded) VALUES (1,1)');
 	const before = f.sqlite.prepare('SELECT * FROM system_settings').get();
-	migrate(f.db, { migrationsFolder: 'drizzle' });
+	migrate(f.db, migrationConfigThrough(t, 40));
 	const after = f.sqlite.prepare('SELECT * FROM system_settings').get();
 	for (const [key, value] of Object.entries(before)) assert.equal(after[key], value);
 	assert.equal(after.automated_clearance_verification_enabled, 1);
@@ -638,8 +644,11 @@ test('admin sample returns Gemini transcription and warnings without matching id
 		});
 	};
 	assert.deepEqual(await f.remote.readClearanceTestHandwriting(f.input), {
-		name: 'Jonnel Mrei Palileo',
-		studentNumber: '23016578'
+		success: true,
+		readings: {
+			name: 'Jonnel Mrei Palileo',
+			studentNumber: '23016578'
+		}
 	});
 	assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n, before);
 	assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM clearance_submission').get().n, 0);
@@ -647,15 +656,21 @@ test('admin sample returns Gemini transcription and warnings without matching id
 	assert(!JSON.stringify(calls[0]).includes('Student User'));
 	globalThis.fetch = async () => Response.json({ candidates: [{ finishReason: 'MAX_TOKENS' }] });
 	const unreadable = await f.remote.readClearanceTestHandwriting(f.input);
-	assert.equal(unreadable.name, '');
-	assert.match(unreadable.warnings.name, /response limit/);
+	assert.equal(unreadable.readings.name, '');
+	assert.match(unreadable.readings.warnings.name, /response limit/);
 	globalThis.fetch = async () => {
 		throw Error('PRIVATE network details');
 	};
-	await assert.rejects(
-		f.remote.readClearanceTestHandwriting(f.input),
-		(cause) => cause.status === 503 && !cause.body.message.includes('PRIVATE')
-	);
+	const networkFailure = await f.remote.readClearanceTestHandwriting(f.input);
+	assert.equal(networkFailure.success, false);
+	assert.match(networkFailure.message, /DNS/);
+	assert(!networkFailure.message.includes('PRIVATE'));
+	globalThis.fetch = async () =>
+		Response.json({ error: { status: 'NOT_FOUND', message: 'PRIVATE_PROJECT' } }, { status: 404 });
+	const modelFailure = await f.remote.readClearanceTestHandwriting(f.input);
+	assert.equal(modelFailure.success, false);
+	assert.match(modelFailure.message, /HTTP 404.*model was not found/);
+	assert(!modelFailure.message.includes('PRIVATE'));
 });
 test('handwriting preview rejects wrong roles, stale templates, missing areas and invalid or oversized PNGs before Gemini', async (t) => {
 	const f = await handwritingFixture(t);
@@ -690,4 +705,75 @@ test('handwriting preview rejects wrong roles, stale templates, missing areas an
 		}),
 		hasStatus(400)
 	);
+});
+
+test('model selection persists for production while test overrides stay unsaved and restricted to admins', async (t) => {
+	const f = await handwritingFixture(t);
+	assert.equal((await f.remote.getClearanceSettings()).geminiModel, 'gemini-3.1-flash-lite');
+	const original = globalThis.fetch;
+	t.after(() => (globalThis.fetch = original));
+	const calls = [];
+	globalThis.fetch = async (url, input) => {
+		calls.push({ url, config: JSON.parse(input.body).generationConfig });
+		return Response.json({
+			candidates: [
+				{
+					finishReason: 'STOP',
+					content: { parts: [{ text: JSON.stringify({ name: '', studentNumber: '' }) }] }
+				}
+			]
+		});
+	};
+	await f.remote.testClearanceGemini({ geminiModel: 'gemini-2.5-flash-lite' });
+	assert.match(calls.at(-1).url, /models\/gemini-2.5-flash-lite:generateContent$/);
+	assert.deepEqual(calls.at(-1).config.thinkingConfig, { thinkingBudget: 0 });
+	assert.equal((await f.remote.getClearanceSettings()).geminiModel, 'gemini-3.1-flash-lite');
+	await f.remote.saveClearanceVerification(settingInput({ geminiModel: 'gemini-3.5-flash-lite' }));
+	assert.equal((await f.remote.getClearanceSettings()).geminiModel, 'gemini-3.5-flash-lite');
+	await f.remote.readClearanceTestHandwriting(f.input);
+	assert.match(calls.at(-1).url, /models\/gemini-3.5-flash-lite:generateContent$/);
+	assert.deepEqual(calls.at(-1).config.thinkingConfig, { thinkingLevel: 'minimal' });
+	// Older settings clients must not reset the chosen model when omitting the field.
+	await f.remote.saveClearanceVerification(settingInput());
+	assert.equal((await f.remote.getClearanceSettings()).geminiModel, 'gemini-3.5-flash-lite');
+	assert.throws(() =>
+		f.remote.saveClearanceVerification(settingInput({ geminiModel: 'https://other.invalid' }))
+	);
+	assert.throws(() => f.remote.testClearanceGemini({ geminiModel: 'not-allowed' }));
+	for (const role of ['student', 'registrar']) {
+		f.state.viewer = { user: { id: 'student', role }, session: {} };
+		await assert.rejects(
+			f.remote.saveClearanceVerification(settingInput({ geminiModel: 'gemini-3.8-flash' })),
+			hasStatus(403)
+		);
+		await assert.rejects(
+			f.remote.testClearanceGemini({ geminiModel: 'gemini-3.8-flash' }),
+			hasStatus(403)
+		);
+	}
+});
+test('0041 preserves keys and flags, defaults to low-cost model, and guards rollback of model choices', (t) => {
+	const f = fixture(t);
+	const rollback = readFileSync('drizzle/rollback/0041_gemini_model_selection.sql', 'utf8');
+	f.db
+		.insert(schema.systemSettings)
+		.values({ id: 1, geminiApiKey: 'private-saved-key', personalInfoVerificationEnabled: false })
+		.run();
+	const before = f.sqlite.prepare('SELECT * FROM system_settings').get();
+	f.sqlite.exec(rollback);
+	assert.equal(
+		f.sqlite.prepare('SELECT gemini_api_key FROM system_settings').get().gemini_api_key,
+		'private-saved-key'
+	);
+	migrate(f.db, { migrationsFolder: 'drizzle' });
+	assert.deepEqual(f.sqlite.prepare('SELECT * FROM system_settings').get(), before);
+	assert.equal(before.gemini_model, 'gemini-3.1-flash-lite');
+	f.sqlite.exec("UPDATE system_settings SET gemini_model='gemini-3.8-flash'");
+	assert.throws(() => f.sqlite.exec(rollback), /CHECK constraint/);
+	f.sqlite.exec('ROLLBACK');
+	assert.equal(
+		f.sqlite.prepare('SELECT gemini_model FROM system_settings').get().gemini_model,
+		'gemini-3.8-flash'
+	);
+	assert.deepEqual(f.sqlite.pragma('foreign_key_check'), []);
 });

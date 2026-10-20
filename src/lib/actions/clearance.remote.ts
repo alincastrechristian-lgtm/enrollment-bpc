@@ -14,7 +14,8 @@ import { z } from 'zod';
 import { db } from '#lib/server/db/index.js';
 import { clearanceTemplate, enrollment, studentData, systemSettings } from '#lib/schema.js';
 import { getClearancePolicy } from '#lib/server/clearance-settings.js';
-import { getGeminiApiKey, recognizeIdentity } from '#lib/server/handwriting.js';
+import { getGeminiApiKey, getGeminiModel, recognizeIdentity } from '#lib/server/handwriting.js';
+import { geminiModelSchema } from '#lib/clearance/gemini.js';
 import sharp from 'sharp';
 import { and, eq } from 'drizzle-orm';
 import { validCorners } from '#lib/clearance/clearance.js';
@@ -129,7 +130,8 @@ export const getClearanceSettings = query(async () => {
 		configured: fileStorageConfigured(),
 		template: getClearanceTemplateInfo(),
 		...getClearancePolicy(db),
-		hasGeminiKey: !!key
+		hasGeminiKey: !!key,
+		geminiModel: await getGeminiModel()
 	};
 });
 
@@ -144,6 +146,7 @@ export const saveClearanceVerification = command(
 			automatedClearanceVerificationEnabled: z.boolean(),
 			personalInfoVerificationEnabled: z.boolean(),
 			geminiApiKey: geminiKey.optional(),
+			geminiModel: geminiModelSchema.optional(),
 			clearGeminiKey: z.boolean().default(false)
 		})
 		.strict(),
@@ -169,7 +172,8 @@ export const saveClearanceVerification = command(
 					.set({
 						automatedClearanceVerificationEnabled: input.automatedClearanceVerificationEnabled,
 						personalInfoVerificationEnabled: input.personalInfoVerificationEnabled,
-						geminiApiKey: key
+						geminiApiKey: key,
+						geminiModel: input.geminiModel
 					})
 					.where(eq(systemSettings.id, 1))
 					.run();
@@ -182,7 +186,9 @@ export const saveClearanceVerification = command(
 );
 
 export const testClearanceGemini = command(
-	z.object({ geminiApiKey: geminiKey.optional() }).strict(),
+	z
+		.object({ geminiApiKey: geminiKey.optional(), geminiModel: geminiModelSchema.optional() })
+		.strict(),
 	async (input) => {
 		validateUser(getRequestEvent().locals, [Role.ADMIN]);
 		const key = input.geminiApiKey || (await getGeminiApiKey());
@@ -197,7 +203,8 @@ export const testClearanceGemini = command(
 			const result = await recognizeIdentity(
 				{ name: png, studentNumber: png },
 				getRequestEvent().request.signal,
-				key
+				key,
+				input.geminiModel
 			);
 			return {
 				success: !result.warnings,
@@ -262,10 +269,15 @@ export const readClearanceTestHandwriting = command(
 			}
 		}
 		try {
-			return await recognizeIdentity(images, request.signal);
+			return { success: true as const, readings: await recognizeIdentity(images, request.signal) };
 		} catch (cause) {
-			if (isHttpError(cause)) throw cause;
-			error(503, 'Could not reach Gemini. Check server connectivity and try again.');
+			// Admin diagnostics return only service-authored messages, bypassing generic 5xx masking.
+			return {
+				success: false as const,
+				message: isHttpError(cause)
+					? cause.body.message
+					: "The server could not connect to Google's Gemini API. Check server internet access, DNS, firewall, and proxy settings."
+			};
 		}
 	}
 );

@@ -44,9 +44,9 @@ const items: SidebarItem[] = [
 		icon: Users,
 		roles: [Role.ADMIN],
 		children: [
-			{ label: 'Students', href: resolve('/user/students'), icon: Users },
+			{ label: 'Admins', href: resolve('/user/admins'), icon: UserShield },
 			{ label: 'Registrars', href: resolve('/user/registrars'), icon: UserShield },
-			{ label: 'Administrators', href: resolve('/user/admins'), icon: UserShield }
+			{ label: 'Students', href: resolve('/user/students'), icon: Users }
 		]
 	},
 	{ label: 'Students', href: resolve('/user/students'), icon: Users, roles: [Role.REGISTRAR] },
