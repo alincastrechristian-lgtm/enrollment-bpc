@@ -2,10 +2,11 @@ import { Role } from '#lib/Roles.js';
 import { validateUser } from '#lib/server/auth.js';
 import {
 	getClearanceTemplateInfo,
+	getClearanceTemplate,
 	saveClearanceTemplate,
 	saveClearanceDefinition
 } from '#lib/server/clearance-template.js';
-import { definitionSchema } from '#lib/clearance/definition.js';
+import { definitionSchema, hasIdentityAreas } from '#lib/clearance/definition.js';
 import { fileStorageConfigured, MAX_FILE_BYTES } from '#lib/server/garage/files.js';
 import { command, form, getRequestEvent, query } from '$app/server';
 import { error, isHttpError } from '@sveltejs/kit';
@@ -211,6 +212,60 @@ export const testClearanceGemini = command(
 					? cause.body.message
 					: 'Could not reach Gemini. Check server connectivity and try again.'
 			};
+		}
+	}
+);
+
+const testCrop = z
+	.string()
+	.min(1)
+	.max(1_000_000)
+	.regex(/^[A-Za-z0-9+/]+={0,2}$/);
+export const readClearanceTestHandwriting = command(
+	z
+		.object({
+			revision: z.string().uuid(),
+			crops: z.object({ name: testCrop, studentNumber: testCrop }).strict()
+		})
+		.strict(),
+	async ({ revision, crops }) => {
+		const { locals, request } = getRequestEvent();
+		validateUser(locals, [Role.ADMIN]);
+		const template = getClearanceTemplate();
+		if (!template || template.revision !== revision)
+			error(409, 'Template changed. Reload the clearance test.');
+		const definition = definitionSchema.safeParse(template.definition);
+		if (!definition.success || !hasIdentityAreas(definition.data))
+			error(400, 'Mark and save the student name and number areas before testing handwriting.');
+		const images = { ...crops };
+		for (const field of ['name', 'studentNumber'] as const) {
+			try {
+				const image = sharp(Buffer.from(crops[field], 'base64'), { limitInputPixels: 2_000_000 });
+				const metadata = await image.metadata();
+				if (
+					metadata.format !== 'png' ||
+					!metadata.width ||
+					!metadata.height ||
+					metadata.width > 2400 ||
+					metadata.height > 1000
+				)
+					error(400, 'Use PNG field crops up to 2400 × 1000 pixels.');
+				images[field] = (
+					await image.flatten({ background: '#fff' }).greyscale().png().toBuffer()
+				).toString('base64');
+			} catch (cause) {
+				if (isHttpError(cause)) throw cause;
+				error(
+					400,
+					'Could not read the handwriting field images. Upload a clear image and try again.'
+				);
+			}
+		}
+		try {
+			return await recognizeIdentity(images, request.signal);
+		} catch (cause) {
+			if (isHttpError(cause)) throw cause;
+			error(503, 'Could not reach Gemini. Check server connectivity and try again.');
 		}
 	}
 );

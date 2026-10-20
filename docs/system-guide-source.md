@@ -575,7 +575,7 @@ The estimator needs at least six matches across at least four reference lines, u
 
 ## 12.5 Admin browser test and revisions
 
-The administrator sample test accepts independent expected semester/year and a sample JPEG/PNG/WebP up to 15 MB. The sample stays in the browser. It tests saved printed/image template anchors, not the full production office, writing-presence, or Gemini pipeline. It creates no submission and no approval.
+The administrator sample test accepts independent expected semester/year and a sample JPEG/PNG/WebP up to 15 MB. By default, the sample stays in the browser and tests saved printed/image template anchors. The optional **Test handwriting with Gemini** checkbox reveals **Read handwriting**: this sends only the saved name/number field crops through the server to Gemini, using the saved key, and displays returned text and warnings. This diagnostic works even when personal verification is disabled, performs no identity comparison, and creates no submission or approval. Office and writing-presence checks are not part of this sample test.
 
 A changed global revision blocks requesting an old ready submission until reupload. An already-requested eligible submission is reviewed against its saved report/definition rather than silently reevaluated against a newer global template. Legacy unverified reports lacking current identity checks need reupload; verified staff approvals remain valid.
 

@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as kit from '@sveltejs/kit';
 import ts from 'typescript';
+import sharp from 'sharp';
 
 const require = createRequire(import.meta.url);
 function load(file, dependencies = {}, override) {
@@ -584,4 +585,109 @@ test('email settings cannot expose saved Gemini credentials', async (t) => {
 	const response = await f.emailPage({ locals: f.state.viewer });
 	assert(!JSON.stringify(response).includes('legacy-test-key'));
 	assert(!Object.hasOwn(response.settings, 'geminiApiKey'));
+});
+
+async function handwritingFixture(t) {
+	const f = fixture(t);
+	await f.remote.uploadClearanceTemplate({ file: file(), revision: '' });
+	const config = {
+		...definition(),
+		personalFields: ['studentName', 'studentNumber'].map((field, i) => ({
+			id: crypto.randomUUID(),
+			field,
+			box: { x: 0.1, y: 0.65 + i * 0.1, width: 0.6, height: 0.05 }
+		}))
+	};
+	f.service.saveClearanceDefinition(f.service.getClearanceTemplate().revision, config);
+	const png = (
+		await sharp({ create: { width: 240, height: 80, channels: 3, background: '#fff' } })
+			.png()
+			.toBuffer()
+	).toString('base64');
+	return {
+		...f,
+		input: {
+			revision: f.service.getClearanceTemplate().revision,
+			crops: { name: png, studentNumber: png }
+		}
+	};
+}
+test('admin sample returns Gemini transcription and warnings without matching identity, saving, or approving', async (t) => {
+	const f = await handwritingFixture(t);
+	f.db
+		.update(schema.systemSettings)
+		.set({ personalInfoVerificationEnabled: false, automatedClearanceVerificationEnabled: false })
+		.run();
+	const before = f.sqlite.prepare('SELECT total_changes() AS n').get().n;
+	const fetchBefore = globalThis.fetch;
+	t.after(() => (globalThis.fetch = fetchBefore));
+	const calls = [];
+	globalThis.fetch = async (url, input) => {
+		calls.push(JSON.parse(input.body));
+		return Response.json({
+			candidates: [
+				{
+					finishReason: 'STOP',
+					content: {
+						parts: [
+							{ text: JSON.stringify({ name: 'Jonnel Mrei Palileo', studentNumber: '23016578' }) }
+						]
+					}
+				}
+			]
+		});
+	};
+	assert.deepEqual(await f.remote.readClearanceTestHandwriting(f.input), {
+		name: 'Jonnel Mrei Palileo',
+		studentNumber: '23016578'
+	});
+	assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n, before);
+	assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM clearance_submission').get().n, 0);
+	assert.equal(calls[0].contents[0].parts.filter((p) => p.inlineData).length, 2);
+	assert(!JSON.stringify(calls[0]).includes('Student User'));
+	globalThis.fetch = async () => Response.json({ candidates: [{ finishReason: 'MAX_TOKENS' }] });
+	const unreadable = await f.remote.readClearanceTestHandwriting(f.input);
+	assert.equal(unreadable.name, '');
+	assert.match(unreadable.warnings.name, /response limit/);
+	globalThis.fetch = async () => {
+		throw Error('PRIVATE network details');
+	};
+	await assert.rejects(
+		f.remote.readClearanceTestHandwriting(f.input),
+		(cause) => cause.status === 503 && !cause.body.message.includes('PRIVATE')
+	);
+});
+test('handwriting preview rejects wrong roles, stale templates, missing areas and invalid or oversized PNGs before Gemini', async (t) => {
+	const f = await handwritingFixture(t);
+	const fetchBefore = globalThis.fetch;
+	t.after(() => (globalThis.fetch = fetchBefore));
+	globalThis.fetch = async () => assert.fail('Invalid sample must not reach Gemini');
+	for (const role of ['registrar', 'student']) {
+		f.state.viewer = { user: { id: 'student', role }, session: {} };
+		await assert.rejects(f.remote.readClearanceTestHandwriting(f.input), hasStatus(403));
+	}
+	f.state.viewer = { user: { id: 'admin', role: 'admin' }, session: {} };
+	await assert.rejects(
+		f.remote.readClearanceTestHandwriting({ ...f.input, revision: crypto.randomUUID() }),
+		hasStatus(409)
+	);
+	const oversized = (
+		await sharp({ create: { width: 2500, height: 10, channels: 3, background: '#fff' } })
+			.png()
+			.toBuffer()
+	).toString('base64');
+	for (const name of ['bm90LWFuLWltYWdl', jpeg.toString('base64'), oversized]) {
+		await assert.rejects(
+			f.remote.readClearanceTestHandwriting({ ...f.input, crops: { ...f.input.crops, name } }),
+			hasStatus(400)
+		);
+	}
+	f.service.saveClearanceDefinition(f.input.revision, { ...definition(), personalFields: [] });
+	await assert.rejects(
+		f.remote.readClearanceTestHandwriting({
+			...f.input,
+			revision: f.service.getClearanceTemplate().revision
+		}),
+		hasStatus(400)
+	);
 });

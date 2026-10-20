@@ -1,7 +1,10 @@
 <script lang="ts">
 	import BorderEditor from '#lib/clearance/BorderEditor.svelte';
 	import DefinedTemplateCheck from '#lib/clearance/DefinedTemplateCheck.svelte';
-	import type { TemplateInfo } from '#lib/clearance/definition.js';
+	import { hasIdentityAreas, type TemplateInfo } from '#lib/clearance/definition.js';
+	import { readClearanceTestHandwriting } from '#lib/actions/clearance.remote.js';
+	import type { IdentityReadings } from '#lib/clearance/identity.js';
+	import { getErrorMessage } from '#lib/errors.js';
 	import { UNIT_CORNERS, type Corners } from '#lib/clearance/clearance.js';
 	import { ScanLine } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
@@ -24,18 +27,58 @@
 	let dragging = $state(false);
 	let loading = $state(false);
 	let checking = $state(false);
+	let includeHandwriting = $state(false);
+	let reading = $state(false);
+	let handwriting = $state<IdentityReadings>();
+	let handwritingError = $state('');
+	let readingVersion = 0;
 	let aligning = $state(false);
 	let error = $state('');
 	let destroyed = false;
 	// Simulation only. Student uploads use the enrollment stored on the server.
 	let semester = $state('1');
 	let schoolYear = $state(`${new Date().getFullYear()}-${new Date().getFullYear() + 1}`);
-	const locked = $derived(disabled || loading || checking || aligning);
-	$effect(() => onbusychange(loading || checking || aligning));
+	const locked = $derived(disabled || loading || checking || aligning || reading);
+	$effect(() => onbusychange(loading || checking || aligning || reading));
+	$effect(() => {
+		void source;
+		JSON.stringify(corners);
+		void template.revision;
+		void includeHandwriting;
+		readingVersion++;
+		handwriting = undefined;
+		handwritingError = '';
+	});
 	onDestroy(() => {
 		destroyed = true;
 		onbusychange(false);
 	});
+
+	async function readHandwriting() {
+		if (!source || !template.definition || !includeHandwriting || locked || drawing || dragging)
+			return;
+		reading = true;
+		handwriting = undefined;
+		handwritingError = '';
+		const version = readingVersion;
+		try {
+			const processor = await import('#lib/clearance/scan.client.js');
+			const crops = processor.identityCrops(source, corners, template.definition);
+			const result = await readClearanceTestHandwriting({
+				revision: template.revision,
+				crops: {
+					name: crops.name.toDataURL('image/png').split(',')[1],
+					studentNumber: crops.studentNumber.toDataURL('image/png').split(',')[1]
+				}
+			});
+			if (!destroyed && version === readingVersion) handwriting = result;
+		} catch (cause) {
+			if (!destroyed && version === readingVersion)
+				handwritingError = getErrorMessage(cause, 'Could not read handwriting. Try again.');
+		} finally {
+			reading = false;
+		}
+	}
 
 	async function upload(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
@@ -124,7 +167,8 @@
 			</label>
 			<p id="clearance-test-help" class="text-xs text-base-content/60">
 				JPG, PNG or WebP up to 15 MB. Confirm both form outlines before comparing. The test image
-				stays in your browser and does not replace the saved template.
+				stays in your browser unless you run the optional Gemini handwriting test. It does not
+				replace the saved template.
 			</p>
 			{#if loading}
 				<p role="status" class="text-sm">Opening image and finding the form border...</p>
@@ -158,18 +202,93 @@
 			{/if}
 		</div>
 		{#if template.definition}
-			<DefinedTemplateCheck
-				showReference
-				{source}
-				{template}
-				definition={template.definition}
-				term={{ semester, schoolYear }}
-				{corners}
-				disabled={disabled || loading || aligning || drawing || dragging}
-				onbusychange={(value) => {
-					checking = value;
-				}}
-			/>
+			<div class="min-w-0 space-y-5">
+				<DefinedTemplateCheck
+					showReference
+					{source}
+					{template}
+					definition={template.definition}
+					term={{ semester, schoolYear }}
+					{corners}
+					disabled={disabled || loading || aligning || drawing || dragging || reading}
+					onbusychange={(value) => {
+						checking = value;
+					}}
+				/>
+				<section
+					class="portal-panel space-y-4 p-5 sm:p-6"
+					aria-label="Gemini handwriting test"
+					aria-busy={reading}
+				>
+					<label class="flex cursor-pointer items-start gap-3">
+						<input
+							type="checkbox"
+							class="checkbox mt-0.5 checkbox-sm"
+							bind:checked={includeHandwriting}
+							disabled={locked}
+						/>
+						<span>
+							<span class="block text-sm font-semibold">Test handwriting with Gemini</span>
+							<span class="mt-1 block text-xs text-base-content/60">
+								Preview the student name and number Gemini reads from the saved input areas. No
+								identity comparison or clearance approval.
+							</span>
+						</span>
+					</label>
+					{#if includeHandwriting}
+						<p class="text-xs text-base-content/60">
+							Click Read handwriting to send only the name and student number crops to Google using
+							the saved Gemini key. This diagnostic runs even when personal information verification
+							is disabled.
+						</p>
+						{#if !hasIdentityAreas(template.definition)}
+							<p class="text-sm text-warning">
+								Mark and save both student name and number areas first.
+							</p>
+						{/if}
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={readHandwriting}
+							disabled={locked ||
+								!source ||
+								drawing ||
+								dragging ||
+								!hasIdentityAreas(template.definition)}
+						>
+							{reading ? 'Reading handwriting…' : 'Read handwriting'}
+						</button>
+						{#if reading}
+							<p role="status" class="text-sm">Gemini is reading the selected fields…</p>
+						{/if}
+						{#if handwritingError}
+							<p role="alert" class="text-sm text-error">{handwritingError}</p>
+						{/if}
+						{#if handwriting}
+							<dl
+								class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4 text-sm"
+								aria-label="Gemini handwriting result"
+							>
+								<div>
+									<dt class="font-semibold">Student name</dt>
+									<dd class="mt-1 break-words whitespace-pre-wrap">
+										{handwriting.name || 'No readable text returned'}
+									</dd>
+								</div>
+								<div>
+									<dt class="font-semibold">Student number (without MA-)</dt>
+									<dd class="mt-1 break-words whitespace-pre-wrap">
+										{handwriting.studentNumber || 'No readable text returned'}
+									</dd>
+								</div>
+							</dl>
+						{#each Object.entries(handwriting.warnings ?? {}) as [field, warning] (field)}
+								<p class="text-sm text-warning">{warning}</p>
+							{/each}
+						{/if}
+					{/if}
+				</section>
+			</div>
 		{:else}
 			<p class="portal-panel p-5 text-sm text-base-content/65">
 				Mark and save the reference details above to enable testing. Uploading a new template

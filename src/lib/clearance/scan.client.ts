@@ -107,7 +107,32 @@ export function straighten(source: HTMLCanvasElement, corners: Corners): HTMLCan
 }
 
 // Sample fields directly from source pixels before the full-form preview loses detail.
-export function identityCrops(source: HTMLCanvasElement, corners: Corners) {
+export function identityCrops(
+	source: HTMLCanvasElement,
+	corners: Corners,
+	definition?: TemplateDefinition
+) {
+	if (definition) {
+		const field = (kind: 'studentName' | 'studentNumber') => {
+			const box = definition.personalFields?.find((area) => area.field === kind)?.box;
+			if (!box)
+				throw new Error(
+					'Mark and save the student name and number areas before testing handwriting.'
+				);
+			return rectifiedRegion(
+				source,
+				corners,
+				{
+					x: box.x * WIDTH,
+					y: box.y * HEIGHT,
+					width: box.width * WIDTH,
+					height: box.height * HEIGHT
+				},
+				Math.min(2, 1000 / (box.height * HEIGHT))
+			);
+		};
+		return { name: field('studentName'), studentNumber: field('studentNumber') };
+	}
 	return {
 		name: rectifiedRegion(source, corners, REGIONS.name, 2),
 		studentNumber: rectifiedRegion(source, corners, REGIONS.studentNumber, 2)

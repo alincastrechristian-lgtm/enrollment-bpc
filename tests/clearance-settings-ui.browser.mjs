@@ -24,11 +24,12 @@ test(
 				'popup.js':
 					'window.messages=[];export const showLoading=()=>{};export const showSuccess=message=>window.messages.push(message);export const showError=message=>window.messages.push(message);',
 				'fixture.js': `const area=(label,kind,x,y,width,height,expected='')=>({id:crypto.randomUUID(),label,kind,box:{x,y,width,height},expected});
-				export const definition={corners:[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],semester:'2',schoolYear:'2025-2026',areas:[area('School name','text',.3,.02,.4,.04,'BULACAN POLYTECHNIC COLLEGE'),area('Form title','text',.32,.12,.35,.04,'Student Clearance Form'),area('School seal','image',.08,.02,.16,.2),area('Semester','semester',.32,.17,.2,.04),area('Academic year','academicYear',.5,.17,.2,.04)],personalFields:[{id:crypto.randomUUID(),field:'studentName',box:{x:.1,y:.7,width:.5,height:.05}}],officeRows:['Library','Registrar'].map((label,i)=>({id:crypto.randomUUID(),label,office:{x:.08,y:.3+i*.08,width:.12,height:.03},cleared:{x:.27,y:.3+i*.08,width:.045,height:.05},signature:{x:.62,y:.3+i*.08,width:.2,height:.05}}))};`,
+				export const definition={corners:[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],semester:'2',schoolYear:'2025-2026',areas:[area('School name','text',.3,.02,.4,.04,'BULACAN POLYTECHNIC COLLEGE'),area('Form title','text',.32,.12,.35,.04,'Student Clearance Form'),area('School seal','image',.08,.02,.16,.2),area('Semester','semester',.32,.17,.2,.04),area('Academic year','academicYear',.5,.17,.2,.04)],personalFields:[{id:crypto.randomUUID(),field:'studentName',box:{x:.1,y:.7,width:.5,height:.05}},{id:crypto.randomUUID(),field:'studentNumber',box:{x:.1,y:.8,width:.5,height:.05}}],officeRows:['Library','Registrar'].map((label,i)=>({id:crypto.randomUUID(),label,office:{x:.08,y:.3+i*.08,width:.12,height:.03},cleared:{x:.27,y:.3+i*.08,width:.045,height:.05},signature:{x:.62,y:.3+i*.08,width:.2,height:.05}}))};`,
 				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,hasGeminiKey:true,template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
 				window.saved=[];window.uploads=[];window.failUpload=false;window.clearTemplate=()=>state={...state,template:null};
 				export function getClearanceSettings(){return{get current(){return state;}};}
-                window.verificationSaves=[];window.geminiTests=[];
+                window.verificationSaves=[];window.geminiTests=[];window.handwritingTests=[];
+ export async function readClearanceTestHandwriting(input){window.handwritingTests.push(input);return window.blankHandwriting?{name:'',studentNumber:'',warnings:{name:'Gemini returned an unusable transcription.'}}:{name:'Jonnel Mrei Palileo',studentNumber:'23016578'};}
                 export async function saveClearanceVerification(input){window.verificationSaves.push(input);state={...state,...input,hasGeminiKey:input.clearGeminiKey?false:!!input.geminiApiKey||state.hasGeminiKey};delete state.geminiApiKey;return{success:true};}
                 export async function testClearanceGemini(input){window.geminiTests.push(input);return{success:true,message:'Gemini connection successful.'};}
 
@@ -36,7 +37,7 @@ test(
 				export const uploadClearanceTemplate={fields:new Proxy({allIssues:()=>[]},{get:(target,name)=>target[name]??{as:(type,value)=>({name,type,...(value===undefined?{}:{value})})}}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;await callback({element,result:{},submit:async()=>{if(window.failUpload)throw Error('Simulated storage error');const file=new FormData(element).get('file');window.uploads.push(file.name);state={...state,template:{filename:file.name,size:file.size,uploadedAt:new Date().toISOString(),revision:crypto.randomUUID(),definition:null}};return true;}});}})};`,
 				'scan.js': `import{definition}from'./fixture.js';
 				export async function loadImage(){const image=new Image();image.src='/reference.jpg';await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);return canvas;}
-				export const loadUpload=loadImage;export const alignTemplate=image=>image;export const detectBorder=()=>structuredClone(definition.corners);
+				export function identityCrops(source,corners,config){window.cropFields=config.personalFields.map(f=>f.field);return{name:source,studentNumber:source};}export const loadUpload=loadImage;export const alignTemplate=image=>image;export const detectBorder=()=>structuredClone(definition.corners);
 				export async function detectOfficeRows(_image,_corners,onProgress,signal){onProgress('Detecting offices');if(window.deferDetection)await new Promise((resolve,reject)=>{window.finishDetection=resolve;signal.addEventListener('abort',()=>reject(Error('Cancelled')),{once:true});});return{rows:structuredClone(definition.officeRows),hints:[]};}
 				export async function detectPersonalFields(){return{fields:structuredClone(definition.personalFields),hints:[]};}
 				export async function detectTemplateAreas(){return{areas:structuredClone(definition.areas),semester:'2',schoolYear:'2025-2026',hints:[]};}
@@ -191,6 +192,30 @@ test(
 			await page
 				.getByLabel('Upload test clearance', { exact: true })
 				.setInputFiles('static/clearance-written-example.jpg');
+
+			const include = page.getByRole('checkbox', { name: /Test handwriting with Gemini/ });
+			await expect(include).not.toBeChecked();
+			await expect(page.getByRole('button', { name: 'Read handwriting', exact: true })).toHaveCount(
+				0
+			);
+			await include.check();
+			await page.getByRole('button', { name: 'Read handwriting', exact: true }).click();
+			await expect(page.getByText('Jonnel Mrei Palileo', { exact: true })).toBeVisible();
+			await expect(page.getByText('23016578', { exact: true })).toBeVisible();
+			assert.equal(await page.evaluate(() => window.handwritingTests.length), 1);
+			assert.deepEqual(await page.evaluate(() => window.cropFields), [
+				'studentName',
+				'studentNumber'
+			]);
+			await include.uncheck();
+			await expect(page.getByText('Jonnel Mrei Palileo', { exact: true })).toHaveCount(0);
+			await include.check();
+			await page.evaluate(() => (window.blankHandwriting = true));
+			await page.getByRole('button', { name: 'Read handwriting', exact: true }).click();
+			await expect(page.getByText('No readable text returned', { exact: true })).toHaveCount(2);
+			await expect(
+				page.getByText('Gemini returned an unusable transcription.', { exact: true })
+			).toBeVisible();
 			await page.getByRole('button', { name: 'Compare template', exact: true }).click();
 			await expect(page.getByText('Matches saved template', { exact: true })).toBeVisible();
 			assert.deepEqual(await page.evaluate(() => window.testTerm), {
@@ -230,7 +255,7 @@ test(
 			assert.equal(saved.areas[0].label, 'Institution heading');
 			assert.equal(saved.officeRows[0].label, 'Library services');
 			assert.equal(saved.officeRows[0].office.x, 0.09);
-			assert.equal(saved.personalFields.length, 1);
+			assert.equal(saved.personalFields.length, 2);
 			assert(!('semester' in saved));
 			assert(!('schoolYear' in saved));
 			await page.evaluate(() => (window.deferDetection = true));
@@ -311,6 +336,57 @@ test(
 			await expect(page.getByLabel('Choose template image', { exact: true })).toBeVisible();
 			await expect(workspace).toHaveCount(0);
 			await page.screenshot({ path: '.tmp/clearance-settings-empty.png', fullPage: true });
+
+			const cropResult = await page.evaluate(
+				async (moduleUrl) => {
+					const { identityCrops } = await import(moduleUrl);
+					const source = document.createElement('canvas');
+					source.width = 1000;
+					source.height = 820;
+					const ctx = source.getContext('2d');
+					ctx.fillStyle = '#fff';
+					ctx.fillRect(0, 0, 1000, 820);
+					const boxes = [
+						{ field: 'studentName', box: { x: 0.65, y: 0.12, width: 0.2, height: 0.07 } },
+						{ field: 'studentNumber', box: { x: 0.12, y: 0.68, width: 0.3, height: 0.05 } }
+					];
+					boxes.forEach(({ box }, i) => {
+						ctx.fillStyle = i ? '#0000ff' : '#ff0000';
+						ctx.fillRect(
+							(0.1 + 0.8 * box.x) * 1000,
+							(0.1 + 0.8 * box.y) * 820,
+							0.8 * box.width * 1000,
+							0.8 * box.height * 820
+						);
+					});
+					const corners = [
+						{ x: 0.1, y: 0.1 },
+						{ x: 0.9, y: 0.1 },
+						{ x: 0.9, y: 0.9 },
+						{ x: 0.1, y: 0.9 }
+					];
+					const crops = identityCrops(source, corners, { personalFields: boxes });
+					const center = (patch) =>
+						Array.from(
+							patch
+								.getContext('2d')
+								.getImageData(Math.floor(patch.width / 2), Math.floor(patch.height / 2), 1, 1).data
+						);
+					let missingRejected = false;
+					try {
+						identityCrops(source, corners, { personalFields: [] });
+					} catch {
+						missingRejected = true;
+					}
+					return { name: center(crops.name), number: center(crops.studentNumber), missingRejected };
+				},
+				'/@fs/' + source('src/lib/clearance/scan.client.ts')
+			);
+			assert.deepEqual(cropResult, {
+				name: [255, 0, 0, 255],
+				number: [0, 0, 255, 255],
+				missingRejected: true
+			});
 			assert.deepEqual(errors, []);
 		} finally {
 			await browser?.close();
