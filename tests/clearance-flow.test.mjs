@@ -177,6 +177,7 @@ function fixture(t) {
 				return Object.assign(result, {
 					refresh: async () => {
 						await result;
+						if (state.failRefresh) throw Error('PRIVATE refresh failure');
 					}
 				});
 			},
@@ -479,7 +480,7 @@ test('ownership, roles, stale template, missing office setup, and malformed outl
 		.update(schema.clearanceTemplate)
 		.set({ definition: { ...f.config, officeRows: [] } })
 		.run();
-	await assert.rejects(f.upload(), status(503));
+	assert.equal((await f.upload()).failure.code, 'CLR-SETUP');
 	f.db
 		.update(schema.clearanceTemplate)
 		.set({ definition: f.config, revision: crypto.randomUUID() })
@@ -555,7 +556,7 @@ test('storage failure and template changes during OCR preserve the previous reco
 	const first = await f.upload(),
 		key = f.row().objectKey;
 	f.state.failPut = true;
-	await assert.rejects(f.upload());
+	assert.equal((await f.upload()).failure.code, 'CLR-UPLOAD');
 	assert.equal(f.row().id, first.submission.id);
 	f.state.failPut = false;
 	f.state.onCheck = () =>
@@ -608,7 +609,7 @@ test('personal areas are required before OCR or Gemini; legacy templates remain 
 		.update(schema.clearanceTemplate)
 		.set({ definition: { ...f.config, personalFields: [] } })
 		.run();
-	await assert.rejects(f.upload(), status(503));
+	assert.equal((await f.upload()).failure.code, 'CLR-SETUP');
 	assert.equal(f.state.reads, 0);
 	assert.equal(f.state.identityCalls, 0);
 });
@@ -622,7 +623,7 @@ test('personal verification uses DB identity and blocks mismatch and provider fa
 		assert.equal(f.state.puts, 0);
 	}
 	f.state.identityError = Error('Provider unavailable');
-	await assert.rejects(f.upload(), status(503));
+	assert.equal((await f.upload()).failure.code, 'CLR-HANDWRITING');
 	assert.equal(f.state.puts, 0);
 	f.state.identityError = null;
 	f.state.identityReadings = { ...studentIdentity, studentNumber: '001' };
@@ -1006,6 +1007,94 @@ test('old-file cleanup cannot keep a successfully saved clearance pending foreve
 	await entered;
 	t.mock.timers.tick(10_000);
 	assert.equal((await active).success, true);
+	assert.equal(f.row().status, 'ready');
+	assert(f.objects.has(f.row().objectKey));
+});
+
+test('student failures identify the failed stage without exposing internal diagnostics or replacing saved evidence', async (t) => {
+	for (const scenario of [
+		{
+			code: 'CLR-REFERENCE',
+			inject: (f) => {
+				f.state.onDownload = () => {
+					throw Error('PRIVATE reference credentials');
+				};
+			}
+		},
+		{
+			code: 'CLR-REFERENCE',
+			inject: (f) => {
+				f.state.onDownload = () => ({
+					arrayBuffer: async () => {
+						throw Error('PRIVATE response body');
+					}
+				});
+			}
+		},
+		{
+			code: 'CLR-TEMPLATE',
+			inject: (f) => {
+				f.state.onCheck = () => {
+					throw Error('PRIVATE OCR internals');
+				};
+			}
+		},
+		{
+			code: 'CLR-HANDWRITING',
+			inject: (f) => {
+				f.state.identityError = (() => {
+					try {
+						kit.error(503, 'PRIVATE provider key/project/model');
+					} catch (cause) {
+						return cause;
+					}
+				})();
+			}
+		},
+		{
+			code: 'CLR-UPLOAD',
+			inject: (f) => {
+				f.state.failPut = true;
+			}
+		},
+		{
+			code: 'CLR-SAVE',
+			inject: (f) => {
+				f.sqlite.exec(
+					"CREATE TRIGGER fail_clearance_save BEFORE INSERT ON clearance_submission BEGIN SELECT RAISE(ABORT,'PRIVATE database details'); END;"
+				);
+			}
+		}
+	]) {
+		await t.test(scenario.code, async (t) => {
+			const f = fixture(t);
+			await f.upload();
+			const previous = f.row();
+			scenario.inject(f);
+			const result = await f.upload();
+			assert.equal(result.success, false);
+			assert.equal(result.report, null);
+			assert.equal(result.submission, null);
+			assert.equal(result.failure.code, scenario.code);
+			assert.equal(result.failure.refreshRequired, scenario.code === 'CLR-SAVE');
+			assert.match(result.failure.message, /Registrar|Refresh clearance status/);
+			assert.doesNotMatch(JSON.stringify(result), /PRIVATE|Storage failed/);
+			assert.deepEqual(f.row(), previous);
+			assert(f.objects.has(previous.objectKey));
+			assert.equal(f.objects.size, 2, 'Only reference and previous saved evidence remain.');
+		});
+	}
+});
+
+test('failed status refresh reports a saved clearance and requires refresh before retry', async (t) => {
+	const f = fixture(t);
+	f.state.failRefresh = true;
+	const result = await f.upload();
+	assert.equal(result.success, false);
+	assert.equal(result.failure.code, 'CLR-STATUS');
+	assert.equal(result.failure.refreshRequired, true);
+	assert.match(result.failure.message, /was saved/);
+	assert.doesNotMatch(JSON.stringify(result), /PRIVATE/);
 	assert.equal(f.row().status, 'ready');
 	assert(f.objects.has(f.row().objectKey));
 });

@@ -31,14 +31,14 @@ test(
 				'paths.js':
 					'export const resolve=(route,params={})=>route.replace(/\\[([^\\]]+)\\]/g,(_,key)=>encodeURIComponent(params[key]));',
 				'scan.js': `export async function loadUpload(){const image=new Image();image.src='/reference.jpg';await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);return canvas;}export const detectBorder=()=>[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];`,
-				'actions.svelte.js': `const state=$state({current:{id:'e',revision:0,status:'enrolled',finalizedGrades:false,submittedClearance:false,semester:2,schoolYearStart:2025},template:{revision:'template',definition:{semester:'2',schoolYear:'2025-2026',personalFields:[{field:'studentName'},{field:'studentNumber'}]}},submission:null});
+				'actions.svelte.js': `import {error} from '@sveltejs/kit';const state=$state({current:{id:'e',revision:0,status:'enrolled',finalizedGrades:false,submittedClearance:false,semester:2,schoolYearStart:2025},template:{revision:'template',definition:{semester:'2',schoolYear:'2025-2026',personalFields:[{field:'studentName'},{field:'studentNumber'}]}},submission:null});
 			window.paperMode=()=>{state.automatedClearanceVerificationEnabled=false;state.current.finalizedGrades=true;state.current.submittedClearance=false;state.submission=null;};window.paperApproved=()=>{state.current.submittedClearance=true;};window.finalize=()=>{state.current.finalizedGrades=true;};window.checkPasses=false;window.identityReview=false;window.uploads=[];window.requests=[];window.failUpload=false;window.setTemplateTerm=(semester,schoolYear)=>{state.template.definition={semester,schoolYear,personalFields:[{field:"studentName"},{field:"studentNumber"}]};};
 			window.reject=()=>{state.submission.status='rejected';state.submission.rejectionReason='Please complete the Library signature.';};window.drop=()=>{state.current.status='dropped';};window.restoreEnrollment=()=>{state.current.status='enrolled';};
 			window.outdateIdentity=()=>{window.savedIdentity=state.submission.report.identity;state.submission.report.identity='deferred';};window.restoreIdentity=()=>{state.submission.report.identity=window.savedIdentity;};window.outdate=()=>{delete state.submission.report.officeCheckVersion;};window.restoreChecks=()=>{state.submission.report.officeCheckVersion=2;};window.verify=()=>{state.submission.status='verified';state.current.submittedClearance=true;};
 			window.newTerm=()=>{state.current={...state.current,id:'next',finalizedGrades:false,submittedClearance:false};state.submission=null;};
 			const check=(verdict)=>({label:'Upload: Printed form',verdict,detail:'Uploaded document evidence'});
 			export function getStudentClearance(){return {get current(){return state;}};}
-			export const uploadClearance={fields:new Proxy({}, {get:(_,name)=>({as:(type,value)=>({name,type,...(value===undefined?{}:{value})})})}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{if(window.failUpload)throw Error('Simulated upload failure');if(window.deferUpload)await new Promise(resolve=>window.finishUpload=resolve);const data=new FormData(element);window.uploads.push({name:data.get('file')?.name,corners:data.get('corners'),revision:data.get('revision'),enrollmentId:data.get('enrollmentId')});const report={template:[{label:'Reference: Printed form',verdict:'pass',detail:'Saved reference evidence'},check(window.checkPasses?'pass':'fail'),{label:'Logo',verdict:'pass',detail:'Uploaded logo evidence'}],offices:window.checkPasses?[check('pass')]:[],identity:window.checkPasses?{verdict:window.identityReview?'review':'match',detail:window.identityReview?'Name needs manual verification':'Student number matches',name:{status:'exact',detected:'Student',expected:'Student',detail:'Name matches'},studentNumber:{status:'exact',detected:'MA-001',expected:'MA-001',detail:'Number matches'}}:'deferred',officeCheckVersion:2,identityCheckVersion:1,identityPresence:{name:{label:'Name writing',verdict:'pass',detail:'Present'},studentNumber:{label:'Number writing',verdict:'pass',detail:'Present'}}};window.lastReport=report;result={success:window.checkPasses,report};if(window.checkPasses){state.submission={id:'submission',filename:'clearance-reference.jpg',status:'ready',report};result.report=state.submission.report;window.lastReport=state.submission.report;}return true;}});}})};
+			export const uploadClearance={fields:new Proxy({}, {get:(_,name)=>({as:(type,value)=>({name,type,...(value===undefined?{}:{value})})})}),enhance:callback=>({onsubmit:async event=>{event.preventDefault();const element=event.currentTarget;let result;await callback({element,get result(){return result;},submit:async()=>{if(window.transportFailure)throw Error('PRIVATE connection details');if(window.largeUpload)error(413,'PRIVATE proxy details');if(window.failUpload){result={success:false,report:null,submission:null,failure:{code:'CLR-UPLOAD',message:'The system could not store your clearance file. Try again later or contact the Registrar.',refreshRequired:false}};return true;}if(window.deferUpload)await new Promise(resolve=>window.finishUpload=resolve);const data=new FormData(element);window.uploads.push({name:data.get('file')?.name,corners:data.get('corners'),revision:data.get('revision'),enrollmentId:data.get('enrollmentId')});const report={template:[{label:'Reference: Printed form',verdict:'pass',detail:'Saved reference evidence'},check(window.checkPasses?'pass':'fail'),{label:'Logo',verdict:'pass',detail:'Uploaded logo evidence'}],offices:window.checkPasses?[check('pass')]:[],identity:window.checkPasses?{verdict:window.identityReview?'review':'match',detail:window.identityReview?'Name needs manual verification':'Student number matches',name:{status:'exact',detected:'Student',expected:'Student',detail:'Name matches'},studentNumber:{status:'exact',detected:'MA-001',expected:'MA-001',detail:'Number matches'}}:'deferred',officeCheckVersion:2,identityCheckVersion:1,identityPresence:{name:{label:'Name writing',verdict:'pass',detail:'Present'},studentNumber:{label:'Number writing',verdict:'pass',detail:'Present'}}};window.lastReport=report;result={success:window.checkPasses,report};if(window.checkPasses){state.submission={id:'submission',filename:'clearance-reference.jpg',status:'ready',report};result.report=state.submission.report;window.lastReport=state.submission.report;}return true;}});}})};
 			export async function requestEnrollment(data){window.requests.push(data);state.submission.status='requested';state.submission.requestedAt=new Date();}`
 			};
 			for (const [name, content] of Object.entries(files))
@@ -176,11 +176,21 @@ test(
 				.setInputFiles('static/clearance-reference.jpg');
 			await expect(page.getByText('Office checks are outdated.', { exact: false })).toHaveCount(0);
 			await expect(save).toBeEnabled();
-			await page.evaluate(() => (window.failUpload = true));
+			await page.evaluate(() => (window.largeUpload = true));
+			await save.click();
+			await expect(page.getByText('Reference: CLR-SIZE.', { exact: false })).toBeVisible();
+			await expect(page.getByText('PRIVATE', { exact: false })).toHaveCount(0);
+			await expect(save).toBeEnabled();
+			await page.evaluate(() => {
+				window.largeUpload = false;
+				window.failUpload = true;
+			});
 			await save.click();
 			await expect(
-				page.getByText('Could not check clearance. Try again.', { exact: true })
+				page.getByText('The system could not store your clearance file.', { exact: false })
 			).toBeVisible();
+			await expect(page.getByText('Reference: CLR-UPLOAD.', { exact: false })).toBeVisible();
+			await expect(save).toBeEnabled();
 			await expect(page.getByText('Office checks are outdated.', { exact: false })).toHaveCount(0);
 			await expect(page.getByText('Uploaded document evidence', { exact: true })).toHaveCount(0);
 			await page.evaluate(() => (window.failUpload = false));
@@ -325,6 +335,33 @@ test(
 			await page.evaluate(() => window.paperApproved());
 			await expect(reminder).toHaveCount(0);
 			await expect(studentClearance.getByText(/Your clearance has been verified/)).toBeVisible();
+			// Unknown transport result must not permit duplicate upload or enrollment request.
+			await page.reload({ waitUntil: 'networkidle' });
+			await page.waitForFunction(() => typeof window.finalize === 'function');
+			await page.evaluate(() => {
+				window.finalize();
+				window.checkPasses = true;
+			});
+			await page
+				.getByLabel('Upload clearance', { exact: true })
+				.setInputFiles('static/clearance-reference.jpg');
+			await save.click();
+			await expect(request).toBeEnabled();
+			await page.getByRole('button', { name: 'Replace saved clearance', exact: true }).click();
+			await page
+				.getByLabel('Upload clearance', { exact: true })
+				.setInputFiles('static/clearance-reference.jpg');
+			await page.evaluate(() => (window.transportFailure = true));
+			await save.click();
+			await expect(page.getByText('Reference: CLR-CONNECTION.', { exact: false })).toBeVisible();
+			await expect(page.getByText('PRIVATE', { exact: false })).toHaveCount(0);
+			await expect(save).toBeDisabled();
+			await expect(request).toBeDisabled();
+			await expect(
+				page.getByRole('button', { name: 'Refresh clearance status', exact: true })
+			).toBeVisible();
+			await page.getByRole('button', { name: 'Cancel replacement', exact: true }).click();
+			await expect(request).toBeDisabled();
 			assert.deepEqual(errors, []);
 		} finally {
 			await browser?.close();

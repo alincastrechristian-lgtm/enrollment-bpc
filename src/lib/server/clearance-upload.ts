@@ -34,14 +34,49 @@ type ClearanceUpload = {
 	corners: Corners;
 };
 
+const failureMessages = {
+	setup: {
+		code: 'CLR-SETUP',
+		message:
+			'Clearance uploads are not ready right now. Contact the Registrar to check the upload service and clearance template.'
+	},
+	reference: {
+		code: 'CLR-REFERENCE',
+		message:
+			"The system could not load the school's reference clearance form. Try again later or contact the Registrar."
+	},
+	template: {
+		code: 'CLR-TEMPLATE',
+		message:
+			'The system could not complete the printed-form and office checks. Try again. If this continues, contact the Registrar.'
+	},
+	identity: {
+		code: 'CLR-HANDWRITING',
+		message:
+			'The handwriting service could not finish checking your name and student number. Try again shortly. If this continues, contact the Registrar.'
+	},
+	upload: {
+		code: 'CLR-UPLOAD',
+		message:
+			'The system could not store your clearance file. Try again later or contact the Registrar.'
+	},
+	save: {
+		code: 'CLR-SAVE',
+		message:
+			'The system could not confirm that your clearance was saved. Refresh clearance status before uploading again.'
+	}
+} as const;
+type UploadStage = keyof typeof failureMessages;
+
 export async function uploadStudentClearance(
 	userId: string,
 	input: ClearanceUpload,
 	signal?: AbortSignal
 ) {
+	const progress = { stage: 'setup' as UploadStage };
 	try {
 		return await withDeadline(
-			(deadline) => processStudentClearance(userId, input, deadline),
+			(deadline) => processStudentClearance(userId, input, progress, deadline),
 			CLEARANCE_CHECK_TIMEOUT_MS,
 			signal
 		);
@@ -51,13 +86,25 @@ export async function uploadStudentClearance(
 				408,
 				'Clearance checking took too long or was interrupted. Refresh clearance status before trying again.'
 			);
-		throw cause;
+		if (isHttpError(cause) && cause.status < 500) throw cause;
+		const failure = {
+			...failureMessages[progress.stage],
+			refreshRequired: progress.stage === 'save'
+		};
+		// Fixed stage/status only: never log provider bodies, credentials or student details.
+		console.error('Student clearance check failed.', {
+			code: failure.code,
+			stage: progress.stage,
+			status: isHttpError(cause) ? cause.status : undefined
+		});
+		return { success: false as const, report: null, submission: null, failure };
 	}
 }
 
 async function processStudentClearance(
 	userId: string,
 	input: ClearanceUpload,
+	progress: { stage: UploadStage },
 	signal?: AbortSignal
 ) {
 	const policy = getClearancePolicy(db);
@@ -100,10 +147,14 @@ async function processStudentClearance(
 		if (isHttpError(cause)) throw cause;
 		error(400, 'Could not read this image. Choose a valid JPG, PNG or WebP.');
 	}
+	progress.stage = 'reference';
 	const reference = await abortable(downloadObject(template.objectKey, signal), signal);
+	// Read the reference bytes before attributing failures to the checker.
+	const referenceBytes = Buffer.from(await abortable(reference.arrayBuffer(), signal));
+	progress.stage = 'template';
 	const report = await abortable(
 		checkClearance(
-			Buffer.from(await abortable(reference.arrayBuffer(), signal)),
+			referenceBytes,
 			image,
 			input.corners,
 			definition,
@@ -123,6 +174,7 @@ async function processStudentClearance(
 			report.identityPresence?.studentNumber.verdict !== 'pass'
 		)
 			return { success: false, report, submission: null };
+		progress.stage = 'identity';
 		const crops = await clearanceIdentityCrops(image, input.corners, definition);
 		signal?.throwIfAborted();
 		report.identity = matchIdentity(
@@ -140,6 +192,7 @@ async function processStudentClearance(
 	const id = randomUUID(),
 		filename = safeUploadName(file.name),
 		key = `student-clearances/${encodeURIComponent(record.student.studentId)}/${id}/${filename}`;
+	progress.stage = 'upload';
 	try {
 		const pendingPut = getGarageS3Client().send(
 			new PutObjectCommand({
@@ -168,6 +221,7 @@ async function processStudentClearance(
 		);
 		await abortable(pendingPut, signal);
 		signal?.throwIfAborted();
+		progress.stage = 'save';
 		db.transaction(
 			(tx) => {
 				signal?.throwIfAborted();

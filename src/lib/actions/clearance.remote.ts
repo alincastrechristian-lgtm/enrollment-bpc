@@ -89,18 +89,31 @@ export const uploadClearance = form(
 	async (input) => {
 		const { locals } = getRequestEvent();
 		validateUser(locals, [Role.STUDENT]);
+		let saved = false;
 		try {
 			const result = await uploadStudentClearance(
 				locals.user.id,
 				input,
 				getRequestEvent().request?.signal
 			);
-			await getStudentClearance().refresh();
+			saved = result.success;
+			if (saved) await getStudentClearance().refresh();
 			return result;
 		} catch (cause) {
-			if (isHttpError(cause)) throw cause;
-			console.error('Student clearance upload failed.');
-			error(503, 'Could not check or save clearance. Try again shortly.');
+			if (isHttpError(cause) && cause.status < 500) throw cause;
+			console.error('Student clearance response failed.', { saved });
+			return {
+				success: false as const,
+				report: null,
+				submission: null,
+				failure: {
+					code: saved ? 'CLR-STATUS' : 'CLR-RESPONSE',
+					message: saved
+						? 'Your clearance was saved, but its status could not be refreshed. Refresh clearance status before continuing.'
+						: 'The system could not confirm the result of your clearance check. Refresh clearance status before uploading again. If this continues, contact the Registrar.',
+					refreshRequired: true
+				}
+			};
 		}
 	}
 );

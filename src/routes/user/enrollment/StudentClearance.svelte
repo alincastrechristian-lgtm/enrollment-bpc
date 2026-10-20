@@ -36,7 +36,7 @@
 		message = $state('');
 	let input = $state<HTMLInputElement>();
 	let replacing = $state(false);
-	let checkTimedOut = $state(false);
+	let needsStatusRefresh = $state(false);
 	const lifetime = new AbortController();
 	onDestroy(() => lifetime.abort());
 	const current = $derived(progress.current?.current);
@@ -110,6 +110,7 @@
 	async function request() {
 		if (
 			!submission ||
+			needsStatusRefresh ||
 			busy ||
 			loading ||
 			aligning ||
@@ -253,7 +254,7 @@
 						{...uploadClearance.enhance(async (form) => {
 							if (
 								busy ||
-								checkTimedOut ||
+								needsStatusRefresh ||
 								loading ||
 								aligning ||
 								drawing ||
@@ -273,7 +274,7 @@
 										lifetime.signal
 									)
 								) {
-									report = form.result?.report;
+									report = form.result?.report ?? undefined;
 									if (form.result?.success) {
 										image = '';
 										replacing = false;
@@ -282,6 +283,10 @@
 											report && clearanceNeedsIdentityReview(report)
 												? 'Clearance saved. Student name or number needs manual verification. Send your enrollment request for Registrar/admin review.'
 												: 'Clearance checks passed and file saved. You can now request enrollment.';
+									} else if (form.result && 'failure' in form.result) {
+										const failure = form.result.failure;
+										message = `${failure.message} Reference: ${failure.code}.`;
+										needsStatusRefresh = failure.refreshRequired;
 									} else
 										message =
 											'Clearance did not pass all checks. Review the findings and upload a clearer or completed form.';
@@ -292,10 +297,19 @@
 									(cause instanceof Error && cause.name === 'TimeoutError') ||
 									isHttpError(cause, 408)
 								) {
-									checkTimedOut = true;
+									needsStatusRefresh = true;
 									message =
 										'Clearance checking is taking too long. Its saved status is unknown. Refresh clearance status before uploading again.';
-								} else message = getErrorMessage(cause, 'Could not check clearance. Try again.');
+								} else if (isHttpError(cause, 413)) {
+									message =
+										'The server rejected the upload size. Try a smaller JPG, PNG or WebP image, or contact the Registrar. Reference: CLR-SIZE.';
+								} else if (isHttpError(cause) && cause.status < 500) {
+									message = getErrorMessage(cause, 'Check your image and try again.');
+								} else {
+									needsStatusRefresh = true;
+									message =
+										'No clearance result was received. Check your connection and refresh clearance status before uploading again. Reference: CLR-CONNECTION.';
+								}
 							} finally {
 								busy = false;
 							}
@@ -378,7 +392,7 @@
 								type="submit"
 								class="btn btn-primary btn-sm"
 								disabled={busy ||
-									checkTimedOut ||
+									needsStatusRefresh ||
 									loading ||
 									aligning ||
 									!image ||
@@ -433,6 +447,7 @@
 							type="button"
 							class="btn shrink-0 btn-primary btn-sm"
 							disabled={busy ||
+								needsStatusRefresh ||
 								!documents.current ||
 								!!documents.error ||
 								!!documentBlock ||
@@ -480,7 +495,7 @@
 			{#if message}
 				<p role="status" class="rounded-xl bg-base-200/60 p-4 text-sm">{message}</p>
 			{/if}
-			{#if checkTimedOut}
+			{#if needsStatusRefresh}
 				<button
 					type="button"
 					class="btn btn-outline btn-sm"
