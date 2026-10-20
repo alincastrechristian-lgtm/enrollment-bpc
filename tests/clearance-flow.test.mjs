@@ -117,7 +117,7 @@ function fixture(t) {
 	const objects = new Map([['blank', bytes]]);
 	const files = {
 		MAX_FILE_BYTES: 10 * 1024 * 1024,
-		fileStorageConfigured: () => true,
+		fileStorageConfigured: () => !state.storageUnavailable,
 		safeUploadName: (name) => name.replace(/[/\\]/g, ''),
 		downloadObject: async (key, signal) => {
 			if (state.onDownload) return state.onDownload(key, signal);
@@ -480,7 +480,7 @@ test('ownership, roles, stale template, missing office setup, and malformed outl
 		.update(schema.clearanceTemplate)
 		.set({ definition: { ...f.config, officeRows: [] } })
 		.run();
-	assert.equal((await f.upload()).failure.code, 'CLR-SETUP');
+	assert.equal((await f.upload()).failure.code, 'CLR-OFFICE-SETUP');
 	f.db
 		.update(schema.clearanceTemplate)
 		.set({ definition: f.config, revision: crypto.randomUUID() })
@@ -609,7 +609,7 @@ test('personal areas are required before OCR or Gemini; legacy templates remain 
 		.update(schema.clearanceTemplate)
 		.set({ definition: { ...f.config, personalFields: [] } })
 		.run();
-	assert.equal((await f.upload()).failure.code, 'CLR-SETUP');
+	assert.equal((await f.upload()).failure.code, 'CLR-PERSONAL-SETUP');
 	assert.equal(f.state.reads, 0);
 	assert.equal(f.state.identityCalls, 0);
 });
@@ -1097,4 +1097,36 @@ test('failed status refresh reports a saved clearance and requires refresh befor
 	assert.doesNotMatch(JSON.stringify(result), /PRIVATE/);
 	assert.equal(f.row().status, 'ready');
 	assert(f.objects.has(f.row().objectKey));
+});
+
+test('setup diagnostics distinguish unavailable storage, missing mappings and unfinished office rows', async (t) => {
+	const f = fixture(t);
+	f.state.storageUnavailable = true;
+	assert.equal((await f.upload()).failure.code, 'CLR-STORAGE-SETUP');
+	f.state.storageUnavailable = false;
+	for (const [definition, code] of [
+		[null, 'CLR-TEMPLATE-SETUP'],
+		[{ ...f.config, areas: [] }, 'CLR-TEMPLATE-SETUP'],
+		[{ ...f.config, officeRows: [] }, 'CLR-OFFICE-SETUP'],
+		[
+			{ ...f.config, officeRows: [{ ...f.config.officeRows[0], signature: undefined }] },
+			'CLR-OFFICE-SETUP'
+		],
+		[
+			{ ...f.config, officeRows: [{ ...f.config.officeRows[0], cleared: undefined }] },
+			'CLR-OFFICE-SETUP'
+		],
+		[{ ...f.config, personalFields: [] }, 'CLR-PERSONAL-SETUP']
+	]) {
+		f.db.update(schema.clearanceTemplate).set({ definition }).run();
+		const result = await f.upload();
+		assert.equal(result.success, false);
+		assert.equal(result.failure.code, code);
+		assert.equal(result.failure.refreshRequired, false);
+		assert.equal(f.state.reads, 0);
+		assert.equal(f.state.identityCalls, 0);
+		assert.equal(f.state.puts, 0);
+	}
+	f.db.update(schema.clearanceTemplate).set({ definition: f.config }).run();
+	assert.equal((await f.upload()).success, true, 'Completing and saving setup permits uploads.');
 });

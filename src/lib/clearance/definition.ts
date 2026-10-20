@@ -161,6 +161,35 @@ export function hasIdentityAreas(definition: Pick<TemplateDefinition, 'personalF
 		definition.personalFields?.some((area) => area.field === field)
 	);
 }
+
+// Drafts may be saved before all steps are finished. Uploads require complete mappings.
+export function getTemplateSetupIssue(
+	definition: TemplateDefinition | null | undefined,
+	personalInfoVerificationEnabled = true
+) {
+	if (!definition)
+		return {
+			code: 'CLR-TEMPLATE-SETUP',
+			message:
+				'The clearance template checking areas are not configured. An administrator must complete Template setup and save its settings. Replacing the template image clears these areas.'
+		};
+	if (
+		!definition.officeRows?.length ||
+		definition.officeRows.some((row) => !row.cleared || !row.signature)
+	)
+		return {
+			code: 'CLR-OFFICE-SETUP',
+			message:
+				'The clearance template needs office checkboxes and signature areas. An administrator must complete Offices & signatures for every saved office, then save template settings.'
+		};
+	if (personalInfoVerificationEnabled && !hasIdentityAreas(definition))
+		return {
+			code: 'CLR-PERSONAL-SETUP',
+			message:
+				'The clearance template needs student name and student number areas. An administrator must complete Personal inputs and save template settings.'
+		};
+	return null;
+}
 export type TemplateInfo = {
 	revision: string;
 	filename: string;

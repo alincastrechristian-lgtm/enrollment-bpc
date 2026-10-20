@@ -14,7 +14,7 @@
 		type ClearanceReport
 	} from '#lib/clearance/report.js';
 	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
-	import { clearanceTermFromEnrollment, hasIdentityAreas } from '#lib/clearance/definition.js';
+	import { clearanceTermFromEnrollment, getTemplateSetupIssue } from '#lib/clearance/definition.js';
 	import { resolve } from '$app/paths';
 	import { isHttpError } from '@sveltejs/kit';
 	import { getErrorMessage } from '#lib/errors.js';
@@ -46,11 +46,13 @@
 		progress.current?.automatedClearanceVerificationEnabled !== false
 	);
 	const term = $derived(current ? clearanceTermFromEnrollment(current) : null);
-	const templateReady = $derived(
-		!!template?.definition &&
-			(progress.current?.personalInfoVerificationEnabled === false ||
-				hasIdentityAreas(template.definition))
+	const templateSetupIssue = $derived(
+		getTemplateSetupIssue(
+			template?.definition,
+			progress.current?.personalInfoVerificationEnabled !== false
+		)
 	);
+	const templateReady = $derived(!templateSetupIssue);
 	const currentChecks = $derived(!submission || hasCurrentClearanceChecks(submission.report));
 	const allowed = $derived(
 		!!current?.finalizedGrades &&
@@ -412,9 +414,8 @@
 						</div>
 					</form>
 				{:else if allowed && !templateReady}
-					<p class="text-sm text-warning">
-						Clearance template setup is not ready. Ask the Registrar to configure office boxes and
-						student name/number areas.
+					<p class="text-sm text-warning" role="status">
+						{templateSetupIssue?.message} Reference: {templateSetupIssue?.code}.
 					</p>
 				{/if}
 				{#if ready}

@@ -2,6 +2,7 @@
 	import { getClearanceSettings, uploadClearanceTemplate } from '#lib/actions/clearance.remote.js';
 	import { showError, showLoading, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
 	import { getErrorMessage } from '#lib/errors.js';
+	import { getTemplateSetupIssue } from '#lib/clearance/definition.js';
 	import { resolve } from '$app/paths';
 	import { ClipboardCheck, FileImage, RotateCcw, Save, Upload } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
@@ -86,6 +87,15 @@
 			</p>
 		{/if}
 		{#if current.template}
+			{@const setupIssue = getTemplateSetupIssue(
+				current.template.definition,
+				current.personalInfoVerificationEnabled
+			)}
+			{#if setupIssue}
+				<p class="alert alert-warning" role="status">
+					Student uploads are not ready. {setupIssue.message} Reference: {setupIssue.code}.
+				</p>
+			{/if}
 			<div class="portal-panel flex flex-wrap items-center gap-4 p-4 sm:p-5">
 				<a
 					href={imageUrl(current.template.revision)}
@@ -150,7 +160,7 @@
 								setupStep = 'outline';
 								feedback = form.result?.cleanupWarning
 									? 'Template saved. The previous file could not be removed from storage.'
-									: 'Clearance template saved successfully.';
+									: 'Template image saved. Complete Template setup and save its settings before students upload clearance.';
 								showSuccess(feedback);
 							} else showError('Choose a supported image up to 10 MiB.');
 						} catch (caught) {

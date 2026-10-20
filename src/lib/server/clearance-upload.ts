@@ -8,7 +8,7 @@ import { clearanceSubmission, clearanceTemplate } from '#lib/schema.js';
 import {
 	definitionSchema,
 	clearanceTermFromEnrollment,
-	hasIdentityAreas
+	getTemplateSetupIssue
 } from '#lib/clearance/definition.js';
 import { clearanceCanSubmit, hasCurrentClearanceChecks } from '#lib/clearance/report.js';
 import { overall, type Corners } from '#lib/clearance/clearance.js';
@@ -38,7 +38,7 @@ const failureMessages = {
 	setup: {
 		code: 'CLR-SETUP',
 		message:
-			'Clearance uploads are not ready right now. Contact the Registrar to check the upload service and clearance template.'
+			'The server could not load clearance settings or enrollment details. Contact the Registrar/admin to check the server. Replacing the template image will not resolve this error.'
 	},
 	reference: {
 		code: 'CLR-REFERENCE',
@@ -67,6 +67,15 @@ const failureMessages = {
 	}
 } as const;
 type UploadStage = keyof typeof failureMessages;
+
+function uploadFailure(failure: { code: string; message: string }, refreshRequired = false) {
+	return {
+		success: false as const,
+		report: null,
+		submission: null,
+		failure: { ...failure, refreshRequired }
+	};
+}
 
 export async function uploadStudentClearance(
 	userId: string,
@@ -97,7 +106,7 @@ export async function uploadStudentClearance(
 			stage: progress.stage,
 			status: isHttpError(cause) ? cause.status : undefined
 		});
-		return { success: false as const, report: null, submission: null, failure };
+		return uploadFailure(failure, failure.refreshRequired);
 	}
 }
 
@@ -108,7 +117,12 @@ async function processStudentClearance(
 	signal?: AbortSignal
 ) {
 	const policy = getClearancePolicy(db);
-	if (!fileStorageConfigured()) error(503, 'File storage is unavailable. Contact the Registrar.');
+	if (!fileStorageConfigured())
+		return uploadFailure({
+			code: 'CLR-STORAGE-SETUP',
+			message:
+				'Clearance file storage is not ready on this server. Contact the Registrar/admin to check storage configuration and server startup.'
+		});
 	const record = requireClearanceEnrollment(db, userId, input.enrollmentId);
 	const previous = getSubmission(db, input.enrollmentId);
 	if (
@@ -123,18 +137,10 @@ async function processStudentClearance(
 	if (!template || template.revision !== input.templateRevision)
 		error(409, 'Clearance template changed. Refresh before uploading.');
 	const parsed = definitionSchema.safeParse(template.definition);
-	if (
-		!parsed.success ||
-		!parsed.data.officeRows?.length ||
-		parsed.data.officeRows.some((r) => !r.cleared || !r.signature)
-	)
-		error(503, 'The Registrar must finish configuring the clearance template and office boxes.');
-	const definition = parsed.data;
-	if (policy.personalInfoVerificationEnabled && !hasIdentityAreas(definition))
-		error(
-			503,
-			'The Registrar must mark the student name and student number areas in the clearance template.'
-		);
+	const definition = parsed.success ? parsed.data : null;
+	const setupIssue = getTemplateSetupIssue(definition, policy.personalInfoVerificationEnabled);
+	if (setupIssue) return uploadFailure(setupIssue);
+	if (!definition) error(503, 'Clearance template setup is incomplete.');
 	const file = input.file;
 	if (!file.size || file.size > MAX_FILE_BYTES)
 		error(400, 'Choose a clearance image up to 10 MiB.');

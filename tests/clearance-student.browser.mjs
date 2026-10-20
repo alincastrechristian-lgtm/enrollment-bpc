@@ -31,9 +31,9 @@ test(
 				'paths.js':
 					'export const resolve=(route,params={})=>route.replace(/\\[([^\\]]+)\\]/g,(_,key)=>encodeURIComponent(params[key]));',
 				'scan.js': `export async function loadUpload(){const image=new Image();image.src='/reference.jpg';await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);return canvas;}export const detectBorder=()=>[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];`,
-				'actions.svelte.js': `import {error} from '@sveltejs/kit';const state=$state({current:{id:'e',revision:0,status:'enrolled',finalizedGrades:false,submittedClearance:false,semester:2,schoolYearStart:2025},template:{revision:'template',definition:{semester:'2',schoolYear:'2025-2026',personalFields:[{field:'studentName'},{field:'studentNumber'}]}},submission:null});
-			window.paperMode=()=>{state.automatedClearanceVerificationEnabled=false;state.current.finalizedGrades=true;state.current.submittedClearance=false;state.submission=null;};window.paperApproved=()=>{state.current.submittedClearance=true;};window.finalize=()=>{state.current.finalizedGrades=true;};window.checkPasses=false;window.identityReview=false;window.uploads=[];window.requests=[];window.failUpload=false;window.setTemplateTerm=(semester,schoolYear)=>{state.template.definition={semester,schoolYear,personalFields:[{field:"studentName"},{field:"studentNumber"}]};};
-			window.reject=()=>{state.submission.status='rejected';state.submission.rejectionReason='Please complete the Library signature.';};window.drop=()=>{state.current.status='dropped';};window.restoreEnrollment=()=>{state.current.status='enrolled';};
+				'actions.svelte.js': `import {error} from '@sveltejs/kit';const state=$state({current:{id:'e',revision:0,status:'enrolled',finalizedGrades:false,submittedClearance:false,semester:2,schoolYearStart:2025},template:{revision:'template',definition:{semester:'2',schoolYear:'2025-2026',personalFields:[{field:'studentName'},{field:'studentNumber'}],officeRows:[{cleared:{},signature:{}}]}},submission:null});
+			window.paperMode=()=>{state.automatedClearanceVerificationEnabled=false;state.current.finalizedGrades=true;state.current.submittedClearance=false;state.submission=null;};window.paperApproved=()=>{state.current.submittedClearance=true;};window.finalize=()=>{state.current.finalizedGrades=true;};window.checkPasses=false;window.identityReview=false;window.uploads=[];window.requests=[];window.failUpload=false;window.setTemplateTerm=(semester,schoolYear)=>{state.template.definition={semester,schoolYear,personalFields:[{field:"studentName"},{field:"studentNumber"}],officeRows:[{cleared:{},signature:{}}]};};
+			window.missingOfficeBoxes=()=>{state.template.definition.officeRows=[];};window.restoreOfficeBoxes=()=>{state.template.definition.officeRows=[{cleared:{},signature:{}}];};window.reject=()=>{state.submission.status='rejected';state.submission.rejectionReason='Please complete the Library signature.';};window.drop=()=>{state.current.status='dropped';};window.restoreEnrollment=()=>{state.current.status='enrolled';};
 			window.outdateIdentity=()=>{window.savedIdentity=state.submission.report.identity;state.submission.report.identity='deferred';};window.restoreIdentity=()=>{state.submission.report.identity=window.savedIdentity;};window.outdate=()=>{delete state.submission.report.officeCheckVersion;};window.restoreChecks=()=>{state.submission.report.officeCheckVersion=2;};window.verify=()=>{state.submission.status='verified';state.current.submittedClearance=true;};
 			window.newTerm=()=>{state.current={...state.current,id:'next',finalizedGrades:false,submittedClearance:false};state.submission=null;};
 			const check=(verdict)=>({label:'Upload: Printed form',verdict,detail:'Uploaded document evidence'});
@@ -87,6 +87,11 @@ test(
 			const reminder = page.getByRole('region', { name: 'Clearance reminder', exact: true });
 			await expect(reminder).toHaveCount(0);
 			await page.evaluate(() => window.finalize());
+			await page.evaluate(() => window.missingOfficeBoxes());
+			await expect(page.getByLabel('Upload clearance', { exact: true })).toHaveCount(0);
+			await expect(page.getByText('Reference: CLR-OFFICE-SETUP.', { exact: false })).toBeVisible();
+			await page.evaluate(() => window.restoreOfficeBoxes());
+
 			await page.evaluate(() => window.setTemplateTerm('1', '2026-2027'));
 			await expect(page.getByLabel('Upload clearance', { exact: true })).toBeVisible();
 			await expect(
