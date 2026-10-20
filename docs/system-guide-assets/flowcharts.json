@@ -36,13 +36,13 @@
       ],
       [
         "f",
-        "Student saves eligible|clearance; requests review",
+        "Online: save + request;|paper: bring to Registrar",
         1,
         4
       ],
       [
         "g",
-        "Staff verifies original;|confirms ID when needed",
+        "Staff verifies original|or confirms paper review",
         1,
         5
       ],
@@ -178,27 +178,41 @@
         "f",
         "Resolve account role;|authorize each action",
         1,
-        3
+        4
       ],
       [
         "g",
         "Administrator:|system + academic work",
         0,
-        4,
+        5,
         "end"
       ],
       [
         "h",
         "Registrar:|academic operations",
         1,
-        4,
+        5,
         "end"
       ],
       [
         "i",
         "Student:|own records only",
         2,
-        4,
+        5,
+        "end"
+      ],
+      [
+        "setup",
+        "Setup complete?",
+        1,
+        3,
+        "decision"
+      ],
+      [
+        "resume",
+        "Resume authenticated|first-login setup",
+        2,
+        3,
         "end"
       ]
     ],
@@ -225,20 +239,32 @@
       ],
       [
         "d",
-        "f",
+        "setup",
         "No",
         "r",
         "l"
       ],
       [
         "e",
-        "f",
+        "setup",
         "",
         "r",
         "l"
       ],
       [
         "b",
+        "setup",
+        "Yes"
+      ],
+      [
+        "setup",
+        "resume",
+        "No",
+        "r",
+        "l"
+      ],
+      [
+        "setup",
         "f",
         "Yes"
       ],
@@ -264,7 +290,7 @@
   },
   {
     "id": "03-setup",
-    "title": "Invitation, password setup and recovery",
+    "title": "Password setup and authenticated recovery after interruption",
     "nodes": [
       [
         "a",
@@ -294,7 +320,7 @@
       ],
       [
         "e",
-        "Open first-login or|reset-password token",
+        "Open password page|with reset token",
         1,
         2
       ],
@@ -327,16 +353,59 @@
       ],
       [
         "j",
-        "Sign in manually|with new password",
+        "Sign in manually|with saved password",
         0,
-        5,
-        "end"
+        5
       ],
       [
         "k",
-        "Set setupComplete|and emailVerified",
+        "Complete any required|two-factor verification",
+        0,
+        6
+      ],
+      [
+        "l",
+        "Authenticated|session established",
         1,
+        6
+      ],
+      [
+        "m",
+        "Setup complete?",
+        1,
+        7,
+        "decision"
+      ],
+      [
+        "r",
+        "Interrupted session opens|protected workspace",
+        2,
         6,
+        "start"
+      ],
+      [
+        "n",
+        "Resume /first-login|without consumed token",
+        1,
+        8
+      ],
+      [
+        "o",
+        "Require saved password;|complete account flags",
+        1,
+        9
+      ],
+      [
+        "q",
+        "Completion failed:|Finish setup retries",
+        0,
+        9
+      ],
+      [
+        "p",
+        "Open role-specific|dashboard",
+        1,
+        10,
         "end"
       ]
     ],
@@ -391,9 +460,66 @@
         "r"
       ],
       [
-        "i",
+        "j",
+        "k"
+      ],
+      [
         "k",
+        "l",
+        "",
+        "r",
+        "l"
+      ],
+      [
+        "i",
+        "l",
         "Yes"
+      ],
+      [
+        "r",
+        "l",
+        "",
+        "l",
+        "r"
+      ],
+      [
+        "l",
+        "m"
+      ],
+      [
+        "m",
+        "n",
+        "No"
+      ],
+      [
+        "m",
+        "p",
+        "Yes",
+        "r",
+        "r"
+      ],
+      [
+        "n",
+        "o"
+      ],
+      [
+        "o",
+        "q",
+        "Failure",
+        "l",
+        "r"
+      ],
+      [
+        "q",
+        "n",
+        "Retry",
+        "t",
+        "l"
+      ],
+      [
+        "o",
+        "p",
+        "Saved"
       ]
     ]
   },
@@ -536,7 +662,7 @@
       ],
       [
         "c",
-        "Valid code and|prerequisite graph?",
+        "Valid fields and|unique code?",
         1,
         2,
         "decision"
@@ -563,7 +689,7 @@
       ],
       [
         "g",
-        "Curriculum or|prerequisite links?",
+        "Curriculum, rule or|history references?",
         1,
         5,
         "decision"
@@ -636,7 +762,7 @@
   },
   {
     "id": "06-curriculum",
-    "title": "Curriculum drafting, publication and historical preservation",
+    "title": "Curriculum-owned prerequisites, validation and frozen publication",
     "nodes": [
       [
         "a",
@@ -653,59 +779,71 @@
       ],
       [
         "c",
-        "Arrange unique subjects|with positive units",
+        "Place unique subjects|with positive units",
         1,
         2
       ],
       [
         "d",
-        "Save draft; edit|while unpublished",
+        "Select earlier subjects|as prerequisites",
         1,
         3
       ],
       [
-        "e",
-        "Activate and|confirm replacement",
+        "v",
+        "All links valid|and earlier?",
         1,
+        4,
+        "decision"
+      ],
+      [
+        "error",
+        "Reject missing/self/duplicate|or unordered links",
+        0,
         4
       ],
       [
-        "f",
-        "Publish snapshots; select|as program default",
+        "e",
+        "Save placements + rules|in one transaction",
         1,
         5
       ],
       [
-        "g",
-        "Archive previous|selected curriculum",
-        0,
-        5
-      ],
-      [
-        "h",
-        "Published rows|become read-only",
+        "f",
+        "Revalidate and activate;|reject invalid plan",
         1,
         6
       ],
       [
-        "i",
-        "New enrollments use|selected curriculum",
+        "g",
+        "Publish subject snapshots;|freeze version rules",
         1,
-        7,
+        7
+      ],
+      [
+        "h",
+        "Archive prior default;|select new curriculum",
+        0,
+        7
+      ],
+      [
+        "k",
+        "Published plan and rules|remain read-only",
+        1,
+        8
+      ],
+      [
+        "i",
+        "Continuing students keep|their assigned version",
+        2,
+        8,
         "end"
       ],
       [
         "j",
-        "Old enrollments keep|original curriculum",
-        2,
-        6,
-        "end"
-      ],
-      [
-        "k",
-        "Archive/deactivate;|delete only if unlinked",
-        0,
-        7,
+        "New students/transfers|use active version",
+        1,
+        9,
         "end"
       ]
     ],
@@ -724,7 +862,26 @@
       ],
       [
         "d",
-        "e"
+        "v"
+      ],
+      [
+        "v",
+        "error",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "error",
+        "d",
+        "Revise",
+        "t",
+        "l"
+      ],
+      [
+        "v",
+        "e",
+        "Yes"
       ],
       [
         "e",
@@ -732,29 +889,29 @@
       ],
       [
         "f",
+        "g"
+      ],
+      [
         "g",
+        "h",
         "",
         "l",
         "r"
       ],
       [
-        "f",
-        "h"
+        "g",
+        "k"
       ],
       [
-        "h",
-        "i"
-      ],
-      [
-        "h",
-        "j",
+        "k",
+        "i",
         "",
         "r",
         "l"
       ],
       [
-        "g",
-        "k"
+        "k",
+        "j"
       ]
     ]
   },
@@ -803,7 +960,7 @@
       ],
       [
         "g",
-        "Select active program|and allowed curriculum",
+        "Retain assigned version;|new program uses active",
         1,
         4
       ],
@@ -1145,7 +1302,7 @@
     "nodes": [
       [
         "a",
-        "Admin opens|Settings > Clearance",
+        "Admin sets online/paper|and personal-check policy",
         1,
         0,
         "start"
@@ -1170,7 +1327,7 @@
       ],
       [
         "e",
-        "Map student name/number;|inspect all saved regions",
+        "If personal checks enabled:|map identity + set AI service",
         1,
         4
       ],
@@ -1182,7 +1339,7 @@
       ],
       [
         "g",
-        "Browser-test anchors;|office marks not tested",
+        "Online: test template;|optional AI crop preview",
         1,
         6
       ],
@@ -1202,7 +1359,7 @@
       ],
       [
         "j",
-        "Students can submit|against saved template",
+        "Online template ready;|paper mode needs no upload",
         1,
         8,
         "end"
@@ -1253,78 +1410,132 @@
   },
   {
     "id": "11-clearance-scan",
-    "title": "Production clearance upload: server analysis and ready state",
+    "title": "Online analysis and optional personal verification",
     "nodes": [
       [
-        "a",
-        "Student opens current|Enrollment clearance",
+        "entry",
+        "Student opens current|finalized enrollment",
         1,
         0,
         "start"
       ],
       [
-        "b",
-        "Choose JPEG/PNG/WebP;|adjust form corners",
+        "a",
+        "Automation enabled?",
         1,
-        1
+        1,
+        "decision"
       ],
       [
-        "c",
-        "Send bounded upload;|check current ownership",
+        "paper",
+        "Disabled: bring paper;|staff records approval",
+        0,
+        1,
+        "end"
+      ],
+      [
+        "b",
+        "Student uploads image|with revisions and corners",
         1,
         2
       ],
       [
-        "d",
-        "Load saved revision;|normalize page and form",
+        "c",
+        "Normalize; check saved|template and office marks",
         1,
         3
       ],
       [
-        "e",
-        "Template + offices + writing;|then Gemini identity",
+        "d",
+        "Local checks pass?",
         1,
-        4
+        4,
+        "decision"
       ],
       [
-        "f",
-        "Requestable|evidence?",
+        "fail",
+        "Return findings;|no new saved evidence",
+        0,
+        4,
+        "end"
+      ],
+      [
+        "policy",
+        "Personal verification|enabled?",
         1,
         5,
         "decision"
       ],
       [
-        "g",
-        "Local non-pass / ID mismatch:|findings only, no new save",
-        0,
-        5,
-        "end"
-      ],
-      [
-        "h",
-        "Store image in Garage;|save report + snapshot",
-        1,
-        6
-      ],
-      [
-        "i",
-        "Ready: matched or review;|explicit request still needed",
-        1,
-        7,
-        "end"
-      ],
-      [
-        "j",
-        "ID review requires|staff confirmation",
+        "skip",
+        "Record identity disabled;|skip writing and AI",
         2,
-        4,
+        5
+      ],
+      [
+        "writing",
+        "Both fields have|added writing?",
+        1,
+        6,
+        "decision"
+      ],
+      [
+        "blank",
+        "Missing writing:|no AI call or save",
+        0,
+        6,
+        "end"
+      ],
+      [
+        "ai",
+        "Selected AI reads two crops;|server compares DB identity",
+        1,
+        7
+      ],
+      [
+        "verdict",
+        "Matched or|reviewable?",
+        1,
+        8,
+        "decision"
+      ],
+      [
+        "mismatch",
+        "Mismatch: no new save",
+        0,
+        8,
+        "end"
+      ],
+      [
+        "save",
+        "Stage file; recheck policy,|identity and revisions; save",
+        1,
+        9
+      ],
+      [
+        "ready",
+        "Ready evidence; student|must explicitly request",
+        1,
+        10,
         "end"
       ]
     ],
     "edges": [
       [
+        "entry",
+        "a"
+      ],
+      [
         "a",
-        "b"
+        "paper",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "a",
+        "b",
+        "Yes"
       ],
       [
         "b",
@@ -1336,155 +1547,220 @@
       ],
       [
         "d",
-        "e"
-      ],
-      [
-        "e",
-        "f"
-      ],
-      [
-        "f",
-        "g",
+        "fail",
         "No",
         "l",
         "r"
       ],
       [
-        "f",
-        "h",
+        "d",
+        "policy",
         "Yes"
       ],
       [
-        "h",
-        "i"
+        "policy",
+        "skip",
+        "No",
+        "r",
+        "l"
+      ],
+      [
+        "policy",
+        "writing",
+        "Yes"
+      ],
+      [
+        "writing",
+        "blank",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "writing",
+        "ai",
+        "Yes"
+      ],
+      [
+        "ai",
+        "verdict"
+      ],
+      [
+        "verdict",
+        "mismatch",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "verdict",
+        "save",
+        "Yes"
+      ],
+      [
+        "skip",
+        "save",
+        "",
+        "b",
+        "r"
+      ],
+      [
+        "save",
+        "ready"
       ]
     ]
   },
   {
     "id": "12-clearance-request",
-    "title": "Request, staff review, rejection and verification",
+    "title": "Staff online review or explicit paper approval",
     "nodes": [
       [
         "a",
-        "Saved eligible clearance|is ready",
+        "Current finalized term;|staff verifies clearance",
         1,
         0,
         "start"
       ],
       [
-        "b",
-        "Student explicitly|requests enrollment",
+        "mode",
+        "Automation enabled?",
         1,
-        1
-      ],
-      [
-        "c",
-        "Current template,|valid report and|upload gate?",
         1,
-        2,
         "decision"
       ],
       [
-        "d",
-        "Reject request;|re-upload if needed",
+        "paper",
+        "Student brings completed|paper clearance",
         0,
-        2,
-        "end"
+        2
       ],
       [
-        "e",
-        "Mark requested; show|Enrollment requests queue",
+        "manual",
+        "Staff explicitly confirms|paper receipt and review",
+        0,
+        3
+      ],
+      [
+        "online",
+        "Ready evidence; student|explicitly requests review",
+        1,
+        2
+      ],
+      [
+        "gate",
+        "Current template/report|and document upload gate",
         1,
         3
       ],
       [
-        "f",
-        "Staff reviews|image and findings",
+        "review",
+        "Staff reviews exact|requested image and report",
         1,
         4
       ],
       [
-        "g",
-        "Approve?",
+        "accept",
+        "Accept original?",
         1,
         5,
         "decision"
       ],
       [
-        "h",
-        "Reason required; reject;|student re-uploads",
-        0,
+        "reject",
+        "Reject with reason;|replace and request again",
+        2,
         5,
         "end"
       ],
       [
-        "i",
-        "Verify exact requested file;|confirm ID if Needs review",
+        "confirm",
+        "If identity review: confirm|both fields against record",
         1,
         6
       ],
       [
-        "j",
-        "Set verified + submitted|clearance + completed",
+        "guard",
+        "Check current ownership,|revision, finalized state",
         1,
         7
       ],
       [
-        "k",
-        "Next term still checks|failed-grade follow-up",
+        "save",
+        "Save online reviewer or|paper verifier; mark complete",
         1,
-        8,
+        8
+      ],
+      [
+        "next",
+        "No dedicated inbox/email event;|next-term gates still apply",
+        1,
+        9,
         "end"
       ]
     ],
     "edges": [
       [
         "a",
-        "b"
+        "mode"
       ],
       [
+        "mode",
+        "paper",
+        "No",
+        "l",
+        "t"
+      ],
+      [
+        "paper",
+        "manual"
+      ],
+      [
+        "manual",
+        "guard",
+        "",
         "b",
-        "c"
+        "l"
       ],
       [
-        "c",
-        "d",
-        "No",
-        "l",
-        "r"
-      ],
-      [
-        "c",
-        "e",
+        "mode",
+        "online",
         "Yes"
       ],
       [
-        "e",
-        "f"
+        "online",
+        "gate"
       ],
       [
-        "f",
-        "g"
+        "gate",
+        "review"
       ],
       [
-        "g",
-        "h",
+        "review",
+        "accept"
+      ],
+      [
+        "accept",
+        "reject",
         "No",
-        "l",
-        "r"
+        "r",
+        "l"
       ],
       [
-        "g",
-        "i",
+        "accept",
+        "confirm",
         "Yes"
       ],
       [
-        "i",
-        "j"
+        "confirm",
+        "guard"
       ],
       [
-        "j",
-        "k"
+        "guard",
+        "save"
+      ],
+      [
+        "save",
+        "next"
       ]
     ]
   },
@@ -1621,7 +1897,7 @@
       ],
       [
         "b",
-        "Current grades finalized|and clearance verified?",
+        "Current finalized grades|and online/paper approval?",
         1,
         1,
         "decision"
@@ -1674,7 +1950,7 @@
       ],
       [
         "j",
-        "Select curriculum; review|prerequisites + due documents",
+        "Same program: assigned plan;|transfer: active version",
         1,
         6
       ],
@@ -2032,7 +2308,7 @@
       ],
       [
         "e",
-        "Dashboard shows term,|grades and next action",
+        "Dashboard: derived reminders;|separate saved-event preview",
         1,
         3
       ],
@@ -2056,7 +2332,7 @@
       ],
       [
         "i",
-        "Upload clearance or|download eligible COR",
+        "Online/paper clearance;|download eligible COR",
         0,
         5,
         "end"
@@ -2223,7 +2499,7 @@
   },
   {
     "id": "19-messaging",
-    "title": "Saved events, notifications and outgoing email",
+    "title": "Saved event scope, mail exceptions and student read state",
     "nodes": [
       [
         "a",
@@ -2233,115 +2509,224 @@
         "start"
       ],
       [
-        "b",
-        "Most academic events:|state + event in transaction",
+        "kind",
+        "Which event path?",
         1,
-        1
+        1,
+        "decision"
       ],
       [
-        "c",
-        "Attempt email using|saved provider settings",
+        "meeting",
+        "Meeting: attempt email|under send claim",
+        0,
+        2
+      ],
+      [
+        "academic",
+        "Most academic actions:|commit state + event",
         1,
         2
       ],
       [
-        "d",
-        "Email succeeds?",
-        1,
+        "docs",
+        "Document request/decision:|commit event; no email",
+        2,
+        2
+      ],
+      [
+        "ms",
+        "Meeting email|accepted?",
+        0,
         3,
         "decision"
       ],
       [
-        "e",
-        "Keep state + notification;|report mail failure",
+        "mail",
+        "Attempt email after commit",
+        1,
+        3
+      ],
+      [
+        "mf",
+        "Failure: release claim;|no meeting event/sent flag",
         0,
-        3,
+        4,
         "end"
       ],
       [
-        "f",
-        "Delivery request|accepted by provider",
+        "ok",
+        "Mail accepted?",
         1,
+        4,
+        "decision"
+      ],
+      [
+        "failure",
+        "Failure: saved state +|event remain; report outcome",
+        2,
         4
       ],
       [
-        "g",
-        "Notifications filtered|by account role",
+        "record",
+        "Accepted meeting: save|event + sent timestamp",
+        0,
+        5
+      ],
+      [
+        "accepted",
+        "Provider acceptance is|not inbox receipt",
         1,
         5
       ],
       [
-        "h",
-        "Student: own inbox|and read/unread controls",
-        0,
-        6,
-        "end"
-      ],
-      [
-        "i",
-        "Registrar: events|attributed to registrar",
+        "scope",
+        "Same role scope for lists,|counts, search and filters",
         1,
-        6,
+        6
+      ],
+      [
+        "student",
+        "Student: own recipient;|own read/unread controls",
+        0,
+        7,
         "end"
       ],
       [
-        "j",
-        "Admin: all events;|staff have no unread count",
+        "registrar",
+        "Registrar: own actor;|no unread/read mutations",
+        1,
+        7,
+        "end"
+      ],
+      [
+        "admin",
+        "Admin: own actor/recipient|+ all enrollment_dropped;|no student read mutations",
         2,
-        6,
+        7,
         "end"
       ]
     ],
     "edges": [
       [
         "a",
-        "b"
+        "kind"
       ],
       [
-        "b",
-        "c"
-      ],
-      [
-        "c",
-        "d"
-      ],
-      [
-        "d",
-        "e",
-        "No",
+        "kind",
+        "meeting",
+        "Meeting",
         "l",
-        "r"
+        "t"
       ],
       [
-        "d",
-        "f",
+        "kind",
+        "academic",
+        "Academic"
+      ],
+      [
+        "kind",
+        "docs",
+        "Documents",
+        "r",
+        "t"
+      ],
+      [
+        "meeting",
+        "ms"
+      ],
+      [
+        "ms",
+        "mf",
+        "No"
+      ],
+      [
+        "ms",
+        "record",
+        "Yes",
+        "l",
+        "l"
+      ],
+      [
+        "academic",
+        "mail"
+      ],
+      [
+        "mail",
+        "ok"
+      ],
+      [
+        "ok",
+        "failure",
+        "No",
+        "r",
+        "l"
+      ],
+      [
+        "ok",
+        "accepted",
         "Yes"
       ],
       [
-        "e",
-        "g",
+        "accepted",
+        "scope"
+      ],
+      [
+        "record",
+        "scope",
         "",
         "b",
         "l"
       ],
       [
-        "f",
-        "g"
+        "failure",
+        "scope",
+        "",
+        "b",
+        "r"
       ],
       [
-        "g",
-        "h",
+        "docs",
+        "scope",
+        "",
+        "r",
+        "t",
+        [
+          [
+            1115,
+            396
+          ],
+          [
+            1115,
+            875
+          ],
+          [
+            770,
+            875
+          ],
+          [
+            770,
+            890
+          ],
+          [
+            570,
+            890
+          ]
+        ]
+      ],
+      [
+        "scope",
+        "student",
         "",
         "l",
         "t"
       ],
       [
-        "g",
-        "i"
+        "scope",
+        "registrar"
       ],
       [
-        "g",
-        "j",
+        "scope",
+        "admin",
         "",
         "r",
         "t"
@@ -2723,7 +3108,7 @@
       ],
       [
         "h",
-        "Initialize Garage;|load auth session hooks",
+        "Validate encryption key;|migrate secrets; init Garage",
         1,
         6
       ],
@@ -2776,63 +3161,77 @@
   },
   {
     "id": "24-diagnostics",
-    "title": "Diagnostic clearance page and handwriting endpoint",
+    "title": "Scan and identity diagnostics are development-only",
     "nodes": [
       [
         "a",
-        "Open /test|diagnostic page",
+        "Request /test or|POST /test/identity",
         1,
         0,
         "start"
       ],
       [
         "b",
-        "Choose local page;|adjust form corners",
+        "Development|server?",
         1,
-        1
+        1,
+        "decision"
+      ],
+      [
+        "stop",
+        "Production: return 404;|no crop/provider work",
+        0,
+        1,
+        "end"
       ],
       [
         "c",
-        "Prototype template|and checkbox experiments",
-        0,
+        "Open local image;|adjust corners",
+        1,
         2
       ],
       [
         "d",
-        "Template passed + signed in:|identity test with crops",
-        2,
-        2
+        "Local prototype OCR|and mark experiments",
+        0,
+        3
       ],
       [
         "e",
-        "Display browser OCR|and geometry findings",
-        0,
-        3,
-        "end"
-      ],
-      [
-        "f",
-        "Server gets expected|identity from DB/session",
+        "Signed in + UI template|pass: identity experiment",
         2,
         3
       ],
       [
-        "g",
-        "Validate PNG crops;|call shared Gemini service",
+        "local",
+        "Display local evidence;|no enrollment update",
+        0,
+        4,
+        "end"
+      ],
+      [
+        "f",
+        "Server reads expected|identity from DB/session",
         2,
         4
       ],
       [
-        "h",
-        "Strict transcription;|compare identity; review",
+        "g",
+        "Validate small PNG crops;|call shared selected AI",
         2,
         5
       ],
       [
-        "i",
-        "Diagnostic result only;|no enrollment approval",
+        "h",
+        "Compare strict readings;|match/review/mismatch",
         2,
-        6,
+        6
+      ],
+      [
+        "i",
+        "Diagnostic result only;|no clearance approval",
+        2,
+        7,
         "end"
       ]
     ],
@@ -2843,24 +3242,36 @@
       ],
       [
         "b",
+        "stop",
+        "No",
+        "l",
+        "r"
+      ],
+      [
+        "b",
         "c",
-        "Form checks",
+        "Yes"
+      ],
+      [
+        "c",
+        "d",
+        "",
         "l",
         "t"
       ],
       [
-        "b",
-        "d",
-        "Identity",
+        "c",
+        "e",
+        "",
         "r",
         "t"
       ],
       [
-        "c",
-        "e"
+        "d",
+        "local"
       ],
       [
-        "d",
+        "e",
         "f"
       ],
       [
@@ -2972,7 +3383,7 @@
       ],
       [
         "b",
-        "Requestable image saved|ready: ID match or review",
+        "Ready: identity match,|review or disabled checks",
         1,
         1
       ],
@@ -3003,7 +3414,7 @@
       ],
       [
         "p",
-        "Reopen / same-term edit:|keep state and approval",
+        "Same-term reopen/edit: keep|online or paper approval",
         1,
         4,
         "end"
@@ -3138,13 +3549,13 @@
       ],
       [
         "h",
-        "Check name/number writing|against blank reference",
+        "Personal checks enabled:|check both writing fields",
         1,
         6
       ],
       [
         "i",
-        "If local checks pass:|run Gemini identity",
+        "If enabled + local passes:|selected AI transcribes crops",
         1,
         7,
         "end"
@@ -3462,7 +3873,7 @@
       ],
       [
         "d",
-        "SQLite: accounts,|academics, states, audits",
+        "SQLite: accounts, academics;|encrypted settings secrets",
         0,
         3
       ],
@@ -3493,7 +3904,7 @@
       ],
       [
         "i",
-        "Gemini transcription:|two PNG field crops",
+        "Selected AI transcription:|Gemini / OpenAI / Ollama",
         2,
         4,
         "end"
@@ -3675,7 +4086,7 @@
   },
   {
     "id": "32-prerequisites",
-    "title": "Prerequisite enforcement against latest earlier subject attempts",
+    "title": "Curriculum-specific prerequisite enforcement at enrollment",
     "nodes": [
       [
         "a",
@@ -3686,7 +4097,7 @@
       ],
       [
         "b",
-        "Load global direct|prerequisite rules",
+        "Load resolved curriculum's|direct prerequisite rules",
         1,
         1
       ],
@@ -3718,7 +4129,7 @@
       ],
       [
         "g",
-        "UI permits draft; server|rechecks rules/history",
+        "UI permits selection; server|rechecks version + history",
         1,
         5
       ],
@@ -3731,7 +4142,7 @@
       ],
       [
         "i",
-        "Admin graph save rejects|cycles/self/missing links",
+        "Draft validates earlier links;|publication freezes rules",
         2,
         1,
         "end"
@@ -3785,7 +4196,7 @@
     "nodes": [
       [
         "a",
-        "Server analyzes|clearance original",
+        "Personal checks enabled:|server analyzes original",
         1,
         0,
         "start"
@@ -3799,14 +4210,14 @@
       ],
       [
         "c",
-        "Return findings;|no Gemini call/new save",
+        "Return findings;|no AI call/new save",
         0,
         1,
         "end"
       ],
       [
         "d",
-        "Gemini transcribes two crops;|server compares DB identity",
+        "Selected AI reads two crops;|server compares DB identity",
         1,
         2
       ],

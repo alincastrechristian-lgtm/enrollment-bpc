@@ -12,9 +12,9 @@ The central record is an enrollment for one student in one school year and semes
 2. The student follows the email link and chooses a password. Staff can create the first enrollment before this setup finishes, but grade processing later requires completed setup.
 3. Staff chooses a program and its usable published curriculum, reviews the term, selects subjects, and saves the enrollment.
 4. Staff enters and saves grades. Those values remain provisional until staff finalizes them.
-5. After finalization, the student checks the released results and submits the signed clearance image for the current term.
-6. The server checks the template, office marks, writing presence, and Gemini-transcribed identity. Eligible identity matches and identity-review cases become saved ready submissions; mismatches remain blocked.
-7. The student explicitly requests enrollment review. Staff reviews the original document and either rejects it with a reason or verifies it. Identity-review cases require explicit staff identity confirmation.
+5. After finalization, the student checks the released results. With automation enabled, the student submits a signed clearance image for the current term; with automation disabled, the student brings paper clearance to the Registrar.
+6. Online analysis checks template and office marks. When personal verification is enabled, it also checks writing presence and selected-provider identity transcription. Eligible results become ready; local failures and identity mismatches remain blocked. Personal checks can be disabled without removing template/office checks.
+7. In online mode the student explicitly requests review; staff reviews the original, then rejects with a reason or verifies the exact request. Identity-review cases need explicit identity confirmation. In paper mode staff instead confirms receipt/review and records manual approval; no online request is required.
 8. Verification completes the current enrollment's clearance requirement. Current failed grades additionally require a completed Registrar follow-up before another ordinary enrollment.
 9. Staff opens the next-term editor, reviews calculated defaults, prerequisites, and outstanding subjects, and saves a new enrollment. Requested final-year documents must be verified before ordinary final-semester enrollment. The old enrollment remains in staff-accessible history.
 
@@ -27,7 +27,7 @@ The central record is an enrollment for one student in one school year and semes
 | User account         | Authentication identity, name, email, role, setup state, access state, and security settings.                                                                  |
 | Student record       | Student number, personal details, linked user, and current-enrollment pointer.                                                                                 |
 | Program              | A course/program catalog entry with an active status and optional selected curriculum.                                                                         |
-| Curriculum           | A program-specific plan containing subjects assigned to years and semesters, with units and publication state.                                                 |
+| Curriculum | A program-specific version containing subject placement, units, prerequisite rules, and publication state. Published rules are frozen. |
 | Enrollment           | One student's actual term registration. It contains its own class details and selected curriculum.                                                             |
 | Enrollment subject   | One subject attempt in an enrollment. It stores subject snapshots, units, and a draft or released grade.                                                       |
 | Clearance submission | One currently saved image/report for an enrollment, with request and review state.                                                                             |
@@ -37,13 +37,11 @@ The central record is an enrollment for one student in one school year and semes
 
 ## 1.3 Scope and evidence
 
-This guide describes implemented behavior in the checked-out source on 20 October 2026, baseline `ee5eb42` plus the current uncommitted reopening/clearance changes. It includes changes since the original `d4b7859` edition: current-only student enrollment pages, staff-only curriculum access, Gemini handwriting and manual identity review, required academic documents, and subject prerequisites. Reopening now preserves clearance, while school-year/semester corrections invalidate it. This guide does not inspect a live institution's operational database or assume every service is configured. Current code takes precedence over older notes.
+This guide describes implemented behavior inspected on 20 October 2026 against application baseline `eb9988d` (secured api keys). It includes curriculum-owned frozen prerequisites and assigned-version continuation, interrupted setup recovery, student CSV import and semester GWA, scoped notification visibility, paper clearance approval, optional identity verification, Gemini/OpenAI/Ollama selection, bounded clearance checks, and encrypted settings credentials. Reopening preserves same-term clearance; school-year/semester corrections invalidate approval. No live operational database or provider account was inspected. Current code takes precedence over older notes.
 
-Chapter 24 explains required documents in full. Chapter 25 provides possible defense questions with suggested answers and demonstration evidence. These answers describe implemented behavior; they do not invent accuracy, performance, user-satisfaction, or legal-compliance results.
+Chapter 24 explains required documents. Chapter 25 contains 80 possible defense questions with suggested answers and demonstration evidence. These answers describe implemented behavior and do not invent accuracy, throughput, satisfaction, or compliance results.
 
-Flowcharts show major checks and branches. The accompanying procedures specify smaller validation rules, transactions, concurrency protections, and exceptions. A stopped branch means the action is rejected or held until its stated requirement is resolved. Canceling a confirmation leaves the saved data unchanged unless a preceding step has already saved a separate record.
-
-Sources: S01, S02, S07–S16.
+Flowcharts show major checks and branches; procedures supply transaction, validation, concurrency, and exception details. A stopped branch requires its stated issue to be resolved. Canceling confirmation leaves saved data unchanged unless an earlier step already saved a separate record.
 
 # 2. Accounts, responsibilities, and permission boundaries
 
@@ -70,7 +68,7 @@ There are exactly three application roles: `admin`, `registrar`, and `student`. 
 | Programs, subjects, curricula                     | Manage                                                         | View                                    | No curriculum/catalog pages                    |
 | Required academic documents                       | Request and review                                             | Request and review                      | Upload own requested copies; cannot verify     |
 | Masterlist and reports                            | View, export, print                                            | View, export, print                     | No                                             |
-| Notifications                                     | All recorded events                                            | Events attributed to that registrar     | Events addressed to own account                |
+| Notifications                                     | Own sent/received events plus all dropped-enrollment events                                            | Events attributed to that registrar     | Events addressed to own account                |
 | Configure email, clearance template, storage      | Yes                                                            | No                                      | No                                             |
 | Download COR                                      | Eligible student enrollment                                    | Eligible student enrollment             | Own eligible enrollment only                   |
 
@@ -143,21 +141,21 @@ Setup and reset links expire after 24 hours. The account email template depends 
 ## 4.2 First-login and password-reset procedure
 
 1. Open the invitation's `/first-login` link, or the recovery email's `/reset-password` link.
-2. The page requires a reset token in the URL. Missing or expired tokens require a new link through staff resend or Forgot password.
+2. Setting or resetting a password requires a valid reset token. An authenticated account with incomplete setup can instead resume `/first-login` without a token; this resumes setup only and does not reset the password. Token/error URLs retain the normal reset-link flow.
 3. Enter a new password with at least eight characters and enter the same confirmation. Authentication enforces its password bounds; the signed-in change-password form explicitly allows 8–128 characters.
 4. The server obtains the target user from an unexpired reset-token record. It does not trust a browser-supplied user identity.
 5. Authentication consumes the token, saves the new password, and revokes old sessions.
 6. The server attempts automatic sign-in. If sign-in fails or two-factor verification is required, the password remains saved and the user is told to sign in normally.
 7. After successful sign-in, setup completion requires an actual credential password and sets `setupComplete=true` and `emailVerified=true`.
-8. The user opens the dashboard. If setup completion needs retrying, the page retains its signed-in state so it does not reuse a consumed reset token.
+8. After setup finishes, the user opens the dashboard. If a saved password is followed by failed automatic sign-in, sign in normally and complete any two-factor challenge. Opening the protected workspace with incomplete setup redirects to tokenless `/first-login`; it automatically retries completion and offers Finish setup if that fails. Reloading an interrupted signed-in session can follow the same path without reusing the consumed token.
 
-The application does not impose a universal setup-complete guard on every protected page. Specific operations enforce setup where needed. For example, staff may create a first enrollment before setup finishes, while grade editing/finalization and student clearance require completed setup.
+The `/user/*` page layout redirects signed-in accounts with incomplete setup to `/first-login`. This page guard is separate from operation-specific server checks: staff may still create a student's first enrollment before that student finishes setup, while grade processing and student clearance require completed setup. Completion requires an authenticated session and an existing credential password; a password-only two-factor challenge cannot complete setup before factor verification. Existing completed accounts are not forced to repeat setup.
 
-![Flowchart 3. Setup and recovery share token consumption and password creation. Email failure does not delete a newly created account.](system-guide-assets/03-setup.png)
+![Flowchart 3. Setup recovery resumes from an authenticated session without reusing a reset token. Required two-factor verification still precedes completion; failed invitations retain the account.](system-guide-assets/03-setup.png)
 
 ## 4.3 Normal sign-in and sign-out
 
-The login page accepts email and password. Busy controls prevent duplicate sign-in requests. A successful password response either opens the dashboard or presents the two-factor challenge. A signed-in visitor opening `/login` is redirected to the dashboard.
+The login page accepts email and password. Busy controls prevent duplicate sign-in requests. A successful password response either proceeds to the protected workspace or presents the two-factor challenge. A signed-in visitor opening `/login` is redirected toward the dashboard; the workspace then resumes incomplete setup before showing protected pages.
 
 The two-factor challenge accepts a six-digit authenticator code or a recovery code. The login UI lets the user switch modes or return to sign-in. It uses `trustDevice:false`, so this UI does not establish a trusted-device bypass. Recovery codes are single-use.
 
@@ -198,7 +196,7 @@ Administrators and registrars open Students and choose Add Student. The dialog c
 
 **Import CSV** on the Students page creates student accounts in batches of up to 100 rows / 256 KB. Download the template, fill first_name, last_name, email, birth_date, sex, contact_number and address; middle_name is optional. Dates use YYYY-MM-DD, sex is female/male, and phone columns should be kept as text to preserve leading zeros. Quoted commas, escaped quotes and multiline addresses are supported.
 
-Preview validates every row with the same creation rules, detects duplicate emails within the file, and rejects existing account emails. The server repeats validation when importing; validation errors create no accounts. Student numbers are generated automatically, enrollment remains unset, and the existing account-setup invitation flow runs for each student. Mail failures retain the created account and show a resend warning. Runtime failures may leave earlier rows created; results identify created, failed and unattempted rows. Review the student list before retrying after a lost response. Existing accounts are never overwritten.
+Preview validates every row with the same creation rules, detects duplicate emails within the file, and rejects existing account emails. The server repeats validation when importing; validation errors create no accounts. Student numbers are generated automatically, enrollment remains unset, and the existing account-setup invitation flow runs for each student. Mail failures retain the created account and show a resend warning. Import creates rows sequentially rather than in one batch transaction. The first runtime creation failure preserves earlier successes and stops all further writes; results identify created, failed and unattempted rows. Review the student list before retrying after a lost response. Existing accounts are never overwritten.
 
 | Field                  | Current rule                                                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------- |
@@ -266,8 +264,8 @@ Sources: S03, S06, S07, S24.
 1. Sign in using the administrator account provisioned during setup. Set an operational password and configure two-factor authentication.
 2. Check Settings > Email before creating real users who need setup invitations.
 3. Review programs, subjects, prerequisite links, and supplied sample curricula. Replace demonstration academic rules with approved institutional rules before operational use.
-4. Activate the intended published curriculum for each active program. A program without a usable selected curriculum cannot support ordinary enrollment.
-5. Configure Garage storage, the server-side Gemini key, and Settings > Clearance. Save a blank reference, printed areas, each required office checkbox/signature region, and student-name/number writing areas.
+4. Activate the intended published curriculum for each active program. A program without a usable selected curriculum cannot support first enrollment or new-program transfers; same-program continuation can retain an existing assigned published version.
+5. Configure Garage storage and Settings > Clearance. Choose online or paper approval. For online analysis, save a blank reference, printed areas and office regions; when personal checks are enabled, also configure name/number regions and a reachable Gemini, OpenAI, or Ollama service. Keep the deployment encryption key available before application startup.
 6. Create registrar accounts. Confirm invitation delivery outcomes and help them complete setup.
 7. Use the dashboard's account/catalog health panels and the role-specific worklists to identify setup or configuration gaps.
 
@@ -298,7 +296,7 @@ Sources: S02, S07–S16, S21–S25.
 
 Open Students, search for the person before creating another account, and check matching student number/email where available. Create the personal record or correct existing information. If the invitation fails, retain the saved student and resend later. First enrollment can proceed while the student completes setup.
 
-Open Enroll Student, choose the program, review its selected curriculum, and check the school year, semester, year level, and section. Review each subject and unit count. Add or remove subjects explicitly; changing the displayed term does not silently replace an already-edited list. Confirm and save. Check the separate confirmation-email outcome.
+Open Enroll Student, choose the program, review the resolved assigned or active curriculum, and check the school year, semester, year level, and section. Review each subject and unit count. Add or remove subjects explicitly; changing the displayed term does not silently replace an already-edited list. Confirm and save. Check the separate confirmation-email outcome.
 
 ## 7.2 End-of-term academic work
 
@@ -341,9 +339,9 @@ The current enrollment card offers an eligible Certificate of Registration. The 
 
 After current grades are finalized, open clearance in Enrollment. Choose a clear JPEG, PNG, or WebP photo/scan of the correct current-term form, at most 10 MiB. Production clearance does not accept PDF. Inspect the suggested outline; use enhanced detection or adjust/draw corners manually as needed.
 
-Check and save clearance runs server template, office-mark, and writing-presence checks, then Gemini name/number transcription when those local checks pass. A template/office review, missing writing, or identity mismatch does not save a new submission. An eligible identity match or identity Needs review result can be saved as ready.
+With automation enabled, Check and save clearance runs authoritative template and office checks. Personal verification, when enabled, adds both-field writing-presence checks and selected-provider transcription/comparison. Local failures or identity mismatch do not save new evidence. Eligible matched/reviewable identity, or explicitly disabled personal checks, can produce a ready submission. With automation disabled, submit paper clearance to the Registrar instead; the online upload/request commands reject attempts.
 
-Ready is not yet a staff request. Explicitly request enrollment review. Near the final curriculum term, any staff-requested academic documents must at least be uploaded first. An identity-review clearance remains reviewable; staff must confirm both fields against the original before verification. A missing Gemini key or provider failure does not silently approve the image or create an outage fallback submission.
+Ready is not yet a staff request. Explicitly request enrollment review. Near the final curriculum term, any staff-requested academic documents must at least be uploaded first. An identity-review clearance remains reviewable; staff must confirm both fields against the original before verification. A missing required cloud key or provider failure does not silently approve an image or create an outage fallback submission. An authorized administrator can deliberately change policy; a failed request cannot change it automatically.
 
 Rejection displays a reason and requires a corrected eligible upload and another request. Verification completes current clearance; staff separately creates the next enrollment after all applicable grade, meeting, document, curriculum, term, and subject-prerequisite checks.
 
@@ -373,41 +371,37 @@ An inactive program is unavailable for ordinary new enrollment. Deactivating it 
 
 Deleting a program is blocked while any curriculum references it. Inactivation is the appropriate catalog state when historical dependencies must remain.
 
-## 9.2 Subject catalog and prerequisites
+## 9.2 Subject catalog and curriculum-owned prerequisites
 
-A subject stores unique code, name, optional description, active status, and optional prerequisite links to other catalog subjects. Units belong to curriculum placements and enrollment attempts, not the catalog itself. Administrators create/edit subjects and rules; registrars can view them.
+A subject stores a unique code, name, optional description, and active status. Units and prerequisites belong to curriculum versions, not the global catalog. Administrators maintain catalog details; registrars can view them. The subject dialog has no prerequisite selector, and subject create/update APIs reject the old prerequisite field rather than changing academic rules globally.
 
-The subject dialog loads existing subjects independently of the current list's search/page, offers a searchable prerequisite selector, and displays removable selection chips. Multiple prerequisites mean all are required. Inactive prerequisite subjects are allowed by current validation; identity is by stable ID, so code renaming does not break a link.
+The same stable subject can therefore have different prerequisites in different programs or revisions. Renaming its catalog code/name does not change any curriculum's prerequisite IDs or rewrite published subject snapshots. Catalog inactivation alone does not categorically reject selection during enrollment.
 
-Rules belong to the global subject, across programs and curricula. Published curriculum snapshots do not freeze prerequisites. Saving new rules affects subsequent enrollment/correction validation but does not automatically reopen, void, or rewrite existing registrations.
+Deleting a subject is blocked while it is a configured prerequisite or is referenced by a curriculum or enrollment. Remove an unused draft relationship through its curriculum, or retain/inactivate the catalog subject when history needs it. Published rules cannot be changed through a catalog edit.
 
-Create defaults to no prerequisites. An update with omitted prerequisite IDs preserves rules; an explicit empty list clears them; a supplied list replaces the desired set. The server rejects duplicate/self/nonexistent IDs and direct/indirect cycles. Details and graph save in one immediate transaction, so a rejected cycle also rolls back a simultaneous name/code change.
-
-Deleting a subject required by another is blocked until inbound requirements are removed. Deleting a dependent subject can cascade its outgoing prerequisite links, while curriculum/enrollment references still independently prevent unsafe deletion. Catalog renaming does not rewrite saved curriculum/enrollment name/code snapshots. An inactive enrollment choice remains labeled but is not categorically rejected by active status alone.
-
-![Flowchart 8. Program and subject maintenance retains historical protection. Subject saves also validate prerequisite links and cycles.](system-guide-assets/05-catalog.png)
+![Flowchart 8. Program and subject maintenance changes catalog details; prerequisite configuration belongs to curriculum drafts. Referenced academic records remain protected.](system-guide-assets/05-catalog.png)
 
 ## 9.3 Create and edit a curriculum draft
 
 1. An administrator opens New Curriculum and chooses its program and a name of at least two characters.
 2. Set positive integer year-level and semester counts. Defaults are four years and two semesters.
-3. Add subjects and assign each to a year level, semester, and positive whole-number units.
+3. Add subjects and assign each to a year level, semester, and positive whole-number units. In each row, use Add prerequisite to select subjects already placed in earlier terms of this draft. Multiple selected prerequisites are all required; remove a selection with its chip control.
 4. A subject may appear only once across the entire curriculum. It cannot be duplicated in another term of the same plan.
-5. Every placement must fit the curriculum's declared year/semester bounds.
-6. Save the draft. An empty draft is permitted, but it cannot be activated without at least one subject.
-7. Continue editing while unpublished and unarchived. The saved row list represents the complete desired curriculum, not a partial patch.
+5. Every placement must fit the curriculum's declared bounds. Every prerequisite must be included in this same curriculum and placed in an earlier year, or an earlier semester within the same year. Duplicate/self links are rejected. Strictly earlier placement makes direct and indirect cycles impossible.
+6. Save the draft. Client and server validate its full subject/prerequisite selection. An empty draft is permitted, but cannot be activated without at least one subject. Invalid prerequisite relationships reject the save without partial placement or rule changes.
+7. Continue editing while unpublished and unarchived. The saved row list and each row's prerequisite IDs represent the complete desired curriculum, not a partial patch. New rows default to no prerequisites; an explicit empty prerequisite list clears that row's rules. Programmatic saves that omit a row's prerequisite list also default it to empty, so callers must submit all intended links.
 
-Existing placement IDs must belong to that curriculum and retain their subject identity. To replace a subject placement, remove it and add the new one. Draft saves obtain current catalog names/codes and save all changes transactionally.
+Existing placement IDs must belong to that curriculum and retain their subject identity. To replace a subject placement, remove it and add the new one. Draft saves obtain current catalog names/codes and save placements and rules transactionally. Removing or moving a prerequisite does not silently remove the dependent's selected rule: fix its placement or explicitly remove the link before saving. Curriculum details show the saved prerequisite codes alongside subject names and units.
 
 ## 9.4 Activate and publish
 
-Activation requires an active parent program and at least one valid subject placement overall. It does not require a subject in every declared year/semester. Every placement must have valid positive integer fields within the plan's limits.
+Activation requires an active parent program and at least one valid subject placement overall. It does not require a subject in every declared year/semester. Every placement must have valid positive integer fields within the plan's limits. Activation also rechecks prerequisite membership, uniqueness, self-reference, and earlier placement; imported or stale invalid rules must be corrected before publication.
 
-On first activation, the system refreshes the subject name/code snapshots from the catalog, stamps publication time, unarchives the selected plan, and points the program to it. A previously selected curriculum is archived. Published placements become read-only, preserving the plan used by historical enrollments.
+On first activation, the system refreshes the subject name/code snapshots from the catalog, stamps publication time, unarchives the selected plan, and points the program to it. A previously selected curriculum is archived. Published placements and prerequisite rules become read-only through application commands, preserving the assigned academic version. To change requirements, create and approve a new curriculum revision; global subject edits cannot modify the frozen rules.
 
-Future ordinary enrollments use the program's selected usable published curriculum. Existing enrollments continue referencing their saved curriculum. Restoring a dropped enrollment in the same program can use its original published plan even after replacement or archiving.
+New students and transfers to a different program use that program's selected usable published curriculum. Continuing students with a non-voided current enrollment in the same program retain its assigned published version for later terms, even after it is archived or replaced. Dropped reenrollment retains the same version as well. Ordinary enrollment still requires an active program. A correction uses the corrected record's version when staying in its program, or the selected version of a newly chosen program. Choosing a new program default does not migrate existing students.
 
-![Flowchart 9. Drafting, publication, replacement, and preservation of historical curriculum assignments.](system-guide-assets/06-curriculum.png)
+![Flowchart 9. Curriculum drafts own prerequisite rules. Save and activation validate ordering; publication freezes rules; continuing students keep their assigned version.](system-guide-assets/06-curriculum.png)
 
 ## 9.5 Derived curriculum states
 
@@ -436,7 +430,7 @@ Only administrators and registrars can open the staff enrollment editor. The ser
 
 For a first enrollment, defaults are year level 1, semester 1, blank section, and the current Manila calendar year as school-year start. That default is not a configurable institutional academic calendar. Program begins blank unless a valid program query supplies a choice.
 
-Ordinary new enrollment needs an active program with its selected active, published, unarchived curriculum. Missing/inactive program, absent selection, wrong program ownership, or unusable curriculum stops loading with an actionable message. Program changes load that program's curriculum and confirm before discarding changed selections.
+First enrollment and transfers to another program need an active program with a selected active, published, unarchived curriculum. Same-program continuation resolves the current non-voided enrollment's assigned published version, including an archived/replaced version; the program still must be active for ordinary enrollment. Missing/inactive programs, missing required selections, wrong ownership, or unavailable resolved versions stop loading with an actionable message. Program changes load that program's curriculum and confirm before discarding changed selections.
 
 ## 10.2 What staff can edit
 
@@ -474,15 +468,15 @@ Failed email does not undo enrollment. The UI reports that separate result and p
 
 ## 10.5 Exact subject-prerequisite enforcement
 
-For every selected subject, load its current direct prerequisite links and the student's non-dropped/non-voided attempts. Compare school-year start then semester, not year level. Ignore same-term and future attempts. For each required subject, the latest valid earlier-term attempt must have finalized numeric grade 1.00–3.00. All configured requirements must pass.
+For every selected subject, load the direct prerequisite links belonging to the enrollment's resolved curriculum version and the student's non-dropped/non-voided attempts. Compare school-year start then semester, not year level. Ignore same-term and future attempts. For each required subject, the latest valid earlier-term attempt must have finalized numeric grade 1.00–3.00. All configured requirements must pass.
 
 Missing history is Not completed; an unfinalized attempt is Pending; finalized null is Incomplete; above 3.00 is Failed. A newer earlier-term Pending/Failed/INC supersedes an older pass. A later finalized passing retake restores eligibility. Selecting both prerequisite and dependent in one enrollment cannot create an earlier finalized pass.
 
-This applies to curriculum/extra rows, first enrollment, ordinary next term, dropped reenrollment, and corrections. Both staff roles are bound; there is no prerequisite override. Correction excludes the entire corrected enrollment from satisfying its own prerequisites and uses the corrected target term. The check evaluates direct required subjects; cycle detection is separate and does not mean recursive academic rechecking of every ancestor of an already-passed prerequisite.
+The same selected-curriculum lookup applies to every selected row, first enrollment, ordinary next term, dropped reenrollment, and corrections. A subject outside that curriculum has no inherited requirements from another program/version: there is no global fallback. Staff remains responsible for approving suitable extra subjects. Both staff roles are bound; there is no prerequisite override. Correction excludes the entire corrected enrollment from satisfying its own prerequisites and uses the corrected target term. The check evaluates direct required subjects; ordered curriculum validation does not mean recursive academic rechecking of every ancestor of an already-passed prerequisite.
 
-The editor recomputes reasons when target school year/semester changes, disables blocked selector choices, explains already-selected blocked rows, and prevents saving. Term defaults, Use term subjects, restoration, and Add all retakes deliberately keep their selected rows rather than silently removing blocked subjects. Staff must remove them or resolve the requirements. The server checks latest rules/history again during save and rejects conflict without partial enrollment/pointer/notification changes.
+The editor recomputes reasons when target school year/semester changes, disables blocked selector choices, explains already-selected blocked rows, and prevents saving. Term defaults, Use term subjects, restoration, and Add all retakes deliberately keep their selected rows rather than silently removing blocked subjects. Staff must remove them or resolve the requirements. The server checks the resolved curriculum's stored rules and latest history again during save and rejects conflict without partial enrollment/pointer/notification changes.
 
-![Flowchart 11. Latest valid earlier attempt must be a finalized pass for every direct prerequisite; no same-term or administrator bypass exists.](system-guide-assets/32-prerequisites.png)
+![Flowchart 11. Use the assigned curriculum's frozen direct rules and the latest valid earlier attempts. Every prerequisite needs a finalized pass; no same-term or administrator bypass exists.](system-guide-assets/32-prerequisites.png)
 
 Sources: S07, S10, S18, S24, S34.
 
@@ -523,6 +517,10 @@ After commit, the system attempts the grade-release email. Failure does not unfi
 
 ![Flowchart 12. Grade entry and release. Finalization locks the reviewed saved values and exposes them to the student.](system-guide-assets/09-grades.png)
 
+### Semester GWA in staff details and history
+
+Staff enrollment details and history display the unit-weighted average of numeric subject grades: sum(grade × units) / sum(units with a numeric grade), formatted to two decimals. Failed numeric grades count. Blank/INC values and their units are excluded; no graded units produces Not available. Fractional stored units are supported by the calculation. Details use saved grades, so unsaved grade edits do not change this average; staff can see a provisional average before finalization. This is a display calculation, not a grade release or an eligibility exception. Student grade masking remains enforced separately.
+
 ## 11.4 Outstanding failed and INC subjects
 
 The enrollment editor collects finalized non-dropped/non-voided history and determines the latest finalized attempt for each subject ID. Sorting uses school year, semester, enrolled timestamp, and ID in descending order. A more recent passing finalized attempt clears an older failed/INC concern for that subject. A latest failed grade or null remains outstanding.
@@ -541,7 +539,7 @@ Sources: S10, S11, S24.
 
 Settings > Clearance is administrator-only. Configure the blank reference image, form outline, permanent printed areas, office Cleared/signature regions, and student-name/number writing regions. Production office names remain configurable. Diagnostic prototype departments are not the production office list.
 
-Garage must be available to save reference objects. When personal information verification is enabled, production handwriting recognition also requires a saved Gemini key. Each saved reference/definition has a UUID revision; upload and request actions reject stale template state.
+Garage must be available to save reference objects. Online personal verification additionally requires the selected cloud provider key or a reachable configured Ollama vision service. Each saved reference/definition has a UUID revision; upload and request actions reject stale template state.
 
 ## 12.2 Reference replacement and four setup steps
 
@@ -579,17 +577,19 @@ The estimator needs at least six matches across at least four reference lines, u
 
 ## 12.5 Admin browser test and revisions
 
-The administrator sample test accepts independent expected semester/year and a sample JPEG/PNG/WebP up to 15 MB. By default, the sample stays in the browser and tests saved printed/image template anchors. The optional **Test handwriting with Gemini** checkbox reveals **Read handwriting**: this sends only the saved name/number field crops through the server to Gemini, using the saved key, and displays returned text and warnings. This diagnostic works even when personal verification is disabled, performs no identity comparison, and creates no submission or approval. Office and writing-presence checks are not part of this sample test.
+The administrator sample test accepts independent expected semester/year and a sample JPEG/PNG/WebP up to 15 MB. By default the sample stays in the browser and tests saved printed/image template anchors. Optional handwriting testing sends only configured name/number field crops to the selected server-side provider and displays readings/warnings. It can run even when personal verification is disabled, makes no identity comparison, and creates no submission or approval. Office and writing-presence checks are not part of this sample test.
 
-A changed global revision blocks requesting an old ready submission until reupload. An already-requested eligible submission is reviewed against its saved report/definition rather than silently reevaluated against a newer global template. Legacy unverified reports lacking current identity checks need reupload; verified staff approvals remain valid.
+The administrator-only handwriting command permits up to 8 MiB of base64 characters per field under the deployment's 20M request-body limit, then validates actual PNG format and maximum 2400 by 1000 dimensions/two million input pixels. This differs from the smaller development-only standalone endpoint in Chapter 22. Connection/model tests use unsaved overrides without activating them; a successful test is configuration evidence, not clearance approval.
 
-Sources: S12–S15, S22, S31, S32.
+A changed template revision blocks requesting an old ready submission until reupload. Already-requested eligible submissions are reviewed against their saved report/definition rather than silently rerun against a newer template. Legacy unverified reports lacking current checks need reupload; verified staff approvals remain valid. Changing personal-verification policy affects new analysis without rewriting previous reports.
 
-# 13. Production clearance, Gemini identity, and staff review
+Sources: S12–S15, S22, S31–S33.
+
+# 13. Production clearance, optional identity checks, and staff review
 
 ## 13.1 Eligibility and input
 
-Only the student uploads their own current enrollment's clearance. Server checks require completed setup, finalized grades, current ownership, and status neither dropped nor voided. Verified records are locked. Current complete requested submissions cannot be replaced while waiting; obsolete unverified reports can be replaced to obtain the current checks.
+Online upload/request requires automated verification to be enabled. Only the student uploads their own current enrollment's clearance. Server checks require completed setup, finalized grades, current ownership, and status neither dropped nor voided. Verified records are locked. Current complete requested submissions cannot be replaced while waiting; obsolete unverified reports can be replaced to obtain the current checks.
 
 The form's semester/school year must match the current enrollment, not the coming term. Choose a nonempty JPEG/PNG/WebP up to 10 MiB and inspect the four corners. The browser sends original bytes, enrollment ID/revision, template revision, and normalized corners. Browser findings or entered identity are not trusted approval input.
 
@@ -599,13 +599,13 @@ The form's semester/school year must match the current enrollment, not the comin
 2. Decode and align the original image against the saved reference.
 3. Evaluate printed template text, current term values, and optional visual anchors.
 4. If template passes, evaluate each office's Cleared mark and signature/stamp presence.
-5. Compare name/number areas with the blank reference to ensure added writing exists in both.
-6. If those local checks pass, create two PNG crops from the server-decoded image and send them to Gemini for transcription.
-7. Compare transcribed values with authenticated database identity, which was not supplied in the prompt.
-8. Save ready only when the report is requestable: local checks pass and identity is match or review. Identity mismatch stays unsaved.
+5. If personal verification is enabled, compare both identity areas with the blank reference to ensure added writing exists. If disabled, skip writing-presence/AI steps and explicitly report disabled personal verification.
+6. With personal verification enabled and local checks passed, create two PNG field crops and send them to the saved Gemini, OpenAI, or Ollama provider/model.
+7. Compare readings with authenticated database identity, which was not supplied in the prompt.
+8. Recheck current policy, ownership and revisions. Save ready only for requestable local passes with matched/reviewable identity or explicitly disabled personal checks; identity mismatch stays unsaved.
 9. The student explicitly requests review. Staff inspects the original; identity-review verification additionally requires explicit identity confirmation.
 
-![Flowchart 16. Clearance can save with matched identity or Needs review after mandatory local checks; mismatches and local failures remain blocked.](system-guide-assets/11-clearance-scan.png)
+![Flowchart 16. Online checks branch on personal-verification policy; paper mode instead requires recorded staff review. Ready evidence still needs an explicit student request.](system-guide-assets/11-clearance-scan.png)
 
 ## 13.3 Image preparation and template comparison
 
@@ -621,7 +621,7 @@ Reference and upload are perspective-rectified to the reference aspect ratio, ma
 | Optional image/structure                  | Otsu black-and-white shape correlation, with local scale/translation tolerance. At least 0.65 passes; below 0.45 fails; the interval between reviews.                                      |
 | Blank/insufficient-detail visual evidence | Review; two blank regions cannot establish matching structure.                                                                                                                             |
 
-Template non-pass prevents proceeding to office acceptance and the Gemini identity pipeline. Template review is not the identity-review exception.
+Template non-pass prevents proceeding to office acceptance and any enabled identity pipeline. Template review is not the identity-review exception.
 
 ## 13.4 Office-mark and writing-presence checks
 
@@ -631,13 +631,13 @@ The inset interior is deskewed to 32×32. An uncertain/missing frame reviews. Re
 
 Signature/stamp presence passes at added ink ratio at least 0.004, reviews strictly above 0.004/3 and below 0.004, and fails at or below 0.004/3. This detects new ink, not signature authenticity or actual office approval.
 
-Name and number have a separate physical writing-presence prerequisite. Aligned reference masking excludes printed glyphs, MA- prefixes, underlines, rules, and specks. Retained plausible strokes must reach at least the greater of 20 pixels and 0.1% of the field area. Both areas must pass before Gemini is called; this check has pass/fail rather than an identity-review fallback. Presence proves strokes exist, not that they are readable or genuine.
+When personal verification is enabled, name and number have a separate physical writing-presence prerequisite. Aligned reference masking excludes printed glyphs, MA- prefixes, underlines, rules, and specks. Retained plausible strokes must reach at least the greater of 20 pixels and 0.1% of the field area. Both areas must pass before the selected AI provider is called; this check has pass/fail rather than an identity-review fallback. Presence proves strokes exist, not that they are readable or genuine.
 
 ![Flowchart 17. Template and office analysis precede required writing presence and identity recognition. New-ink measures remain evidence for human review.](system-guide-assets/27-ocr.png)
 
 ## 13.5 Handwriting AI service, privacy, and outcomes
 
-Administrators can disable personal information verification independently. New uploads then skip writing-presence and Gemini checks, do not require name/number regions, and explicitly record personal verification as disabled. Template and office checks remain mandatory. Saved reports retain the policy used when uploaded; switching this option does not invalidate prior approvals.
+Administrators can disable personal information verification independently. New uploads then skip writing-presence and AI identity checks, do not require name/number regions, and explicitly record personal verification as disabled. Template and office checks remain mandatory. Saved reports retain the policy used when uploaded; switching this option does not invalidate prior approvals.
 
 The **Automated clearance verification** switch disables online upload and request actions. Students instead receive dashboard and enrollment reminders to submit paper clearance. Registrar/admin must still click **Verify clearance**, explicitly confirm receipt and review, and finalize grades before approval. Paper approvals record staff identity/name and time. Enrollment remains blocked until approval; document, prerequisite and academic follow-up requirements still apply. Paper approval survives same-term reopening/correction and re-enabling automation, while school-year/semester corrections clear it.
 
@@ -647,9 +647,9 @@ Administrators select **Gemini**, **OpenAI / ChatGPT**, or **Ollama** in Setting
 
 OpenAI uses a server-side API key stored in `system_settings` and the Responses API with two PNG data URLs, strict JSON schema and `store: false`. Default model is `gpt-4.1-mini`; administrators may enter another image/structured-output model. **Fetch available models** lists model IDs accessible to the entered or saved OpenAI key, without saving settings or changing the selection. The returned list does not establish image/structured-output compatibility; run **Test AI connection** before saving. Changing or removing the entered key clears the fetched choices. ChatGPT subscriptions do not supply API credits. Ollama uses a configured HTTP/HTTPS server origin and vision model (default `http://localhost:11434`, `qwen3-vl:4b`) through `/api/chat` with base64 images, structured output and streaming disabled. The model must already be pulled. The address must be reachable from the application server; localhost refers to that server/container. Provider redirects are rejected. Google/OpenAI credentials are never forwarded to Ollama. Keys are not returned to the browser; blank input preserves a saved key and explicit removal clears it.
 
-Administrators choose a Gemini model in Settings > Clearance. The default is 3.1 Flash-Lite, the lowest-cost newer option verified with the configured key. Legacy 2.5 Flash-Lite is cheaper but may be unavailable to newer projects. The key tester can use an unsaved model selection; production and the sample handwriting preview use the saved model. Model choices are validated against the supported image/JSON model list. Gemini 3 models use minimal thinking; 2.5 models disable thinking through a zero budget. There is no automatic switch to a more expensive model.
+Administrators choose a Gemini model from the application's configured list. The current default is `gemini-3.1-flash-lite`; the list also contains `gemini-3.5-flash-lite`, `gemini-3.8-flash`, `gemini-2.5-flash-lite`, and `gemini-2.5-flash`. These are application-accepted IDs, not independently verified availability or pricing guarantees. Test access with the deployment's key. Unsaved selections are available to connection tests; production uses saved settings. Gemini 3 uses minimal thinking and 2.5 disables thinking with a zero budget. There is no automatic model/provider fallback.
 
-Administrators manage the Gemini key in Settings > Clearance. It is stored in system_settings and never returned to the browser. Optional GEMINI_API_KEY is imported only when the saved value is null; removing the key explicitly prevents environment re-import. When Gemini is selected, it sends one direct request to Google using the saved model (default `gemini-3.1-flash-lite`) through `generateContent` containing two base64 PNG field crops: name then student number. Production crops are grayscale; diagnostic browser crops are checked and normalized to grayscale PNGs on the server. It does not send the original whole clearance or expected database identity. The crops themselves contain personal information and leave the server for Google processing; the code does not establish provider retention policy or legal compliance.
+Administrators manage the Gemini key in Settings > Clearance. It is encrypted in system_settings and never returned to the browser. Optional GEMINI_API_KEY is imported only when the saved value is null; removing the key explicitly prevents environment re-import. When Gemini is selected, it sends one direct request to Google using the saved model (default `gemini-3.1-flash-lite`) through `generateContent` containing two base64 PNG field crops: name then student number. Production crops are grayscale; diagnostic browser crops are checked and normalized to grayscale PNGs on the server. It does not send the original whole clearance or expected database identity. The crops themselves contain personal information and leave the server for Google processing; the code does not establish provider retention policy or legal compliance.
 
 Prompt instructions require visible characters only, ignore image instructions/signatures, preserve leading zeros, and read the numeric student-number suffix without fixed/repeated MA- prefixes. Requests use a 1024-token output limit and structured JSON by default. GPT-5 nano (including dated snapshots) uses minimal reasoning effort and a 4096-token limit because reasoning and visible JSON share the output budget. Incomplete, filtered and refused OpenAI responses receive specific safe diagnostics; incomplete text is never accepted. Gemini/Ollama set temperature 0. Gemini thinking settings follow the selected model. Only completed output is parsed (Gemini STOP, OpenAI completed message without refusal, or Ollama done with stop reason); thought parts are ignored, and each trimmed field is at most 200 characters. Invalid/incomplete fields produce warnings rather than guessed values.
 
@@ -671,11 +671,11 @@ One shared recognition request runs per process, with a 60-second timeout. Missi
 
 ## 13.6 Automatic pass versus requestable evidence
 
-Current reports require office-check version 2, identity-check version 1, writing-presence evidence, and an identity result. `clearancePassed` is the stricter helper requiring identity match without warnings. `clearanceCanSubmit` permits identity match or review after all mandatory local checks pass. Save/request uses the latter. `clearanceNeedsIdentityReview` identifies the requestable reports that still need explicit staff confirmation.
+Current reports require office-check version 2 and identity-check version 1. With personal checks enabled they also require writing-presence evidence and a structured identity result; explicitly disabled identity with identityVerificationEnabled=false is the alternative current format. `clearanceCanSubmit` requires local passes plus disabled identity or matched/reviewable identity with both writing checks passed. `clearancePassed` additionally excludes identity review/warnings, while accepting the explicit disabled-policy path; that helper name is not proof identity was checked. Save/request uses requestability. `clearanceNeedsIdentityReview` identifies requestable evidence needing explicit staff confirmation.
 
 Needs review is a report/UI condition, not an added database submission status. Such an upload is still saved as ready, can become requested, and remains blocked from enrollment progression until staff verifies it. Old unverified incomplete reports need reupload; existing verified approvals remain valid.
 
-![Flowchart 18. Matched and reviewable identity branches: review requires explicit staff confirmation; mismatches cannot be saved as ready.](system-guide-assets/33-identity-review.png)
+![Flowchart 18. When personal verification is enabled, review requires explicit staff confirmation and mismatches stay blocked. Disabled personal checks remain an explicit report path.](system-guide-assets/33-identity-review.png)
 
 ## 13.7 Save, request, verification, and rejection
 
@@ -685,26 +685,28 @@ After analysis/object upload, the immediate save transaction rechecks enrollment
 
 Explicit student request requires own eligible current enrollment, ready requestable report, current template revision, no verified flag, and any applicable required-document upload gate. Requested/rejected academic-document copies block that near-final-term request; uploaded/verified copies satisfy it. This does not prevent analyzing/saving the clearance image itself.
 
-The staff Enrollment requests queue still lists requested/verified current submissions. Staff opens the original image and findings. Verification requires exact requested ID, request timestamp, requestable saved report, enrollment revision/current/finalized/lifecycle checks. If identity needs review, `identityConfirmed=true` is mandatory. The UI requires staff to check the original and confirm both name and number against the student record.
+With automation enabled, the staff Enrollment requests queue lists requested/verified current submissions. With automation disabled, this online queue is empty; staff uses the enrollment paper-verification action. Staff opens the original image and findings. Verification requires exact requested ID, request timestamp, requestable saved report, enrollment revision/current/finalized/lifecycle checks. If identity needs review, `identityConfirmed=true` is mandatory. The UI requires staff to check the original and confirm both name and number against the student record.
 
 Successful verification stores verified status, reviewer ID/name/time, retains the original automated report, and updates enrollment clearance/status/revision. The review acknowledgment is enforced in that transaction; there is no separate persisted identity-confirmation column or dedicated identity-audit event. Retained report plus reviewer metadata show that staff accepted reviewable evidence.
 
 Rejection requires the exact current requested file and a 5–1000-character reason. It records reviewer/time/reason, increments revision, and permits a fresh eligible upload/request cycle. Staff should reject rather than confirm evidence they cannot reconcile.
 
-![Flowchart 19. Explicit request and staff decision. Identity-review verification adds a server-enforced confirmation; final enrollment remains a separate staff action.](system-guide-assets/12-clearance-request.png)
+![Flowchart 19. Online request and paper approval converge only after staff review and finalized-current-record checks. Next enrollment is a separate action; no dedicated clearance inbox/email event is generated.](system-guide-assets/12-clearance-request.png)
 
 ## 13.8 Submission state reference
 
 | State               | Meaning                                                                                                                  |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | No saved submission | No current eligible evidence saved; blocked analysis does not create another row.                                        |
-| ready               | Local checks passed and identity matched or needs review; student may explicitly request when other request gates allow. |
+| ready               | Local checks passed; identity matched, needs review or was explicitly disabled; request still needs normal gates. |
 | requested           | Waiting for staff; current complete reports locked against replacement.                                                  |
 | verified            | Staff accepted evidence, including explicit identity confirmation when required.                                         |
 | rejected            | Staff reason recorded; new eligible upload and request needed.                                                           |
 | invalidated         | Dropping or changing the enrollment term invalidated prior evidence; restore eligibility before uploading again.         |
 
-Reopening and same-term corrections preserve the existing clearance file, submission state and verification. Changing the semester or school year clears the enrollment clearance flag and invalidates the saved submission while retaining its file. Dropping also invalidates clearance. Changing the global template blocks requesting old ready evidence; already-requested verification uses saved evidence.
+Paper approval does not manufacture an uploaded submission: it stores manual verifier ID, retained name and timestamp on the enrollment, sets submittedClearance and completed, and increments revision. Current ownership, finalized grades, valid lifecycle and exact revision are still required. A repeated approval is rejected. When automation is enabled, manual confirmation cannot bypass the online request workflow. Both forms of approval leave next-enrollment gates in force and create no dedicated clearance inbox/email event.
+
+Reopening and same-term corrections preserve the existing clearance file, submission state and verification, including recorded paper approval. Changing the semester or school year clears the enrollment clearance flag and invalidates the saved submission while retaining its file. Dropping also invalidates clearance. Changing the global template blocks requesting old ready evidence; already-requested verification uses saved evidence.
 
 ![Flowchart 20. Reopening and same-term corrections retain clearance state/approval. A term correction or drop invalidates evidence while retaining its file; ready can still carry an identity-review warning.](system-guide-assets/26-clearance-states.png)
 
@@ -730,7 +732,7 @@ A subsequent ordinary enrollment requires the prior current record's grades fina
 
 INC-only results retain the acknowledgment warning but do not force completed follow-up before reenrollment. Historical outstanding concerns can still appear in worklists and retake selection; they are not all converted into the current failed-grade gate.
 
-If an uploaded clearance submission exists for the current enrollment, enrollment save additionally requires it to be verified with a request timestamp. This prevents legacy flags or stale state from bypassing the uploaded-document workflow.
+If an uploaded clearance submission exists for the current enrollment, enrollment save normally requires verified status and a request timestamp. Recorded manual paper approval is an explicit exception: it remains valid even when automation is re-enabled and does not require an uploaded/requested submission. Legacy flags or stale unapproved online evidence alone cannot bypass these checks.
 
 | Current situation                                        | Ordinary next enrollment                                                                              |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -748,7 +750,7 @@ If an uploaded clearance submission exists for the current enrollment, enrollmen
 2. If previous semester is below that count, default semester to previous+1 and keep school-year start and year level.
 3. If previous semester reaches/exceeds that count, default semester to 1, school-year start to previous+1, and year level to previous+1.
 4. Carry previous program and section as defaults.
-5. Load the selected program's currently usable published curriculum for an ordinary new enrollment.
+5. When continuing in the same program, retain the current non-voided enrollment's assigned published curriculum. A first enrollment or transfer to another program uses that program's selected active version.
 6. Clamp initial editor year/semester defaults to that selected curriculum's declared bounds.
 7. Staff reviews defaults, retakes, prerequisites, subject selection, units, and section; applicable requested final-term documents must be verified before saving.
 8. The server requires a later school-year/semester tuple for ordinary progression and rechecks all eligibility at save.
@@ -786,7 +788,7 @@ The same program preserves the existing curriculum, including its historical pub
 
 Matching subject IDs retain their enrollment-subject IDs, draft grades, and original staff attribution. Their snapshot/source/units may update. New subjects receive new rows and acting staff attribution. Removed rows disappear from the active subject list, but the before/after audit retains them and their grades. Removing a numeric graded row requires an additional acknowledgment.
 
-Correction also revalidates current global prerequisite rules using the corrected term and excluding this enrollment. Required-document final-term gating is explicitly exempt in the correction editor and server path; it must not be described as enforced for corrections. Saving resets meeting/follow-up timestamps, increments revision, and writes the audit plus notification in the same transaction. Same-term corrections preserve clearance and its approval. Changing school year or semester clears approval and invalidates the submission without deleting its file. Email is attempted afterward.
+Correction also revalidates the resolved curriculum's frozen prerequisite rules using the corrected term and excluding this enrollment. Required-document final-term gating is explicitly exempt in the correction editor and server path; it must not be described as enforced for corrections. Saving resets meeting/follow-up timestamps, increments revision, and writes the audit plus notification in the same transaction. Same-term corrections preserve clearance and its approval. Changing school year or semester clears approval and invalidates the submission without deleting its file. Email is attempted afterward.
 
 ## 15.3 Void an incorrect attempt
 
@@ -831,7 +833,7 @@ Admin/registrar may drop the current enrollment only while status is enrolled. A
 
 After confirmation, the server checks revision and any active meeting-send claim, invalidates clearance, sets status dropped and `droppedAt`, increments revision, and records the notification. It keeps current pointer, subjects, grades, and historical evidence; email follows after commit.
 
-Enroll again restores the same school year, semester, year, program, section, selected subjects, and custom units as defaults. For the same program it may use the original published curriculum even if archived/replaced; the program generally must still be active. This path bypasses the prior completion/meeting gate and permits the same term, but not an earlier term.
+Enroll again restores the same school year, semester, year, program, section, selected subjects, and custom units as defaults. For the same program it uses the original published curriculum even if archived/replaced; the program generally must still be active. This path bypasses the prior completion/meeting gate and permits the same term, but not an earlier term.
 
 Saving creates a new enrollment attempt and changes the current pointer. The dropped attempt remains. Do not use drop to erase an incorrectly entered record; void expresses that different meaning.
 
@@ -867,7 +869,7 @@ Next-action messages distinguish no enrollment, pending grade release, clearance
 
 The dashboard is informational. It does not release grades, send meeting emails, verify a clearance, or create another enrollment merely because a card displays a ready/pending state.
 
-Sources: S17, S18, S24.
+Sources: S17, S18, S24, S38.
 
 # 17. Masterlist and academic reports
 
@@ -927,21 +929,23 @@ Clearance request/review states are displayed by their queue and enrollment work
 
 ## 18.2 Visibility and read controls
 
-| Viewer        | Events visible                                          | Read/unread behavior                                                      |
-| ------------- | ------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Student       | Only records whose recipient is that student's user ID. | Own unread count, unread filter, mark one read, mark all own unread read. |
-| Registrar     | Only records whose actor ID is the current registrar.   | Activity view; no recipient unread count or mark-read controls.           |
-| Administrator | All recorded events.                                    | Activity view; no student inbox read mutation.                            |
+| Viewer | Events visible | Read/unread behavior |
+| --- | --- | --- |
+| Student | Only events addressed to that student user ID. | Own unread count, All/Unread filter, mark one read, mark all own unread read. |
+| Registrar | Only events whose actor ID is the current registrar. | Activity view; unread count is zero and student read state cannot be changed. |
+| Administrator | Events they sent (actor ID), events addressed to them (recipient ID), plus every enrollment_dropped event. | Activity view; unread count is zero and student read state cannot be changed. |
 
-The inbox searches title, message, and recipient name and filters by event type. Student views additionally offer all/unread. Results use 20-record pages ordered newest timestamp then ID. Marking one inaccessible notification returns not found; mark all applies only to the current student's unread addressed events. Existing read timestamps are preserved.
+Administrator is not an unrestricted notification archive. For example, Registrar A's grade-finalization event is visible to its student and Registrar A, but not unrelated Registrar B or Administrator B. If Registrar A drops an enrollment, every administrator can see that dropped event; unrelated registrars still cannot. An administrator's own account notices are visible through recipient matching. Existing role rules do not grant registrars a general recipient-based staff inbox.
 
-Document requests/decisions record in-app notifications atomically; uploads do not generate notifications or email. There is no document email delivery path. A registrar can see an attributed event independently of whether an associated email exists or succeeds, because visibility follows actor attribution. Students see their saved addressed events independently of inbox delivery. Unknown roles are rejected.
+The same server-side visibility predicate controls lists, counts, searches, event-type filters and pagination; changing query parameters cannot expose another scope. Unknown roles receive 403. Search covers title, message and recipient name. Default pages contain 20 rows, newest createdAt then ID. Staff unread-only filters are ignored, returned staff readAt values are null, and mark-read commands are student-only. A student marking another recipient's notification receives 404. Own existing read timestamps are preserved; mark all touches only own unread addressed events.
 
-![Flowchart 26. Persisted events remain visible when mail fails. Visibility depends on recipient/actor/role, not the email provider's delivery result.](system-guide-assets/19-messaging.png)
+Document requests and staff decisions save in-app events atomically; upload produces no event or email. Registrar activity follows actor attribution independently of email success. Saved student inbox events remain visible even when the corresponding email fails. Neither successful delivery nor a role's ability to view an event changes academic state.
+
+![Flowchart 26. Persisted events follow role scope. Administrators see their sent/received events and every dropped-enrollment event; only students change their inbox read state.](system-guide-assets/19-messaging.png)
 
 ## 18.3 Email configuration
 
-Only administrators can open Settings > Email. Settings are stored in singleton row 1. Loaders return the nonsecret settings and booleans indicating whether SMTP password/Resend key exists; they never return saved secret values to the form.
+Only administrators can open Settings > Email. Settings are stored in singleton row 1. SMTP password and Resend API key are encrypted at rest with the deployment encryption key; the email service decrypts them only on the server when needed. Loaders return the nonsecret settings and booleans indicating whether SMTP password/Resend key exists; they never return saved secret values to the form.
 
 Choose SMTP or Resend. Both require a valid sender email and nonempty sender name without newline characters. SMTP additionally needs a host without whitespace/slash/colon, an integer port from 1 through 65535, and a new or already-saved password. Resend needs a new or already-saved API key.
 
@@ -959,7 +963,27 @@ Templates produce HTML and plain text. Lifecycle messages contain relevant stude
 
 Provider request success does not prove the recipient received or read the email. An academic save and an email send are not one distributed transaction. Staff should read the separate success/failure message and resend through the correct account or follow-up path where supported, without recreating academic records.
 
-Sources: S06, S11, S16, S21, S23.
+## 18.5 Dashboard reminders versus saved notifications
+
+The clearance dashboard card is computed from current enrollment, policy, template and saved submission. It is not an inbox event, has no read timestamp, does not send email, and does not itself request or approve clearance. Links open `/user/enrollment#clearance`. There is no card when grades are unfinalized, current status is dropped/voided, clearance is already approved, or the submission is verified. Query errors also suppress the card.
+
+After those suppression rules, the first matching condition below wins. Priority matters: paper instructions precede any old online request, while an eligible requested submission precedes missing-template setup warnings.
+
+| Priority and condition | Card and next step |
+| --- | --- |
+| 1. Automated verification disabled | Submit your paper clearance. Bring the completed form to the Registrar for recorded staff verification. |
+| 2. Submission requested with current check version | Enrollment request sent. Wait for staff review; no replacement upload while the current complete request is pending. |
+| 3. No saved definition, or personal checks enabled with missing identity regions | Clearance upload is not available yet. Contact the Registrar about configuration. |
+| 4. Ready, requestable report requiring identity review | Identity review needed. Send the request for human identity review. |
+| 5. Other ready, requestable report | Your clearance is ready. Explicitly request enrollment review. |
+| 6. Any other existing submission | Upload your clearance again. Open feedback and resolve rejection, invalidation or obsolete evidence. |
+| 7. No submission | Upload your clearance for next enrollment. Save eligible evidence, then explicitly request review. |
+
+The card is guidance, not an authoritative permission check or a guarantee every save gate is satisfied. Request commands still recheck current template, report, policy, revisions and applicable documents. For example, a ready card cannot bypass missing requested documents. Required-document dashboard notices and popup are likewise derived reminders; popup dismissal leaves stored requirements intact. Reading an inbox event cannot dismiss an unresolved clearance requirement.
+
+Reopening hides provisional grades and suppresses the clearance card until refinalization. A retained approved clearance then keeps the card hidden. A term correction invalidates approval and permits the appropriate reminder after grades are finalized again. No separate clearance-approved, clearance-rejected or clearance-requested notification type is added by these reminders.
+
+Sources: S06, S11–S16, S21, S23, S36–S39.
 
 # 19. Certificate of Registration (COR)
 
@@ -1039,7 +1063,7 @@ Sources: S22, S25, S28.
 
 ## 21.1 Application layers
 
-The application uses Svelte/SvelteKit pages and components, TypeScript, server loaders/endpoints, validated remote commands, SQLite through Drizzle/better-sqlite3, Better Auth, Garage S3-compatible storage, SMTP/Resend delivery, local Tesseract/Sharp image analysis, Gemini handwriting transcription, and PDFKit certificate generation. Package versions/ranges belong to `package.json` and the lockfile; this guide documents repository behavior rather than promising compatibility with another version.
+The application uses Svelte/SvelteKit pages and components, TypeScript, server loaders/endpoints, validated remote commands, SQLite through Drizzle/better-sqlite3, Better Auth, Garage S3-compatible storage, SMTP/Resend delivery, local Tesseract/Sharp image analysis, selected-provider handwriting transcription, and PDFKit certificate generation. Package versions/ranges belong to `package.json` and the lockfile; this guide documents repository behavior rather than promising compatibility with another version.
 
 Browser components own local drafts, confirmation dialogs, display filters, border adjustment, diagnostic image work, and navigation. The server owns authorization, student identity lookup, authoritative validation, transactions, state transitions, production OCR, storage credentials, and email delivery. Browser-supplied role, report, or grade visibility is never the source of authority.
 
@@ -1056,8 +1080,8 @@ The request hook resolves authentication and fills server locals. Protected rout
 | Enrollment references one student and curriculum  | Term registration owns its own academic assignment.                                      |
 | Enrollment has many unique subject attempts       | One subject ID per enrollment; names/units saved historically.                           |
 | Partial unique student/year/semester index        | At most one valid enrolled/completed attempt for a term; dropped/voided attempts exempt. |
-| Program selects optional curriculum               | New ordinary enrollment needs a usable selected plan.                                    |
-| Published curriculum subject snapshots            | Later catalog edits do not rewrite plan history.                                         |
+| Program selects optional curriculum | New students/program transfers need a usable selected plan; same-program continuation retains the assigned version. |
+| Published curriculum snapshots and prerequisite rules | Later catalog edits/new versions do not rewrite the assigned plan or its rules. |
 | One saved clearance submission per enrollment     | Replacement updates evidence rather than retaining a full upload-attempt history.        |
 | Revision field and original-value comparisons     | Stale forms cannot silently overwrite newer grades or lifecycle changes.                 |
 | Restrictive academic foreign keys                 | Student/curriculum/subject deletion cannot discard referenced academic history.          |
@@ -1081,6 +1105,7 @@ Claims/leases coordinate specific shared operations. They do not create a genera
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `DATABASE_URL`                                  | SQLite database path; required by DB initialization/migration.                                                           |
 | `ORIGIN`                                        | Public application origin used by authentication and deployment.                                                         |
+| `DATA_ENCRYPTION_KEY` | Required deployment key: 32–64 random bytes encoded as hexadecimal; derives the key for encrypted settings secrets. |
 | `BETTER_AUTH_SECRET`                            | Authentication signing/security secret.                                                                                  |
 | `GARAGE_ADMIN_ENDPOINT`, `GARAGE_ADMIN_TOKEN`   | Private Garage Admin API configuration.                                                                                  |
 | `GARAGE_API_ENDPOINT`, `GARAGE_REGION`          | S3-compatible endpoint and matching region. Region fallback is `garage`.                                                 |
@@ -1089,7 +1114,7 @@ Claims/leases coordinate specific shared operations. They do not create a genera
 | `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Seed-process inputs for initial administrator creation when running that seed process.                                   |
 | Saved email settings                            | SMTP/Resend sender/provider/secret values are stored privately in system settings, not in page data.                     |
 
-Actual `.env` values, database credentials, generated account secrets, and object-store tokens were not copied into this guide. Compose currently forwards the declared core/Garage settings and body limit, but does not forward GEMINI_API_KEY. Save the key through Settings > Clearance, or explicitly supply it to the running container for one-time import; a host .env entry alone does not populate an undeclared container environment variable. Other seed inputs likewise need deployment wiring where absent.
+Actual environment values, account secrets and object-store tokens are excluded from this guide. Compose explicitly forwards the required DATA_ENCRYPTION_KEY alongside declared core/Garage settings and the body limit. A missing, malformed or incompatible encryption key blocks application initialization. Cloud AI keys can be saved privately through Settings > Clearance; an optional legacy GEMINI_API_KEY imports only while the saved field is null, and explicit removal prevents re-import. A host environment entry alone does not supply a variable absent from the container environment declaration.
 
 ## 21.5 Build and container startup
 
@@ -1097,7 +1122,7 @@ The project scripts expose development, production build, preview, type checking
 
 The Docker build uses Node 22 Alpine, installs the pinned package-manager version and dependencies, then builds the Node adapter output. The runtime image carries build output, dependencies, migrations, required seed/schema files, and the entrypoint. Production defaults listen on port 3000 and use `/app/data/local.db`.
 
-Startup prepares the persistent data directory, gives the runtime node user access, applies pending SQL migrations, attempts seeding, and starts the Node application. Migration failure stops startup. Seed failure logs a warning and permits startup, with retry next time. Application initialization then performs configured Garage setup; a required Garage initialization failure can prevent serving requests.
+Startup prepares the persistent data directory, gives the runtime node user access, applies pending SQL migrations, attempts seeding, and starts the Node application. Migration failure stops startup. Seed failure logs a warning and permits startup, with retry next time. Application initialization first validates DATA_ENCRYPTION_KEY and transactionally migrates/validates encrypted settings secrets, then performs configured Garage setup; a required Garage initialization failure can prevent serving requests.
 
 Docker Compose mounts `./data` into `/app/data` and declares restart behavior. The checked workflow builds on pull requests to `main` and publishes `aetherknowledge/enrollment-system` latest/commit tags on `main` pushes or manual execution. Older README wording about another branch/image is not the authoritative workflow.
 
@@ -1105,23 +1130,37 @@ Docker Compose mounts `./data` into `/app/data` and declares restart behavior. T
 
 ## 21.6 Seed behavior and sample data
 
-The seed process checks singleton `seeded` and skips when already true. It creates/reuses sample programs BSIS, ACT, and DHRMT, 49 sample subjects, and three sample published curricula named 2026 Sample Curriculum. BSIS has 32 subject placements, ACT 23, and DHRMT 22, with 40 prerequisite links across the catalog. Every required subject is scheduled in an earlier term. These are demonstration curricula, not official academic requirements. It does not currently create sample student accounts or enrollments. Existing program selections, curriculum rows, and edited prerequisite rules are not overwritten on rerun. Prerequisite insertion occurs only inside newly created sample-curriculum branches; existing sample curricula are skipped, so rerun does not backfill the new rules. Migration 0038 adds an initially empty relation without inferring academic rules from codes or altering saved enrollments.
+The seed process checks singleton `seeded` and skips when already true. It creates/reuses sample programs BSIS, ACT, and DHRMT, 49 sample subjects, and three sample published curricula named 2026 Sample Curriculum. BSIS has 32 subject placements, ACT 23, and DHRMT 22. Demonstration prerequisite links are stored separately for each newly created curriculum; shared catalog subjects do not imply shared mutable rules. Every sample prerequisite is placed in an earlier term. Samples are not official institutional requirements. The seed does not currently create sample student accounts or enrollments, and reruns do not overwrite existing curriculum rules or selections.
+
+Migration 0039 replaces the former global `subject_prerequisite` relation with `curriculum_prerequisite`, keyed by curriculum, dependent subject, and prerequisite subject. It copies applicable legacy links into every existing curriculum containing the dependent subject, then drops the global table. It preserves placements, enrollments, grades, and current pointers; unused global rules are no longer catalog policy. It does not infer or repair missing/late prerequisite placements. Review carried legacy rules; activation rejects invalid membership or ordering, and published changes require a revision. Fresh databases apply the migration chain before scoped sample seeding. A configured database was not reset or migrated during this documentation update.
+
+The guarded 0039 rollback refuses while curriculum-specific rules or later migrations exist, because different version-specific rules cannot safely collapse into a global set. Reconcile/export rules before a deliberate rollback; do not describe it as automatic policy conversion.
 
 The initial admin uses seed environment inputs when present; the code contains development fallback credentials. Operational deployment should supply controlled values and secure/change the account rather than treat development defaults as institutional policy. The seed marks the selected initial admin as admin/setup complete and then sets seeded true.
 
 ## 21.7 Backup and operational preservation
 
-A recoverable operational snapshot needs both SQLite data and Garage objects, plus separately managed configuration/secrets. The portal does not expose a built-in backup/restore screen. This guide does not claim a tested restore for the user's live deployment.
+A recoverable operational snapshot needs both SQLite data and Garage objects, plus separately managed configuration/secrets including the original DATA_ENCRYPTION_KEY. Restoring the database without its matching key can make saved email/AI credentials unreadable; a new arbitrary key does not decrypt them. The portal does not expose a built-in backup/restore screen. This guide does not claim a tested restore for the user's live deployment.
 
 Use a consistent SQLite backup process or stop writes when copying its files; preserve whatever SQLite companion files are required by the chosen mode/process. Preserve Garage data and database-referenced keys together. Schema rollback is not equivalent to restoring deleted file objects or reversing a human-approved academic change.
 
-Sources: S01, S03, S05, S22–S25, S28, S29.
+## 21.8 Encrypted settings credentials
+
+Four saved settings fields are encrypted: senderPassword, resendApiKey, geminiApiKey and openaiApiKey. AES-256-GCM uses a fresh 12-byte IV, authentication tag, versioned enc:v1: representation and field-specific associated data. SHA-256 derives the cipher key from the configured 32–64 random bytes represented as hexadecimal. Runtime getters decrypt only server-side; browser forms receive configured/not-configured flags rather than secrets.
+
+At non-build application initialization, an immediate transaction validates the deployment key, decrypts/validates existing encrypted values and encrypts legacy plaintext settings. Repeated startup is idempotent. A wrong key, damaged ciphertext or invalid key stops initialization and rolls back that migration; it does not silently replace stored credentials. Key validation also applies when the settings table contains no saved secret.
+
+This protection covers those four settings values, not the entire database, student documents, backups, or data sent to a chosen AI provider. Preserve the matching encryption key separately with controlled access. No automatic key-rotation or credential-recovery workflow is described by the current app.
+
+Sources: S01, S03, S05, S22–S25, S28, S29, S40.
 
 # 22. Diagnostic tools and prototype boundaries
 
 ## 22.1 Standalone scan laboratory
 
-`/test` labels itself a standalone prototype with no records changed. Visitors can inspect local/demo/example images, adjust borders, preview aligned form crops, review OCR evidence, and examine mark measurements. Browser OCR may download its language resources on first use. Signed-in visitors additionally receive current saved-template metadata and an identity test target when available.
+`/test` is development-only. Both its server page loader and the `/test/identity` POST endpoint return 404 in production before loading diagnostic identity data, reading image crops, or calling an AI provider. This closes the production diagnostic paid-call and shared-slot abuse path. `/test/files` is a separate authenticated storage test and is not disabled by this change.
+
+In development, `/test` labels itself a standalone prototype with no records changed. Visitors can inspect local/demo/example images, adjust borders, preview aligned form crops, review OCR evidence, and examine mark measurements. Browser OCR may download its language resources on first use. Signed-in visitors additionally receive current saved-template metadata and an identity test target when available.
 
 The prototype has fixed geometry and fixed departments such as SG Adviser, PTCA, Adviser, Research, and Program Head. It can inspect expected personal details and both Cleared and Not Cleared regions. These fixed rules are not the configurable production office rules documented in Chapter 13.
 
@@ -1129,21 +1168,21 @@ Prototype Not Cleared ink at least 4% fails; contradictory both-checkbox evidenc
 
 ## 22.2 Handwriting identity experiment
 
-The identity UI requires prior template pass and sign-in, crops fixed diagnostic name/student-number regions, and submits PNG crops to a same-origin server endpoint. Production instead uses its configured personal boxes and mandatory blank-reference writing-presence check. Changing image/corners invalidates earlier evidence. Cancellation is supported.
+In development, the identity UI requires prior template pass and sign-in, crops fixed diagnostic name/student-number regions, and submits PNG crops to a same-origin server endpoint. Production instead uses its configured personal boxes and mandatory blank-reference writing-presence check. Changing image/corners invalidates earlier evidence. Cancellation is supported.
 
 The server obtains expected identity from the session/database. Student accounts compare their own identity. Staff diagnostic accounts target the fixed test student number `MA-23016578`; if that record does not exist, the endpoint returns no target rather than searching an arbitrary real person.
 
 The JSON body is bounded to 2 MiB and must contain exactly two base64 PNG crops. Each encoded field has a length bound; actual PNG headers and dimensions are checked, with each crop limited to 2400×1000 and two million pixels.
 
-One handwriting request runs per server process. The shared service calls the saved provider (Gemini `generateContent`, OpenAI Responses API, or Ollama `/api/chat`), sends both field crops in one request, and requests structured JSON. Calls have a 60-second timeout. Reasoning text is ignored. Incomplete or unusable output produces warnings rather than inferred identity. Authentication keys and provider error details remain server-side.
+One handwriting request runs per server process. Development diagnostics and administrator tests share that slot with production recognition; there is no independent diagnostic queue. The administrator-only Settings handwriting test remains available in production, unlike the standalone development routes. The shared service calls the saved provider (Gemini `generateContent`, OpenAI Responses API, or Ollama `/api/chat`), sends both field crops in one request, and requests structured JSON. Calls have a 60-second timeout. Reasoning text is ignored. Incomplete or unusable output produces warnings rather than inferred identity. Authentication keys and provider error details remain server-side.
 
-Normalized comparison handles case, accents, punctuation, and spacing. Exact student-number evidence can pass if the name is not different. Gemini reads the numeric student-number suffix; comparison ignores an optional printed or handwritten `MA-` prefix, including a repeated prefix, while preserving leading zeros and rejecting other letter prefixes. A one-digit-close number or a sufficiently similar name supports review rather than full match. Model warnings force review. Request cancellation/outer 120-second timeout returns 408; the inner Gemini 60-second timeout and provider/network failures return an app-authored 503 while the outer signal is still live. Admin diagnostics return safe explanations explicitly so generic server-error masking does not hide them.
+Normalized comparison handles case, accents, punctuation, and spacing. Exact student-number evidence can pass if the name is not different. The selected model reads the numeric student-number suffix; comparison ignores an optional printed or handwritten `MA-` prefix, including a repeated prefix, while preserving leading zeros and rejecting other letter prefixes. A one-digit-close number or a sufficiently similar name supports review rather than full match. Model warnings force review. Request cancellation/outer 120-second timeout returns 408; the inner provider 60-second timeout and provider/network failures return an app-authored 503 while the outer signal is still live. Admin diagnostics return safe explanations explicitly so generic server-error masking does not hide them.
 
-![Flowchart 33. Diagnostic browser inspection and optional handwriting recognition. These results do not approve a production clearance or modify enrollment records.](system-guide-assets/24-diagnostics.png)
+![Flowchart 33. Production diagnostic requests stop at 404. Development browser/identity experiments remain separate from saved clearance and enrollment approval.](system-guide-assets/24-diagnostics.png)
 
 ## 22.3 How to interpret diagnostic results
 
-A prototype match means that experiment's expected image/text comparison succeeded. It does not set enrollment clearance true, create a requested submission, verify a signature, or authorize next enrollment. Production uses the same recognition/comparison logic only after its own authentication, template, office, and both-field writing-presence checks. A diagnostic result cannot bypass that pipeline or substitute fixed diagnostic crops for configured production regions.
+A prototype match means that experiment's expected image/text comparison succeeded. It does not set enrollment clearance true, create a requested submission, verify a signature, or authorize next enrollment. Production uses the shared recognition/comparison logic only when personal verification is enabled, after authentication, template, office and both-field writing-presence checks. Disabled personal checks and paper approval follow their explicit policy paths. A diagnostic result cannot bypass that pipeline or substitute fixed diagnostic crops for configured production regions.
 
 `/test/files` similarly exercises authenticated personal file storage, not clearance upload. A successful file upload there does not appear in Enrollment requests.
 
@@ -1201,9 +1240,9 @@ If grades are already finalized, an administrator must reopen before academic co
 
 The current routes do not provide a separate applicant review pipeline, student self-registration, instructor grade-entry role, cashier/payment/tuition ledger, timetable/room allocation, class seat capacity, automatic retake insertion, graduation processing, or automatic next-term enrollment. Staff remains responsible for those institutional decisions or external processes.
 
-Clearance does not authenticate signatures. Production uses Gemini transcription to compare handwritten name/number with the student record; this supports staff review and does not prove document authenticity. The system stores one current submission per enrollment, not an append-only archive of every failed scan or upload replacement.
+Clearance does not authenticate signatures. When personal verification is enabled, production uses the selected AI provider to compare handwritten name/number with the student record; this supports staff review and does not prove document authenticity. The system stores one current submission per enrollment, not an append-only archive of every failed scan or upload replacement.
 
-Required-document creation is staff-selected rather than automatic; no request waiver/cancel or verified-document reopening is implemented. Document requirements persist per student/kind across program changes, and final-term corrections are exempt from the new-enrollment document gate. Prerequisite rules are global mutable catalog rules rather than frozen curriculum snapshots. Native student history browsing and curriculum pages are no longer exposed; underlying staff history remains.
+Required-document creation is staff-selected rather than automatic; no request waiver/cancel or verified-document reopening is implemented. Document requirements persist per student/kind across program changes, and final-term corrections are exempt from the new-enrollment document gate. Prerequisite rules belong to published curriculum versions and remain frozen; extra subjects outside the resolved curriculum inherit no global fallback. Native student history browsing and curriculum pages are no longer exposed; underlying staff history remains.
 
 Profile is read-only, while guarded staff account editors are implemented. Two-factor setup/login is implemented. Administrator management is implemented. Do not rely on older notes that describe those latter features as unfinished.
 
@@ -1323,7 +1362,7 @@ Profile is read-only. Authorized staff edits personal records using original-val
 
 ### Q08. Can you explain the entire lifecycle briefly?
 
-Staff creates account/student record, requests setup email, and saves first enrollment. After account setup, staff saves/finalizes grades. Student submits eligible clearance and explicitly requests review; staff verifies it and completes any mandatory failed-grade follow-up. Applicable documents and prerequisites are checked before staff saves the next enrollment as a new historical attempt/current record.
+Staff creates the account/student and first enrollment; student completes setup. Staff saves and finalizes grades. In online mode, the student uploads eligible clearance, explicitly requests review and staff verifies the original; in paper mode, staff confirms receipt/review and records manual approval. Failed-grade follow-up, applicable documents and curriculum prerequisites remain separate gates before staff saves a new next-term enrollment. Saved inbox events and dashboard reminders explain progress but never perform those transitions themselves.
 
 ### Q09. Why use an explicit current-enrollment pointer?
 
@@ -1347,7 +1386,7 @@ No. Status/finalization/clearance are only part of readiness. Current failures m
 
 ### Q14. How is the next term calculated?
 
-The previous curriculum's semester count determines rollover. Before its last semester, increment semester and keep school year/year level. At its end, default semester 1 and increment school-year start and year level. Carry program/section, load the selected usable curriculum, and clamp initial editor limits. Defaults remain reviewable and do not implement graduation.
+The previous curriculum's semester count determines rollover. Before its last semester, increment semester and keep school year/year level. At its end, default semester 1 and increment school-year start and year level. Carry program/section, retain the assigned version for same-program continuation or load the active version for a new program, and clamp initial editor limits. Defaults remain reviewable and do not implement graduation.
 
 ### Q15. Why have correct, void, reopen, and drop as different actions?
 
@@ -1355,9 +1394,9 @@ Correct fixes allowed draft enrollment details; void preserves an incorrect atte
 
 ## 25.3 Subject prerequisites
 
-### Q16. Why are prerequisites stored on subjects?
+### Q16. Why do prerequisites belong to curriculum versions?
 
-One global catalog rule governs every use of the subject across curricula/programs. Placement snapshots and subject eligibility are separate concerns. This avoids duplicating one requirement per plan, but means rule edits affect later enrollment/correction checks even for an old published curriculum; the current system does not version prerequisites with curricula.
+Programs and revisions can impose different requirements for the same catalog subject. Each curriculum owns its own links; publication freezes them, while later catalog edits cannot change enrolled students' rules. New students/program transfers use the active version and same-program continuing students retain their assigned version. For example, a new revision can add Logic before Programming 2 without imposing it on students continuing under the older plan.
 
 ### Q17. What evidence satisfies a prerequisite?
 
@@ -1371,9 +1410,9 @@ No. A newer earlier-term attempt can supersede an older pass even when the newer
 
 Same-term enrollment alone cannot satisfy a prerequisite. Both subjects may be selected when qualifying earlier evidence already exists. Adding the prerequisite as an extra or retake does not itself establish that earlier pass. No co-requisite or administrator override field is implemented.
 
-### Q20. How are circular dependencies prevented?
+### Q20. How are invalid or circular curriculum prerequisites prevented?
 
-The guarded subject save rejects self, duplicate, and nonexistent references and traverses the proposed graph for paths back to the edited subject. Rule/details changes are transactional. Database constraints independently prevent duplicate/self/missing links but do not implement recursive cycle checking for arbitrary direct SQL edits.
+Draft save and activation require every linked subject to be included in the same curriculum and every prerequisite to be placed strictly earlier by year/semester. They also reject duplicates and self-reference. A cycle cannot satisfy strict earlier ordering around every edge, so this validation rejects indirect cycles without a separate global graph. Placements and rules save transactionally. Database keys/checks protect duplicate/self/catalog references; membership, ordering, and publication immutability remain application-enforced invariants rather than arbitrary-SQL protections.
 
 ### Q21. Why can Use term subjects or Add all retakes leave blocked rows?
 
@@ -1383,9 +1422,9 @@ Those controls preserve the intended selection rather than silently drop subject
 
 No. Correction validation excludes the entire corrected enrollment and uses the corrected target term. It requires valid earlier evidence outside that record. It also retains duplicate-term and chronological protections. A previously saved row/grade is not a self-issued exemption.
 
-### Q23. Will existing installations automatically receive sample prerequisite rules?
+### Q23. What happens to prerequisites during migration and new curriculum creation?
 
-Migration 0038 creates an empty relation rather than infer academic policy. Fresh sample seeding supplies demonstration links when creating sample curricula. Existing sample plans are skipped, preserving edits and preventing automatic backfill. Operators must configure approved rules for existing catalogs deliberately.
+Migration 0039 copies legacy global links into each curriculum containing their dependent subject, then removes global ownership. It does not invent requirements for new drafts or repair invalid legacy placement. Fresh sample seeding creates demonstration rules for each new sample curriculum; existing plans are skipped. New manually created curricula start with no rules unless the administrator selects them. Published versions cannot be edited; create a revision for approved changes. There is no global fallback for an extra subject outside the resolved curriculum, and no automatic transfer of an enrolled student to a newly selected program default.
 
 ## 25.4 Required documents
 
@@ -1421,31 +1460,31 @@ Current correction UI and server path explicitly exempt it. Ordinary final-term 
 
 No. Popup dismissal is local reminder behavior. Stored requests/revisions remain, and dashboard notices continue until verification. Requests and staff decisions create in-app notifications only; upload itself creates no notification/email. The popup refresh uses focus and a visible-page interval, not guaranteed instant push.
 
-## 25.5 Clearance, Gemini, and human review
+## 25.5 Clearance policies, AI, and human review
 
 ### Q32. Does AI approve enrollment automatically?
 
-No. Local image analysis and Gemini produce evidence. The student explicitly requests, authorized staff verifies the original clearance, and staff separately saves the next enrollment under academic/document/prerequisite checks. No model call can grant a role, create a grade, or independently register the student.
+No. When enabled, local checks and the selected AI provider produce evidence. The student explicitly requests online review, authorized staff verifies it, and staff separately saves the next enrollment under academic/document/prerequisite checks. In paper mode staff records a manual approval instead. Neither a model result nor a dashboard reminder can create grades, grant roles or register a student.
 
-### Q33. Why combine local image checks with Gemini?
+### Q33. Why combine local checks with optional AI transcription?
 
-Local code checks form/term alignment, printed evidence, office ink, and actual added writing. Gemini transcribes configured handwriting crops, then deterministic server code compares values against the student record. Each mechanism addresses a different problem; combining them does not establish a measured accuracy or replace staff approval.
+Online template/office checks validate alignment, term and added marks. With personal checks enabled, writing-presence checks establish added strokes, the selected provider transcribes field crops, and server code compares readings with the student record. Disabling personal checks skips both writing-presence and AI identity work while retaining template/office checks. None of these checks authenticates an office signature or replaces staff review.
 
 ### Q34. What happens to a blank name or number field?
 
-The blank-reference writing-presence check removes printed glyphs/prefixes, underlines, and specks and requires retained added strokes in both fields. Failure blocks the Gemini call and new submission. Presence proves writing-like strokes, not that the text is correct, readable, or authentic.
+With personal checks enabled, both fields must contain sufficient added writing after blank-reference masking removes printed text, prefixes, rules and specks. Failure prevents the AI call and a new saved submission. With personal checks disabled, this identity check is explicitly skipped and reported disabled; template/office checks still apply. Presence alone does not prove correctness or authenticity.
 
-### Q35. What information reaches Google?
+### Q35. What information reaches the selected AI provider?
 
-Two configured grayscale PNG name/number crops and transcription instructions. Expected database identity and the whole original clearance are excluded from that request. The crops contain personal information, so the accurate answer is limited data transfer, not that no personal data leaves the server. Provider retention/legal review needs separate evidence.
+Two configured PNG name/number crops and transcription instructions. Expected database identity and the original whole clearance are excluded. Gemini sends crops to Google; OpenAI sends them to its API with store:false; Ollama sends them to the configured server, which may be local or remote. Crops contain personal information. Endpoint location and request flags do not by themselves establish a provider retention policy or legal compliance.
 
 ### Q36. Why is the expected name/number excluded from the prompt?
 
 The model is asked to transcribe visible evidence rather than reproduce a supplied answer. The server independently obtains the expected identity from authenticated records and compares afterward. This reduces one source of confirmation bias, but it does not guarantee the model never misreads or invents text.
 
-### Q37. What is the difference between automatic pass and Needs review?
+### Q37. How do automatic pass, Needs review and disabled checks differ?
 
-Automatic pass needs the strict matched-identity result without warnings. Requestable evidence can instead have identity review after all mandatory local checks pass. It remains ready/requested in the same state model and requires explicit staff identity confirmation to verify. Template/office review is not covered by this exception.
+With personal checks enabled, automatic identity pass requires the strict matched result without warnings. Requestable evidence may instead require human identity review after local checks pass; staff must explicitly confirm both fields before verification. When personal checks are disabled, reports state that identity was not verified and eligible local passes can still be requested. Template/office review or failure is never converted into an identity-review exception. All paths still require staff approval.
 
 ### Q38. Can a wrong number still reach human review?
 
@@ -1453,19 +1492,19 @@ Yes. For example, an exact name with a different number can yield review. Staff 
 
 ### Q39. Why does a number without MA- sometimes match exactly?
 
-MA- is a fixed prefix, so comparison strips supported optional/repeated leading prefixes and compares numeric digits, preserving leading zeros. Exact digits are exact, not merely close. Arbitrary letter prefixes are not discarded. One-edit-close digits support review under the implemented length rules.
+MA- is a fixed prefix. Comparison normalizes supported optional/repeated leading prefixes and allowed formatting while retaining digit order and leading zeros. The model is instructed to treat the reading as a literal identifier, including group separators, rather than a number. Exact supported normalized digits can match; arbitrary letter prefixes are not discarded. One-edit-close evidence supports review only under the implemented comparison rules.
 
-### Q40. What if Gemini times out or its key is missing?
+### Q40. What if the AI times out, is busy or lacks required credentials?
 
-The new analysis fails with a safe error rather than creating ready evidence. Missing key gives 503; a busy shared call gives 429; provider/network failures remain private. There is no automatic retry/provider fallback or outage-to-review bypass. Users retry; already-saved eligible reports remain usable without retranscription just to request/review them.
+A new analysis fails safely rather than manufacturing ready evidence. Missing required cloud key returns a service error; an occupied shared recognition slot returns 429. Provider calls have a 60-second deadline, the full production pipeline 180 seconds and the browser wait 210 seconds. Cancellation/timeouts prevent late persistence and clean unreferenced staging objects. Refresh saved clearance status before retrying after an uncertain result. Safe errors identify the failing stage/action; raw provider bodies and keys stay private. No automatic retry/provider fallback or outage approval exists.
 
 ### Q41. Can a signature mark prove an office approved?
 
 No. Added-ink detection measures marks beyond the blank reference; it does not authenticate a signature, stamp, or office authorization. Production also lacks a separate Not Cleared region. Staff must inspect the original for contradictory marks and legitimacy before accepting it.
 
-### Q42. What evidence records a manual identity approval?
+### Q42. How are human identity review and paper approval recorded?
 
-Verification requires `identityConfirmed=true` for a reviewable report and records verified state, reviewer ID/name/time, and the original automated report. There is no separate identity-confirmation column or dedicated identity audit event. Those existing fields show who accepted the reviewable evidence without rewriting the model findings to pretend automatic success.
+For an online Needs review report, verification requires identityConfirmed=true and stores verified status, reviewer ID/name/time and the original automated report. There is no separate identity-confirmation column or dedicated identity-audit event. In paper mode, manualClearanceConfirmed is required and enrollment stores manual verifier ID, retained name and timestamp. Both update enrollment clearance/status/revision transactionally, require finalized current grades, and create no dedicated clearance inbox/email event.
 
 ### Q43. How do enhanced alignment and confidence thresholds help?
 
@@ -1497,9 +1536,9 @@ Account edits compare original values; academic and document transitions compare
 
 The server rechecks ownership/state after external work and cleans an unreferenced staging object when safe. It avoids deleting a file if the committed record may reference it. Previous-object deletion is best effort after replacement. This is coordinated recovery, not a distributed atomic transaction or complete file-version archive.
 
-### Q50. What happens when confirmation email fails?
+### Q50. What happens when a confirmation email fails?
 
-Saved accounts, enrollments, and grade changes normally remain. The system reports email outcome separately, and saved notifications can still be visible. Meeting sends use a specific claim/sent-state process. Provider acceptance is not proof of inbox delivery, and there is no persistent automatic email retry worker in current code.
+Most academic actions commit state and their saved event before attempting email, so email failure leaves both saved. Meeting requests differ: sent timestamp/event are recorded only after successful provider send. Visibility still follows each role scope; unrelated administrators cannot inspect every event. Provider acceptance proves neither inbox delivery nor reading. No persistent automatic mail retry worker exists. Resend setup through the existing account action rather than recreating accounts or enrollments.
 
 ### Q51. Why do reports sometimes count records differently from students?
 
@@ -1517,7 +1556,7 @@ Repository changes were traced by subsystem against current source and cross-che
 
 ### Q54. Which tests should support a technical demonstration?
 
-Relevant existing files include subject-prerequisites and enrollment-correction tests, required-document tests, clearance-checker/identity/presence/flow tests, and their selected browser scenarios. Show actual command results from the environment used for the defense. Listing tests or reading their assertions is not the same as claiming all currently pass.
+Use focused curriculum/prerequisite, setup recovery, enrollment correction, required-document, notification visibility/read-state, clearance policy/provider/deadline, settings-secret, student CSV and GWA tests, plus relevant browser scenarios. Record actual commands and results for the defended revision. Earlier implementation runs are not proof that later commits pass. This documentation task checks the generated guide and diagrams; it does not rerun the application suite or contact providers.
 
 ### Q55. What proves the OCR or AI accuracy rate?
 
@@ -1525,25 +1564,107 @@ Source thresholds and example passes do not establish an accuracy rate. A defens
 
 ### Q56. Is the system fully offline?
 
-No. Database and local image processing can run locally, but production handwriting transcription calls Google Gemini and email calls its provider. Garage availability is required for evidence files. Some browser diagnostics may fetch OCR resources. Documented failure behavior is not an offline replacement for these dependencies.
+Deployment dependencies depend on policy. Personal checks can use a reachable local Ollama model or be disabled, and paper mode avoids online scanning entirely. Email still depends on its configured provider, stored evidence needs Garage and cloud AI requires its selected service. Local configuration does not prove all resources/models are already available offline. Demonstrate the chosen deployment rather than claiming universal offline operation.
 
-### Q57. What deployment detail could make a working local Gemini feature fail in Docker?
+### Q57. What can break a working local deployment in Docker?
 
-The source reads a server-side Gemini key, but the current Compose environment list does not forward it. Deployment must provide it to the running container rather than assume the host's .env is automatically the container environment. Keep the key private; do not show live values in the defense.
+The running app needs a valid DATA_ENCRYPTION_KEY matching saved encrypted settings; Compose forwards this required value. Missing, malformed or wrong keys stop initialization. Saved cloud credentials, model access, Garage and provider connectivity must also work from the container. Ollama localhost means the application container, not the host machine. Saving an unsaved test selection or supplying a host-only variable is not implicit. Preserve the original encryption key with recovery material and never display its value.
 
 ### Q58. What limitations should be stated clearly?
 
-No automatic graduation, tuition/payment ledger, timetable/seat allocation, instructor-role grade entry, automatic retake insertion, signature authentication, or universal document waiver/reopen/version-history flow is implemented. Document gates exempt corrections, and global prerequisites are mutable across curriculum versions. These boundaries should be explained rather than presented as completed features.
+No automatic graduation, tuition/payment ledger, timetable/seat allocation, instructor-role grade entry, automatic retake insertion, signature authentication, or universal document waiver/reopen/version-history flow is implemented. Document gates exempt corrections. Prerequisites are frozen by published curriculum version, but subjects outside the resolved curriculum inherit no global rule; automatic waivers, rule exceptions, and cohort migration are not implemented. These boundaries should be explained rather than presented as completed features.
 
 ### Q59. What improvements would be reasonable next steps?
 
-Possible evaluated extensions include institution-approved prerequisite versioning/exceptions, document correction/waiver/history policy, readiness indicators reflecting all gates, provider resilience, backup/restore exercises, and measured recognition/scaling studies. These are proposals, not existing functionality. Prioritize confirmed institutional needs and preservation of authorization/history over speculative expansion.
+Possible evaluated extensions include institution-approved prerequisite exceptions and explicit cohort-transfer policy, document correction/waiver/history policy, readiness indicators reflecting all gates, provider resilience, backup/restore exercises, and measured recognition/scaling studies. These are proposals, not existing functionality. Prioritize confirmed institutional needs and preservation of authorization/history over speculative expansion.
 
 ### Q60. What would you demonstrate to prove the complete workflow?
 
-Use a prepared student and curriculum: show account setup, first enrollment, draft-hidden versus finalized grades, failed/INC behavior, blocked/satisfied prerequisite, document upload versus verification, matched/reviewable clearance, required staff identity acknowledgment, and final next-term save. Show a stale or forbidden action rejected and confirm old records remain. Use staged data when real academic progression would take too long for a live demonstration.
+Use prepared test accounts: onboarding, first enrollment, hidden draft versus released grades, failed/INC handling, assigned-curriculum prerequisite gates, requested-document upload versus verification, online matched/reviewable clearance, and separately paper approval. Save the next term and show retained history. Compare student/registrar/admin notifications, the all-admin dropped exception and derived dashboard reminders. Demonstrate stale/forbidden actions rejecting safely. Use nonprivate staged data; no secret or live academic manipulation is needed.
 
-## 25.8 Evidence preparation checklist
+## 25.8 Questions about the latest updates
+
+### Q61. Can every administrator see every notification?
+
+No. The server returns events where that administrator is actor or recipient, plus all enrollment_dropped events. Registrar-generated grade, document, correction, void or reopen events are not automatically visible to unrelated administrators. The dropped-event exception is explicit, not general cross-staff access. Demonstrate two administrators and a registrar rather than relying on a single account.
+
+### Q62. Why do all administrators see dropped-enrollment events?
+
+The implemented visibility policy explicitly includes enrollment_dropped regardless of actor so administrators can see those withdrawal events across staff activity. It does not broaden registrar access or grant other event types the same exception. This is application policy, not evidence of an institution-approved legal reporting requirement.
+
+### Q63. Can search, type filters or page counts reveal events outside a role scope?
+
+The same role/actor/recipient predicate applies before listing, search, type filtering, counts and pagination. Filtering cannot expand the scope. Verify this using a registrar-generated ordinary event hidden from an unrelated administrator, then compare list rows, result totals and searched/type-filtered views. Unknown roles are rejected.
+
+### Q64. Does a staff member reading a notification mark it read for the student?
+
+No. Staff receive an activity view with unread count zero and readAt null; they have no student read controls. Only the recipient student can mark one own event or all own unread events read. Existing read timestamps are preserved and a foreign student event ID returns not found. Staff review of clearance is an independent state transition.
+
+### Q65. Why can the dashboard show a clearance reminder with no unread notification?
+
+The card is derived from current academic state, policy, template and submission, whereas unread counts refer to saved addressed events. Clearance has no dedicated requested/verified/rejected inbox event type. A card can therefore appear with a zero unread count. Reading messages does not finalize grades, waive documents or approve clearance.
+
+### Q66. Which clearance reminder appears first when several conditions apply?
+
+Unfinalized/dropped/voided/already-approved states suppress it first. Otherwise paper mode precedes requested-current-check evidence, missing-template/identity-region setup warnings, ready identity-review, other ready evidence, replacement guidance and initial-upload guidance. A query error hides the card. Every link opens the current enrollment clearance section and the server still rechecks actual action eligibility.
+
+### Q67. Does every upload or staff review send email?
+
+No. Document requests/verified/rejected decisions create in-app events only; document uploads create neither event nor email. Clearance upload/request/review and paper approval use saved workflow state and derived reminders without a dedicated inbox/email event. Meeting, grade release and account/enrollment lifecycle messages use their implemented email paths. Never promise delivery for an event with no delivery path.
+
+### Q68. What happens to reminders after reopening or changing the term?
+
+Reopening makes grades provisional, which suppresses the clearance card. Existing same-term clearance and paper approval remain; after refinalization an already-approved record needs no duplicate clearance. A school-year/semester correction clears approval and invalidates submitted evidence while retaining its file, so a new reminder can appear after refinalization. Meeting/follow-up requirements remain independent.
+
+### Q69. Does switching off automated clearance remove the clearance requirement?
+
+No. Online upload/request is disabled and the student sees paper instructions. Authorized staff must explicitly confirm receipt/review of completed paper clearance against the current finalized enrollment. Approval records verifier identity/time, sets clearance and completed, and increments revision. Next enrollment remains blocked until this approval and all other gates pass.
+
+### Q70. Can staff use paper confirmation while automation is enabled?
+
+No. The server rejects manualClearanceConfirmed in online mode and instead verifies the exact requested uploaded submission, including any identity acknowledgment. Paper mode requires its own explicit confirmation. Both paths enforce revision, current ownership, finalized grades, valid status and duplicate-approval checks.
+
+### Q71. Does disabling personal verification disable all clearance analysis?
+
+No. New online uploads still need template and office passes. Only writing-presence and AI identity work are skipped, name/number regions are no longer required for that policy, and the report explicitly states personal verification disabled. Old reports keep their original policy/results. Staff still reviews and verifies the evidence.
+
+### Q72. What happens when automation is re-enabled after paper approval?
+
+Recorded paper approval remains valid and the ordinary next-enrollment gate recognizes it without demanding a nonexistent uploaded submission. Same-term reopening/correction retains approval; changing school year or semester clears it. Re-enabling automation does not create an online request or rewrite the paper verifier record.
+
+### Q73. How do Gemini, OpenAI and Ollama differ in this system?
+
+They share the two-crop transcription/comparison workflow but use different endpoints, credentials and configured models. Gemini uses generateContent, OpenAI uses Responses with store:false, and Ollama uses a configured server /api/chat endpoint without streaming. Production uses saved settings; only authorized tests can override them without saving. No provider approves enrollment or automatically falls back to another provider.
+
+### Q74. Does fetching a model list or passing Test AI connection guarantee correct handwriting?
+
+No. A list establishes accessible IDs, not vision/structured-output compatibility or accuracy. Connection tests use fixed blank crops and unsaved choices without changing production selection; handwriting preview reads sample crops but creates no enrollment approval. Save a tested suitable configuration and evaluate representative labeled handwriting before making accuracy claims.
+
+### Q75. Why can Ollama work locally but fail inside a container?
+
+Requests originate from the application server. localhost inside the app container refers to that container, so a host Ollama installation needs a reachable configured origin. The URL permits only HTTP/HTTPS origin without credentials, path, query or fragment, and redirects are rejected. The vision model must already be available on the chosen server; cloud keys are not forwarded to it.
+
+### Q76. Are saved email and AI credentials plaintext in the database?
+
+Four settings secrets are encrypted with AES-256-GCM: SMTP password, Resend key, Gemini key and OpenAI key. Versioned ciphertext uses fresh IVs, authentication tags and field-specific associated data; server getters decrypt when needed and forms receive only presence flags. This does not encrypt the entire database, evidence files or data transmitted to providers.
+
+### Q77. What if the deployment encryption key is lost, changed or incorrect?
+
+Startup validates the key and existing encrypted settings in one migration transaction. Missing/invalid/wrong keys or corrupted ciphertext stop initialization and roll back migration rather than silently overwrite credentials. Preserve the matching original DATA_ENCRYPTION_KEY with controlled recovery material; a database backup alone cannot decrypt those secrets. No automatic key-rotation/recovery workflow is implemented.
+
+### Q78. Is CSV student import one all-or-nothing operation?
+
+No. Preview validates up to 100 rows and 256 KiB, required headers, personal data and duplicate/existing emails; any preview issue prevents writes. Import revalidates, then creates each account through the normal intake path. Earlier successes remain if a later creation fails; further rows are not attempted. A created account with failed invitation remains created and is eligible for setup resend. Refresh and retry only unresolved rows to avoid duplicates.
+
+### Q79. How is semester GWA calculated and can INC distort it?
+
+Staff enrollment details/history show sum(grade times units) divided by graded units, displayed to two decimals. Details use saved grades rather than unsaved edits and can show a provisional staff average before finalization; this does not release drafts to students. Failed numeric grades count; null/blank/INC grades contribute neither value nor units. With no graded units the result is Not available. For example, 2.00 at three units and 3.00 at two units produce 2.40; an additional INC is excluded. This display does not waive failures or replace prerequisite/follow-up checks.
+
+### Q80. Are all diagnostic tools disabled in production?
+
+No. The standalone /test page and /test/identity endpoint return 404 in production before crop/provider processing. Authorized Settings > Clearance connection/model/handwriting tests remain available, and the separate authenticated /test/files route retains its behavior. Diagnostic results do not create submissions or approvals; administrator tests share the process-wide handwriting slot with production checks.
+
+## 25.9 Evidence preparation checklist
 
 1. Prepare separate administrator, registrar, and student test accounts; verify actual role restrictions with direct routes as well as navigation.
 2. Use nonprivate approved sample documents and clear, misaligned, blank-field, mismatch, and reviewable clearance examples.
@@ -1551,9 +1672,11 @@ Use a prepared student and curriculum: show account setup, first enrollment, dra
 4. Show required-document requested/uploaded/verified/rejected states and the different request/save gates.
 5. Prepare service configuration privately; verify live connectivity ahead of time without displaying secrets.
 6. Capture real focused test outcomes and record environment/model/source revision alongside any performance or accuracy evaluation.
-7. Be ready to explain correction exemptions, mutable prerequisites, retained history, and why model evidence requires staff judgment.
+7. Compare actor/recipient/admin-drop visibility with separate accounts; demonstrate student-only read controls and a clearance card with no inbox event.
+8. Demonstrate paper approval, optional personal checks and saved-versus-unsaved provider settings without displaying secrets.
+9. Be ready to explain correction exemptions, frozen curriculum prerequisites and extra-subject scope, retained history, and why model evidence requires staff judgment.
 
-Sources: S01–S36. Answers should be revised when implementation or institutional policy changes.
+Sources: S01–S41. Answers should be revised when implementation or institutional policy changes.
 
 # Appendix A. Screen and endpoint reference
 
@@ -1563,7 +1686,7 @@ Dynamic braces identify a record ID placeholder. Account user IDs and student nu
 | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `/`                                                       | Public landing page; portal information and dashboard/sign-in link.                            |
 | `/login`                                                  | Public login and second-factor/recovery challenge; signed-in users redirected.                 |
-| `/first-login`                                            | Token-based first password setup.                                                              |
+| `/first-login` | Token-based first password setup; authenticated unfinished accounts can also resume completion without a token. |
 | `/forgot-password`                                        | Public generic recovery request.                                                               |
 | `/reset-password`                                         | Token-based password reset and attempted sign-in.                                              |
 | `/user`                                                   | Protected workspace entry redirect/view leading to dashboard.                                  |
@@ -1601,8 +1724,8 @@ Dynamic braces identify a record ID placeholder. Account user IDs and student nu
 | `/user/settings/storage`                                  | Admin whole-bucket browser, overview, confirmed deletion/capacity.                             |
 | `/user/settings/storage/upload`                           | Admin bounded multipart file upload.                                                           |
 | `/user/settings/storage/download`                         | Admin storage attachment stream.                                                               |
-| `/test`                                                   | Standalone browser scan/diagnostic prototype; optional signed-in tools.                        |
-| `/test/identity`                                          | Authenticated same-origin diagnostic handwriting POST.                                         |
+| `/test` | Development-only scan prototype; production loader returns 404. |
+| `/test/identity` | Development-only authenticated same-origin handwriting POST; production returns 404 before provider use. |
 | `/test/files`                                             | Authenticated private per-user test upload/list.                                               |
 | `/test/files/download`                                    | Authenticated own-prefix download.                                                             |
 
@@ -1631,9 +1754,9 @@ This inventory groups exported application commands/queries by owner. Direct Bet
 | same                                               | `getClearanceSettings`, `uploadClearanceTemplate`, `saveClearanceAreas`: admin template and saved definition management.                                       |
 | `actions/documents.remote.ts`                      | `getStudentDocuments`, `getStudentDocumentReview`: own student requirements and staff review data.                                                             |
 | same                                               | `requestDocuments`, `reviewDocument`, `uploadDocument`: role/ownership-scoped requests, manual decisions, and file submission with revision checks.            |
-| `actions/curriculum.remote.ts`                     | `createCurriculum`, `updateCurriculum`, `activateCurriculum`, `changeCurriculumState`, `deleteCurriculum`: plan lifecycle and publication.                     |
+| `actions/curriculum.remote.ts`                     | `createCurriculum`, `updateCurriculum`, `activateCurriculum`, `changeCurriculumState`, `deleteCurriculum`: plan lifecycle, curriculum-scoped prerequisite validation/save, and publication. |
 | `actions/program.remote.ts`                        | `createProgram`, `updateProgram`, `deleteProgram`, `setProgramStatus`: admin catalog and curriculum selection.                                                 |
-| `actions/subject.remote.ts`                        | `createSubject`, `updateSubject`, `deleteSubject`, `setSubjectStatus`: admin subject catalog, transactional prerequisite graph validation, protected deletion. |
+| `actions/subject.remote.ts`                        | `createSubject`, `updateSubject`, `deleteSubject`, `setSubjectStatus`: admin subject catalog details and protected deletion; no global prerequisite writer. |
 | `actions/settings.remote.ts`                       | `updateSystemSettings`: save validated email settings while preserving blank secrets.                                                                          |
 | `actions/notifications.remote.ts`                  | `readNotifications`: supplied `id` marks that own event; omitted `id` marks all own unread events.                                                             |
 | `actions/storage.remote.ts`                        | `deleteGarageEntry`, `increaseGarageCapacity`: administrator-only validated confirmed mutations.                                                               |
@@ -1644,7 +1767,7 @@ This inventory groups exported application commands/queries by owner. Direct Bet
 | `server/clearance-workflow.ts`                     | Own-current eligibility, request state, queue, verification/rejection invariants.                                                                              |
 | `server/clearance-upload.ts`                       | Server analysis/object save/recheck and safe replacement cleanup.                                                                                              |
 | `server/clearance-checker.ts`                      | Production decoding, rectification, OCR, printed and office findings.                                                                                          |
-| `server/handwriting.ts`, `clearance/identity*.ts`  | Shared Gemini transcription, normalized comparison, and production writing-presence evidence.                                                                  |
+| `server/handwriting.ts`, `clearance/identity*.ts`  | Shared selected-provider transcription, normalized comparison, and production writing-presence evidence.                                                                  |
 | `server/documents.ts`, `server/document-upload.ts` | Student-scoped requirements, upload/verified term gates, manual review, private file replacement.                                                              |
 | `subject-prerequisites.ts`, `server/enrollment.ts` | Latest valid earlier attempt and all-direct-prerequisites checks; server enforcement for creation/restoration/correction.                                      |
 | `server/masterlist.ts`, `server/reports.ts`        | Validated historical scope, data queries, output generation.                                                                                                   |
@@ -1662,7 +1785,7 @@ Dedicated catalog status commands exist even where the current interface saves a
 | `student_sequence`     | Year/month primary key and last allocated monthly number.                                                                                                                                   |
 | `program`              | Unique code, name/description, active status, selected curriculum ID.                                                                                                                       |
 | `subject`              | Unique catalog code, name/description, active status; no universal unit value.                                                                                                              |
-| `subject_prerequisite` | Composite subject/required-subject pair, reverse index, self check, cascade/restrict links. Global mutable rules, not published curriculum snapshots.                                       |
+| `curriculum_prerequisite` | Composite curriculum/dependent/prerequisite key, reverse index, self check, curriculum/subject foreign keys. Rules belong to one version and freeze through application publication rules. |
 | `curriculum`           | Program-code link, unique program/name pair, year/semester bounds, publication/archive state.                                                                                               |
 | `curriculum_subject`   | Unique subject in a curriculum, placement, units, published name/code snapshots.                                                                                                            |
 | `enrollment`           | Student/curriculum, section/year/semester/school-year, status, finalization/clearance, meeting/follow-up/drop times, revision.                                                              |
@@ -1693,7 +1816,7 @@ Paths are repository-relative. Line references identify representative inspected
 | S03 | `src/lib/server/auth.ts:18`, `src/lib/auth-permissions.ts:10`, `src/lib/server/auth-names.ts:22`, `src/hooks.server.ts:12`. Auth boundary/hooks.                                                                                                                                                                                                                                                                     |
 | S04 | `src/routes/login/+page.svelte:16`, `src/routes/first-login/+page.svelte:13`, `src/routes/reset-password/+page.svelte:13`, `src/routes/user/settings/security/+page.svelte:65`. Login/password/TOTP UI.                                                                                                                                                                                                              |
 | S05 | `src/lib/errors.ts:1`, `src/hooks.client.ts:1`, `src/lib/components/Popup/`, `src/lib/components/ThemeController/`. Safe errors/shared controls/theme.                                                                                                                                                                                                                                                               |
-| S06 | `src/lib/actions/password.remote.ts:11`, `src/lib/server/email/account-setup.ts:1`, `src/routes/forgot-password/+page.svelte:13`. Tokens/setup/delivery tracking.                                                                                                                                                                                                                                                    |
+| S06 | `src/lib/actions/password.remote.ts:11`, `src/routes/first-login/+page.server.ts`, `src/routes/user/+layout.server.ts`, `src/lib/server/email/account-setup.ts:1`, `src/routes/forgot-password/+page.svelte:13`. Tokens/setup/delivery tracking.                                                                                                                                                                                                                                                    |
 | S07 | `src/lib/actions/user.remote.ts:32`, `src/lib/students.ts:5`, `src/lib/person-name.ts:3`, `src/routes/user/students/StudentDialog.svelte:37`. Account/student lifecycle.                                                                                                                                                                                                                                             |
 | S08 | `src/lib/actions/program.remote.ts:12`, `src/lib/actions/subject.remote.ts:11`, `src/routes/user/programs/`, `src/routes/user/subjects/`. Catalogs.                                                                                                                                                                                                                                                                  |
 | S09 | `src/lib/actions/curriculum.remote.ts:12`, `src/lib/server/curriculum.ts:35`, `src/routes/user/curriculum/`. Draft/publication/history.                                                                                                                                                                                                                                                                              |
@@ -1717,13 +1840,18 @@ Paths are repository-relative. Line references identify representative inspected
 | S27 | `src/lib/server/cor.ts:15`, `src/lib/server/cor-pdf.ts:13`, `src/routes/user/enrollment/[enrollmentId]/cor/+server.ts:6`. Certificate output.                                                                                                                                                                                                                                                                        |
 | S28 | `src/routes/test/files/+page.server.ts:12`, `src/lib/server/garage/files.ts:126`, `README.md`. Diagnostic personal storage/configuration notes.                                                                                                                                                                                                                                                                      |
 | S29 | `Dockerfile:1`, `docker-entrypoint.sh:1`, `docker-compose.yml:1`, `scripts/migrate.mjs:1`, `src/lib/server/db/seed.ts:1`, `.github/workflows/docker-publish.yml:1`, `src/env.ts:1`. Runtime/seed/configuration.                                                                                                                                                                                                      |
-| S30 | `src/routes/test/+page.svelte:220`, `src/routes/test/IdentityCheck.svelte:51`, `src/routes/test/identity.server.ts:11`, `src/lib/clearance/identity.ts`, `src/lib/server/handwriting.ts`. Diagnostic scan/identity.                                                                                                                                                                                                  |
-| S31 | `src/lib/server/handwriting.ts:14`, `src/lib/clearance/identity.ts:38`, `src/lib/clearance/identity-presence.ts:61`, `src/lib/clearance/report.ts:17`. Gemini, comparison, writing presence, submit/review helpers.                                                                                                                                                                                                  |
+| S30 | `src/routes/test/+page.server.ts:1`, `src/routes/test/identity/+server.ts:1`, `src/routes/test/+page.svelte`, `src/routes/test/IdentityCheck.svelte:51`, `src/routes/test/identity.server.ts:11`, `src/lib/clearance/identity.ts`, `src/lib/server/handwriting.ts`. Diagnostic scan/identity.                                                                                                                                                                                                  |
+| S31 | `src/lib/server/handwriting.ts:14`, `src/lib/clearance/identity.ts:38`, `src/lib/clearance/identity-presence.ts:61`, `src/lib/clearance/report.ts:17`. Selected providers, comparison, writing presence, submit/review helpers.                                                                                                                                                                                                  |
 | S32 | `src/lib/clearance/anchors.ts:69`, `src/lib/clearance/scan.client.ts:425`, `src/lib/clearance/BorderEditor.svelte:57`, `src/lib/clearance/definition.ts:124`, `src/lib/clearance/checkbox.ts:16`. Current alignment, definition, and mark checks.                                                                                                                                                                    |
 | S33 | `src/lib/server/documents.ts:15`, `src/lib/server/document-upload.ts:17`, `src/lib/actions/documents.remote.ts:16`, `src/lib/components/documents/`, `src/routes/user/document-files/[id]/+server.ts:10`. Required documents and exact gates.                                                                                                                                                                        |
-| S34 | `src/lib/subject-prerequisites.ts:16`, `src/lib/actions/subject.remote.ts:29`, `src/lib/server/enrollment.ts:27`, `src/lib/server/enrollment-corrections.ts:179`, `src/lib/server/db/seed-data.ts:63`, `drizzle/0038_subject_prerequisites.sql:1`. Prerequisite graph, enforcement, samples, migration.                                                                                                              |
+| S34 | `src/lib/subject-prerequisites.ts:16`, `src/lib/actions/curriculum.remote.ts`, `src/lib/server/curriculum.ts`, `src/lib/server/enrollment.ts:27`, `src/lib/server/enrollment-corrections.ts:179`, `src/lib/server/db/seed-data.ts:63`, `drizzle/0039_curriculum_prerequisites.sql`, `drizzle/rollback/0039_curriculum_prerequisites.sql`. Curriculum rule ownership, ordered validation, frozen versions, enforcement, samples, migration.                                                                                                              |
 | S35 | `src/routes/user/enrollment/+page.server.ts:6`, `src/lib/components/EnrollmentHistory.svelte:70`, `src/lib/components/Sidebar/navigation.ts:58`, `src/routes/user/curriculum/+page.server.ts:13`, `src/routes/user/curriculum/[curriculumId]/+page.server.ts:7`. Current-only student page and staff-only curriculum.                                                                                                |
 | S36 | `tests/subject-prerequisites.test.mjs`, `tests/enrollment-corrections.test.mjs`, `tests/required-documents.test.mjs`, `tests/required-documents.browser.mjs`, `tests/clearance-checker.test.ts`, `tests/clearance-identity-presence.test.ts`, `tests/clearance-identity.test.mjs`, `tests/clearance-review.browser.mjs`. Relevant regression evidence; this documentation update does not imply a new full test run. |
+| S37 | `src/lib/server/notifications.ts`, `src/lib/actions/notifications.remote.ts`, `src/routes/user/notifications/+page.svelte`, `tests/notifications.test.mjs`. Actor/recipient/admin-drop scope, counts, filters and student-only read state. |
+| S38 | `src/lib/pages/Dashboard/Student/ClearanceNotice.svelte`, `src/lib/pages/Dashboard/Student/Dashboard.svelte`. Derived dashboard reminders and clearance-card priority. |
+| S39 | `src/lib/server/clearance-settings.ts`, `src/lib/actions/clearance.remote.ts`, `src/lib/actions/grades.remote.ts`, `src/lib/server/clearance-upload.ts`, `src/lib/clearance/ai.ts`, `src/lib/server/handwriting.ts`. Paper/personal policy, provider settings, bounded upload and staged failures. |
+| S40 | `src/lib/server/secrets.ts`, `src/lib/server/settings.ts`, `src/hooks.server.ts`, `docker-compose.yml`. Encrypted settings, startup migration and deployment key. |
+| S41 | `src/lib/student-csv.ts`, `src/lib/actions/user.remote.ts`, `src/lib/enrollment-grades.ts`, `src/lib/components/EnrollmentHistory.svelte`. Sequential student CSV import and unit-weighted semester GWA. |
 
 | Term                       | Definition                                                                                                                      |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -1745,5 +1873,5 @@ Paths are repository-relative. Line references identify representative inspected
 | Ready clearance            | Eligible saved evidence awaiting explicit request; identity may match or require staff review.                                  |
 | Requested clearance        | Evidence submitted for staff review, not automatic enrollment.                                                                  |
 | Identity review            | Requestable machine findings requiring explicit staff confirmation of original name/number; not an extra submission state.      |
-| Prerequisite               | Direct global subject requirement satisfied by the latest qualifying earlier finalized pass.                                    |
+| Prerequisite | Direct requirement in the resolved curriculum version, satisfied by the latest qualifying earlier finalized pass. |
 | Uploaded academic document | File provided but awaiting manual acceptance; enough for the applicable student request upload gate, not final-term staff save. |
