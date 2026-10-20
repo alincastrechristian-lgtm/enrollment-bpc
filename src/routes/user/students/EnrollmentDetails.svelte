@@ -15,7 +15,8 @@
 	import {
 		formatGrade,
 		getEnrollmentLockReason,
-		getGradeConcerns
+		getGradeConcerns,
+		getSemesterGwa
 	} from '#lib/enrollment-grades.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { beforeNavigate, goto, refreshAll } from '$app/navigation';
@@ -87,6 +88,9 @@
 	const canEdit = $derived(!voided && !dropped && data.canEdit && !finalized);
 	const canFinalize = $derived(!voided && !dropped && data.canFinalize && !finalized);
 	const incompleteCount = $derived(rows.filter((row) => row.savedGrade === null).length);
+	const semesterGwa = $derived(
+		getSemesterGwa(rows.map((row) => ({ grade: row.savedGrade, units: row.units })))
+	);
 	const gradeConcerns = $derived(
 		getGradeConcerns(
 			rows.map((row) => ({ grade: row.savedGrade })),
@@ -780,6 +784,14 @@
 				</h2>
 				<p class="mt-1 text-sm text-base-content/60">
 					{rows.length} subjects · {rows.reduce((sum, row) => sum + row.units, 0)} units
+				</p>
+				<p class="mt-2 text-sm">
+					Semester GWA: <span class="font-semibold tabular-nums">
+						{formatGrade(semesterGwa, 'Not available')}
+					</span>
+				</p>
+				<p class="mt-1 text-xs text-base-content/50">
+					Unit-weighted; excludes blank and INC grades.
 				</p>
 			</div>
 			{#if canEdit}

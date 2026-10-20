@@ -21,12 +21,15 @@
 		MailCheck,
 		Pencil,
 		Trash2,
+		Upload,
 		UserPlus
 	} from '@lucide/svelte';
 
 	import StudentDialog from './StudentDialog.svelte';
+	import StudentCsvDialog from './StudentCsvDialog.svelte';
 	import type { PageProps } from './$types';
 	let studentDialog = $state<StudentDialog>();
+	let studentCsvDialog = $state<StudentCsvDialog>();
 	let { data }: PageProps = $props();
 
 	const students = $derived(data.users);
@@ -117,6 +120,13 @@
 			filterOptions={data.filterOptions}
 			filters={data.filters}
 		>
+			<button
+				type="button"
+				class="btn gap-2 btn-outline btn-sm"
+				onclick={() => studentCsvDialog?.open()}
+			>
+				<Upload class="size-4" aria-hidden="true" />Import CSV
+			</button>
 			<button
 				type="button"
 				class="btn gap-2 btn-primary btn-sm"
@@ -271,3 +281,4 @@
 </CatalogPage>
 
 <StudentDialog bind:this={studentDialog} />
+<StudentCsvDialog bind:this={studentCsvDialog} />

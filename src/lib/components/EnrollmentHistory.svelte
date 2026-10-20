@@ -23,7 +23,7 @@
 </script>
 
 <script lang="ts">
-	import { formatGrade } from '#lib/enrollment-grades.js';
+	import { formatGrade, getSemesterGwa } from '#lib/enrollment-grades.js';
 	import { resolve } from '$app/paths';
 	import { BookOpen, Eye, RotateCcw } from '@lucide/svelte';
 	import CORDownload from './CORDownload.svelte';
@@ -183,6 +183,14 @@
 							(sum, subject) => sum + subject.units,
 							0
 						)} units
+					</p>
+					<p class="mt-2 text-sm">
+						Semester GWA: <span class="font-semibold tabular-nums">
+							{formatGrade(getSemesterGwa(entry.subjects), 'Not available')}
+						</span>
+					</p>
+					<p class="mt-1 text-xs text-base-content/50">
+						Unit-weighted; excludes blank and INC grades.
 					</p>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">

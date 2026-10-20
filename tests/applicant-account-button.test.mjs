@@ -90,6 +90,8 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 	try {
 		files['actions.js'] +=
 			`export async function createAdmin(){throw Error('Unexpected admin creation');}export async function updateAdmin(){throw Error('Unexpected admin edit');}export async function deleteAdmin(){throw Error('Unexpected admin deletion');}export async function setAdminDisabled(){throw Error('Unexpected admin access change');}`;
+		files['actions.js'] +=
+			'export async function previewStudentCsv(){throw Error("Unexpected CSV preview");}export async function importStudentCsv(){throw Error("Unexpected CSV import");}';
 		for (const [name, contents] of Object.entries(files))
 			writeFileSync(path.join(root, name), contents);
 		server = await createServer({
@@ -328,6 +330,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toHaveCount(0);
 		await page.evaluate(() => window.show('grade-empty'));
+		await expect(page.getByText('Semester GWA: Not available', { exact: true })).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toBeDisabled();
 		await expect(page.getByRole('button', { name: 'Edit grades', exact: true })).toBeDisabled();
 		await page.evaluate(() => window.show('grade-finalized'));
@@ -341,6 +344,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
 		await page.evaluate(() => window.show('grade-current'));
+		await expect(page.getByText('Semester GWA: 1.25', { exact: true })).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Finalize grades', exact: true })).toBeEnabled();
 		await expect(page.getByRole('link', { name: 'ENROLLMENTS', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
@@ -369,6 +373,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		await expect(firstGrade).toHaveValue('');
 		await firstGrade.fill('2.25');
 		await secondGrade.fill('');
+		await expect(page.getByText('Semester GWA: 1.25', { exact: true })).toBeVisible();
 		await page.evaluate(() => (window.failGrades = true));
 		await page.getByRole('button', { name: 'Save grades', exact: true }).click();
 		await expect(page.getByRole('alert')).toContainText('Grades have changed');
@@ -397,6 +402,7 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 		});
 		await page.evaluate(() => window.finishGrades());
 		await expect(page.getByRole('status')).toHaveText('Grades saved successfully.');
+		await expect(page.getByText('Semester GWA: 2.25', { exact: true })).toBeVisible();
 		await expect(page.getByRole('cell', { name: '2.25', exact: true })).toBeVisible();
 		await expect(page.getByRole('cell', { name: 'No grade', exact: true })).toBeVisible();
 		await page.setViewportSize({ width: 1360, height: 960 });
@@ -505,9 +511,12 @@ test('enrollment page edits subjects, protects drafts, submits once, and opens c
 			{ email: 'stored@example.com' }
 		]);
 		await page.evaluate(() => window.show('student-inc'));
+		await expect(page.getByText('Semester GWA: 1.25', { exact: true })).toBeVisible();
+		await expect(page.getByText('Semester GWA: Not available', { exact: true })).toBeVisible();
 		await expect(page.getByRole('cell', { name: 'INC (Incomplete)', exact: true })).toBeVisible();
 		await page.setViewportSize({ width: 1360, height: 960 });
 		await page.evaluate(() => window.show('my-enrollment'));
+		await expect(page.getByText('Semester GWA: 1.25', { exact: true })).toBeVisible();
 		await expect(page.getByRole('heading', { name: 'ENROLLMENT', exact: true })).toBeVisible();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 		await expect(

@@ -18,9 +18,20 @@ function load(file, dependencies = {}, source = readFileSync(file, 'utf8')) {
 		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	});
 	const exports = {};
-	new Function('require', 'exports', outputText)((id) => dependencies[id] ?? require(id), exports);
+	new Function('require', 'exports', outputText)(
+		(id) =>
+			dependencies[id] ?? (id === '#lib/student-csv.js' ? studentCsv : undefined) ?? require(id),
+		exports
+	);
 	return exports;
 }
+const studentCsv = load('src/lib/student-csv.ts', {
+	'./students': load('src/lib/students.ts', {
+		'./person-name': load('src/lib/person-name.ts'),
+		'./student-demographics': load('src/lib/student-demographics.ts')
+	})
+});
+
 const roles = load('src/lib/Roles.ts');
 const personNames = load('src/lib/person-name.ts');
 const { nameFields, nameHooks } = load('src/lib/server/auth-names.ts', {

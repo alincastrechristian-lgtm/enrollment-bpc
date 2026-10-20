@@ -20,9 +20,20 @@ function loadModule(filename, dependencies = {}, sourceOverride) {
 		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	});
 	const exports = {};
-	new Function('require', 'exports', outputText)((id) => dependencies[id] ?? require(id), exports);
+	new Function('require', 'exports', outputText)(
+		(id) =>
+			dependencies[id] ?? (id === '#lib/student-csv.js' ? studentCsv : undefined) ?? require(id),
+		exports
+	);
 	return exports;
 }
+const studentCsv = loadModule('src/lib/student-csv.ts', {
+	'./students': loadModule('src/lib/students.ts', {
+		'./person-name': loadModule('src/lib/person-name.ts'),
+		'./student-demographics': loadModule('src/lib/student-demographics.ts')
+	})
+});
+
 const { Role } = loadModule('src/lib/Roles.ts');
 const deliveryModule = loadModule('src/lib/server/email/account-setup.ts');
 const errorHelpers = loadModule('src/lib/errors.ts', { '@sveltejs/kit': { isHttpError } });

@@ -4,6 +4,17 @@ export function formatGrade(grade: number | null | undefined, fallback = '—'):
 	return grade == null ? fallback : grade.toFixed(2);
 }
 
+export function getSemesterGwa(subjects: { grade: number | null; units: number }[]): number | null {
+	let weightedGrades = 0;
+	let gradedUnits = 0;
+	for (const subject of subjects) {
+		if (subject.grade === null) continue;
+		weightedGrades += subject.grade * subject.units;
+		gradedUnits += subject.units;
+	}
+	return gradedUnits > 0 ? weightedGrades / gradedUnits : null;
+}
+
 // Shared by enrollment writes, page loads, and reactive staff views.
 export function getEnrollmentLockReason(
 	current: Pick<

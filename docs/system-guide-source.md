@@ -196,14 +196,19 @@ Sources: S03, S04, S06.
 
 Administrators and registrars open Students and choose Add Student. The dialog collects personal information and offers immediate enrollment or enrollment later. The default create-and-enroll path opens the enrollment editor after successful account creation.
 
+**Import CSV** on the Students page creates student accounts in batches of up to 100 rows / 256 KB. Download the template, fill first_name, last_name, email, birth_date, sex, contact_number and address; middle_name is optional. Dates use YYYY-MM-DD, sex is female/male, and phone columns should be kept as text to preserve leading zeros. Quoted commas, escaped quotes and multiline addresses are supported.
+
+Preview validates every row with the same creation rules, detects duplicate emails within the file, and rejects existing account emails. The server repeats validation when importing; validation errors create no accounts. Student numbers are generated automatically, enrollment remains unset, and the existing account-setup invitation flow runs for each student. Mail failures retain the created account and show a resend warning. Runtime failures may leave earlier rows created; results identify created, failed and unattempted rows. Review the student list before retrying after a lost response. Existing accounts are never overwritten.
+
+
 | Field                  | Current rule                                                                     |
 | ---------------------- | -------------------------------------------------------------------------------- |
 | First name / last name | Required; trimmed; each 1–100 characters.                                        |
 | Middle name            | Optional; trimmed; maximum 100; stored as empty text when omitted.               |
 | Email                  | Required valid email; trimmed/lowercased; unique across every account role.      |
 | Address                | Required trimmed text; maximum 500 characters.                                   |
-| Contact number         | Required trimmed text; maximum 30 characters; no country-specific phone pattern. |
-| Birth date             | Valid calendar date in `YYYY-MM-DD`; cannot be after today's Manila date.        |
+| Contact number         | Required; exactly 11 digits on creation; spaces/hyphens allowed; maximum 30 characters. |
+| Birth date             | Valid calendar date in `YYYY-MM-DD`; student must be 17 or older on creation, based on Manila date.        |
 | Sex                    | Current stored options are `female` and `male`.                                  |
 | Enrollment timing      | Create and enroll now, or save the student and enroll later.                     |
 

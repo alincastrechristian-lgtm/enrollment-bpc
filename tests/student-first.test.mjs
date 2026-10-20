@@ -17,6 +17,7 @@ function load(file, deps = {}, source) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			deps[id] ??
+			(id === '#lib/student-csv.js' ? studentCsv : undefined) ??
 			(['#lib/server/clearance-settings.js', './clearance-settings'].includes(id)
 				? load('src/lib/server/clearance-settings.ts', { '#lib/schema.js': schema })
 				: require(id)),
@@ -24,6 +25,13 @@ function load(file, deps = {}, source) {
 	);
 	return exports;
 }
+const studentCsv = load('src/lib/student-csv.ts', {
+	'./students': load('src/lib/students.ts', {
+		'./person-name': load('src/lib/person-name.ts'),
+		'./student-demographics': load('src/lib/student-demographics.ts')
+	})
+});
+
 const { Role } = load('src/lib/Roles.ts');
 const deliveryModule = load('src/lib/server/email/account-setup.ts');
 const schema = load('src/lib/schema.ts', {
@@ -1400,4 +1408,83 @@ test('invalid student age or phone fails before account creation, numbering, or 
 	assert.equal(f.state.emails, 0);
 	assert.equal(f.db.select().from(schema.studentData).all().length, 0);
 	assert.equal(f.db.select().from(schema.studentSequence).all().length, 0);
+});
+
+const csvRows = (...rows) =>
+	'first_name,last_name,email,birth_date,sex,contact_number,address\n' +
+	rows
+		.map(
+			(email, index) =>
+				'Student' + index + ',Test,' + email + ',2000-01-01,female,09171234567,"Malolos, Bulacan"'
+		)
+		.join('\n');
+test('staff CSV import validates every required field before creating accounts and generates student numbers', async (t) => {
+	for (const role of [Role.ADMIN, Role.REGISTRAR]) {
+		const f = fixture(t);
+		f.state.role = role;
+		const csv = csvRows('one@example.com', 'two@example.com');
+		const preview = await f.previewStudentCsv({ csv });
+		assert.equal(preview.rows.length, 2);
+		assert.deepEqual(preview.issues, []);
+		assert.equal(f.state.creates, 0);
+		const result = await f.importStudentCsv({ csv });
+		assert.equal(result.results.length, 2);
+		assert(result.results.every((row) => row.status === 'created' && row.invitationSent));
+		assert.equal(f.state.creates, 2);
+		assert.equal(f.state.emails, 2);
+		assert.equal(new Set(result.results.map((row) => row.studentId)).size, 2);
+		assert(
+			f.db
+				.select()
+				.from(schema.studentData)
+				.all()
+				.every((row) => row.currentEnrollmentId === null)
+		);
+		assert.equal(f.db.select().from(schema.enrollment).all().length, 0);
+		const repeated = await f.importStudentCsv({ csv });
+		assert.equal(repeated.issues.length, 2);
+		assert.equal(repeated.results.length, 0);
+		assert.equal(f.state.creates, 2);
+	}
+});
+test('CSV errors, duplicates, changed existing emails and unauthorized callers never create partial accounts', async (t) => {
+	const f = fixture(t);
+	for (const csv of [
+		csvRows('ok@example.com', 'bad@example.com').replace('Student1,Test', 'Student1,'),
+		csvRows('same@example.com', 'SAME@example.com'),
+		csvRows('ok@example.com').replace('2000-01-01', '2020-01-01'),
+		csvRows('ok@example.com').replace('09171234567', '0917')
+	]) {
+		const result = await f.importStudentCsv({ csv });
+		assert(result.issues.length);
+		assert.equal(result.results.length, 0);
+		assert.equal(f.state.creates, 0);
+	}
+	const csv = csvRows('one@example.com');
+	await f.previewStudentCsv({ csv });
+	await f.createStudent({ ...personal, email: 'one@example.com' });
+	assert((await f.importStudentCsv({ csv })).issues.length);
+	assert.equal(f.state.creates, 1);
+	for (const role of [Role.STUDENT, null]) {
+		f.state.role = role;
+		await assert.rejects(f.previewStudentCsv({ csv }), status(role ? 403 : 401));
+		await assert.rejects(f.importStudentCsv({ csv }), status(role ? 403 : 401));
+	}
+});
+test('CSV import preserves created accounts on mail failure and stops after an uncertain creation failure', async (t) => {
+	const f = fixture(t);
+	f.state.mailFail = true;
+	const result = await f.importStudentCsv({ csv: csvRows('mail@example.com') });
+	assert.equal(result.results[0].status, 'created');
+	assert.equal(result.results[0].invitationSent, false);
+	assert.equal(f.db.select().from(schema.studentData).all().length, 1);
+	f.state.authFail = true;
+	const failed = await f.importStudentCsv({
+		csv: csvRows('failed@example.com', 'unattempted@example.com')
+	});
+	assert.equal(failed.results.length, 2);
+	assert(failed.results.every((row) => row.status === 'failed'));
+	assert.match(failed.results[1].message, /Not attempted/);
+	assert(!JSON.stringify(failed).includes('SECRET'));
+	assert.equal(f.db.select().from(schema.studentData).all().length, 1);
 });

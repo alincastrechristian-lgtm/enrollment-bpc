@@ -1,3 +1,8 @@
+import {
+	STUDENT_CSV_MAX_BYTES,
+	validateStudentCsv,
+	type StudentCsvIssue
+} from '#lib/student-csv.js';
 import { Role } from '#lib/Roles.js';
 import { formatPersonName, personNameSchema } from '#lib/person-name.js';
 import {
@@ -324,10 +329,8 @@ export const createAdmin = command(createUserSchema, (data) =>
 	createStaffAccount(data, Role.ADMIN)
 );
 
-export const createStudent = command(createStudentSchema, async (data) => {
-	const { locals, request } = getRequestEvent();
-	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
-	const createdUser = await createUser(data, Role.STUDENT, request.headers);
+async function createStudentAccount(data: z.infer<typeof createStudentSchema>, headers: Headers) {
+	const createdUser = await createUser(data, Role.STUDENT, headers);
 	let studentId: string;
 	try {
 		studentId = db.transaction((tx) => {
@@ -381,7 +384,7 @@ export const createStudent = command(createStudentSchema, async (data) => {
 	// The student exists even if email delivery fails; staff can resend the setup link.
 	let invitationSent = true;
 	try {
-		await sendPasswordResetLink(createdUser.email, request.headers);
+		await sendPasswordResetLink(createdUser.email, headers);
 	} catch {
 		invitationSent = false;
 	}
@@ -392,6 +395,85 @@ export const createStudent = command(createStudentSchema, async (data) => {
 		studentId,
 		invitationSent
 	};
+}
+
+export const createStudent = command(createStudentSchema, async (data) => {
+	const { locals, request } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	return createStudentAccount(data, request.headers);
+});
+
+const studentCsvInput = z.object({ csv: z.string().max(STUDENT_CSV_MAX_BYTES) }).strict();
+function studentCsvPreview(csv: string) {
+	const preview = validateStudentCsv(csv);
+	if (!preview.issues.length) {
+		for (const row of preview.rows) {
+			try {
+				rejectExistingEmail(row.student.email);
+			} catch (cause) {
+				if (isHttpError(cause) && cause.status === 409)
+					preview.issues.push({ row: row.row, message: cause.body.message });
+				else throw cause;
+			}
+		}
+	}
+	return preview;
+}
+export const previewStudentCsv = command(studentCsvInput, ({ csv }) => {
+	validateUser(getRequestEvent().locals, [Role.ADMIN, Role.REGISTRAR]);
+	return studentCsvPreview(csv);
+});
+export const importStudentCsv = command(studentCsvInput, async ({ csv }) => {
+	const { locals, request } = getRequestEvent();
+	validateUser(locals, [Role.ADMIN, Role.REGISTRAR]);
+	const preview = studentCsvPreview(csv);
+	const results: {
+		row: number;
+		email: string;
+		status: 'created' | 'failed';
+		studentId?: string;
+		invitationSent?: boolean;
+		message: string;
+	}[] = [];
+	if (preview.issues.length) return { issues: preview.issues, results };
+	for (const row of preview.rows) {
+		try {
+			const created = await createStudentAccount(row.student, request.headers);
+			results.push({
+				row: row.row,
+				email: row.student.email,
+				status: 'created',
+				studentId: created.studentId,
+				invitationSent: created.invitationSent,
+				message: created.invitationSent
+					? 'Student created; setup invitation sent.'
+					: 'Student created; setup invitation could not be sent. Use Resend setup link.'
+			});
+		} catch (cause) {
+			results.push({
+				row: row.row,
+				email: row.student.email,
+				status: 'failed',
+				message:
+					isHttpError(cause) && cause.status >= 400 && cause.status < 500
+						? cause.body.message
+						: 'Could not confirm student creation. Refresh the student list before retrying this row.'
+			});
+			// Keep completed accounts, but stop further writes after any creation failure.
+			break;
+		}
+	}
+	const processed = new Set(results.map((result) => result.row));
+	for (const row of preview.rows)
+		if (!processed.has(row.row))
+			results.push({
+				row: row.row,
+				email: row.student.email,
+				status: 'failed',
+				message:
+					'Not attempted because an earlier row failed. Resolve that failure before importing this row.'
+			});
+	return { issues: [] as StudentCsvIssue[], results };
 });
 
 // Both staff editors use the same account and email-change safeguards.
