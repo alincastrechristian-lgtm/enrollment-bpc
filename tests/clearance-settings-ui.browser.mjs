@@ -25,13 +25,13 @@ test(
 					'window.messages=[];export const showLoading=()=>{};export const showSuccess=message=>window.messages.push(message);export const showError=message=>window.messages.push(message);',
 				'fixture.js': `const area=(label,kind,x,y,width,height,expected='')=>({id:crypto.randomUUID(),label,kind,box:{x,y,width,height},expected});
 				export const definition={corners:[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],semester:'2',schoolYear:'2025-2026',areas:[area('School name','text',.3,.02,.4,.04,'BULACAN POLYTECHNIC COLLEGE'),area('Form title','text',.32,.12,.35,.04,'Student Clearance Form'),area('School seal','image',.08,.02,.16,.2),area('Semester','semester',.32,.17,.2,.04),area('Academic year','academicYear',.5,.17,.2,.04)],personalFields:[{id:crypto.randomUUID(),field:'studentName',box:{x:.1,y:.7,width:.5,height:.05}},{id:crypto.randomUUID(),field:'studentNumber',box:{x:.1,y:.8,width:.5,height:.05}}],officeRows:['Library','Registrar'].map((label,i)=>({id:crypto.randomUUID(),label,office:{x:.08,y:.3+i*.08,width:.12,height:.03},cleared:{x:.27,y:.3+i*.08,width:.045,height:.05},signature:{x:.62,y:.3+i*.08,width:.2,height:.05}}))};`,
-				'actions.svelte.js': `import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,aiProvider:'gemini',hasOpenaiKey:false,openaiModel:'gpt-4.1-mini',ollamaBaseUrl:'http://localhost:11434',ollamaModel:'qwen3-vl:4b',hasGeminiKey:true,geminiModel:'gemini-3.1-flash-lite',template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
+				'actions.svelte.js': `import{error}from'@sveltejs/kit';import{definition}from'./fixture.js';let state=$state.raw({configured:true,automatedClearanceVerificationEnabled:true,personalInfoVerificationEnabled:true,aiProvider:'gemini',hasOpenaiKey:false,openaiModel:'gpt-4.1-mini',ollamaBaseUrl:'http://localhost:11434',ollamaModel:'qwen3-vl:4b',hasGeminiKey:true,geminiModel:'gemini-3.1-flash-lite',template:{filename:'clearance-reference.jpg',size:79329,uploadedAt:'2026-10-19T00:00:00.000Z',revision:crypto.randomUUID(),definition:structuredClone(definition)}});
 				window.saved=[];window.uploads=[];window.failUpload=false;window.clearTemplate=()=>state={...state,template:null};
 				export function getClearanceSettings(){return{get current(){return state;}};}
                 window.ollamaModelListCalls=[];export async function fetchClearanceOllamaModels(input){window.ollamaModelListCalls.push(input);return{success:true,models:['qwen3-vl:4b','test-vision:latest']};}
                 window.modelListCalls=[];export async function fetchClearanceOpenaiModels(input){window.modelListCalls.push(input);return window.modelListError?{success:false,message:'OpenAI model listing failed (HTTP 403). Check permissions.'}:{success:true,models:['gpt-4.1-nano','gpt-test-vision']};}
                 window.verificationSaves=[];window.geminiTests=[];window.handwritingTests=[];
- export async function readClearanceTestHandwriting(input){window.handwritingTests.push(input);return window.handwritingError?{success:false,message:'Gemini request failed (HTTP 404, NOT_FOUND; model gemini-2.5-flash). The configured model was not found.'}:{success:true,readings:window.blankHandwriting?{name:'',studentNumber:'',warnings:{name:'Gemini returned an unusable transcription.',studentNumber:'Gemini returned an unusable transcription.'}}:{name:'Jonnel Mrei Palileo',studentNumber:'23016578'}};}
+ export async function readClearanceTestHandwriting(input){if(window.largeHandwriting)error(413,'Payload Too Large');window.handwritingTests.push(input);return window.handwritingError?{success:false,message:'Gemini request failed (HTTP 404, NOT_FOUND; model gemini-2.5-flash). The configured model was not found.'}:{success:true,readings:window.blankHandwriting?{name:'',studentNumber:'',warnings:{name:'Gemini returned an unusable transcription.',studentNumber:'Gemini returned an unusable transcription.'}}:{name:'Jonnel Mrei Palileo',studentNumber:'23016578'}};}
                 export async function saveClearanceVerification(input){window.verificationSaves.push(input);state={...state,...input,hasGeminiKey:input.clearGeminiKey?false:!!input.geminiApiKey||state.hasGeminiKey};state.hasOpenaiKey=input.clearOpenaiKey?false:!!input.openaiApiKey||state.hasOpenaiKey;delete state.openaiApiKey;delete state.geminiApiKey;return{success:true};}
                 export async function testClearanceAi(input){window.geminiTests.push(input);return{success:true,message:'Gemini connection successful.'};}
 
@@ -311,6 +311,12 @@ test(
 				page.getByText('Gemini returned an unusable transcription.', { exact: true })
 			).toBeVisible();
 
+			await page.evaluate(() => (window.largeHandwriting = true));
+			await page.getByRole('button', { name: 'Read handwriting', exact: true }).click();
+			await expect(
+				page.getByRole('alert').filter({ hasText: 'BODY_SIZE_LIMIT=20M' })
+			).toBeVisible();
+			await page.evaluate(() => (window.largeHandwriting = false));
 			await page.evaluate(() => (window.handwritingError = true));
 			await page.getByRole('button', { name: 'Read handwriting', exact: true }).click();
 			await expect(page.getByRole('alert').filter({ hasText: 'HTTP 404' })).toBeVisible();

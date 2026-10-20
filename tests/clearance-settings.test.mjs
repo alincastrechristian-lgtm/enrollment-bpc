@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomFillSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
@@ -1241,4 +1242,65 @@ test('GPT-5 nano reserves JSON output room with minimal reasoning and reports sa
 		assert(!JSON.stringify(result).includes('PRIVATE'));
 		assert(!JSON.stringify(result).includes('saved-key'));
 	}
+});
+
+test('large handwriting PNG crops above the previous 1 MB cap are accepted while size and pixel limits remain bounded', async (t) => {
+	const f = await handwritingFixture(t);
+	const original = globalThis.fetch;
+	t.after(() => (globalThis.fetch = original));
+	const png = (
+		await sharp(randomFillSync(Buffer.alloc(1200 * 800)), {
+			raw: { width: 1200, height: 800, channels: 1 }
+		})
+			.png()
+			.toBuffer()
+	).toString('base64');
+	assert(png.length > 1_000_000);
+	let calls = 0;
+	globalThis.fetch = async (_url, options) => {
+		calls++;
+		const body = JSON.parse(options.body);
+		for (const part of body.contents[0].parts.filter((part) => part.inlineData)) {
+			const meta = await sharp(Buffer.from(part.inlineData.data, 'base64')).metadata();
+			assert.equal(meta.width, 1200);
+			assert.equal(meta.height, 800);
+		}
+		return Response.json({
+			candidates: [
+				{
+					finishReason: 'STOP',
+					content: {
+						parts: [
+							{ text: JSON.stringify({ name: 'Example Student', studentNumber: '00123456' }) }
+						]
+					}
+				}
+			]
+		});
+	};
+	const result = await f.remote.readClearanceTestHandwriting({
+		...f.input,
+		crops: { name: png, studentNumber: png }
+	});
+	assert.equal(result.success, true);
+	assert.equal(calls, 1);
+	assert.throws(() =>
+		f.remote.readClearanceTestHandwriting({
+			...f.input,
+			crops: { name: 'A'.repeat(8 * 1024 * 1024 + 1), studentNumber: png }
+		})
+	);
+	const oversized = (
+		await sharp({ create: { width: 2400, height: 1000, channels: 3, background: '#fff' } })
+			.png()
+			.toBuffer()
+	).toString('base64');
+	await assert.rejects(
+		f.remote.readClearanceTestHandwriting({
+			...f.input,
+			crops: { name: oversized, studentNumber: png }
+		}),
+		hasStatus(400)
+	);
+	assert.equal(calls, 1);
 });

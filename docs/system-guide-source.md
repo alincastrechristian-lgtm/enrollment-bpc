@@ -1075,17 +1075,17 @@ Claims/leases coordinate specific shared operations. They do not create a genera
 
 ## 21.4 Configuration names
 
-| Setting name                                    | Purpose                                                                                                         |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                  | SQLite database path; required by DB initialization/migration.                                                  |
-| `ORIGIN`                                        | Public application origin used by authentication and deployment.                                                |
-| `BETTER_AUTH_SECRET`                            | Authentication signing/security secret.                                                                         |
-| `GARAGE_ADMIN_ENDPOINT`, `GARAGE_ADMIN_TOKEN`   | Private Garage Admin API configuration.                                                                         |
-| `GARAGE_API_ENDPOINT`, `GARAGE_REGION`          | S3-compatible endpoint and matching region. Region fallback is `garage`.                                        |
-| `BODY_SIZE_LIMIT`                               | Node request-body limit; Compose sets `12M` to cover bounded 10 MiB file multipart requests.                    |
-| `GEMINI_API_KEY`                                | Optional one-time import into system settings. Administrators can instead save the key in Settings > Clearance. |
-| `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Seed-process inputs for initial administrator creation when running that seed process.                          |
-| Saved email settings                            | SMTP/Resend sender/provider/secret values are stored privately in system settings, not in page data.            |
+| Setting name                                    | Purpose                                                                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                                  | SQLite database path; required by DB initialization/migration.                                                           |
+| `ORIGIN`                                        | Public application origin used by authentication and deployment.                                                         |
+| `BETTER_AUTH_SECRET`                            | Authentication signing/security secret.                                                                                  |
+| `GARAGE_ADMIN_ENDPOINT`, `GARAGE_ADMIN_TOKEN`   | Private Garage Admin API configuration.                                                                                  |
+| `GARAGE_API_ENDPOINT`, `GARAGE_REGION`          | S3-compatible endpoint and matching region. Region fallback is `garage`.                                                 |
+| `BODY_SIZE_LIMIT`                               | Node request-body limit; Docker and Compose set `20M` for two encoded handwriting crops and bounded 10 MiB file uploads. |
+| `GEMINI_API_KEY`                                | Optional one-time import into system settings. Administrators can instead save the key in Settings > Clearance.          |
+| `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Seed-process inputs for initial administrator creation when running that seed process.                                   |
+| Saved email settings                            | SMTP/Resend sender/provider/secret values are stored privately in system settings, not in page data.                     |
 
 Actual `.env` values, database credentials, generated account secrets, and object-store tokens were not copied into this guide. Compose currently forwards the declared core/Garage settings and body limit, but does not forward GEMINI_API_KEY. Save the key through Settings > Clearance, or explicitly supply it to the running container for one-time import; a host .env entry alone does not populate an undeclared container environment variable. Other seed inputs likewise need deployment wiring where absent.
 

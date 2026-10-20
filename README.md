@@ -86,7 +86,7 @@ GARAGE_API_ENDPOINT=http://your-garage-server:3900
 GARAGE_ADMIN_ENDPOINT=http://your-garage-server:3903
 GARAGE_ADMIN_TOKEN=your-admin-token
 GARAGE_REGION=garage
-BODY_SIZE_LIMIT=12M
+BODY_SIZE_LIMIT=20M
 ```
 
 `GARAGE_REGION` must match `[s3_api].s3_region` in `garage.toml`. At startup the
@@ -103,8 +103,8 @@ migration automatically before app startup. No existing settings or file data is
 changed. Keep the metadata table when rolling back to an older build.
 
 Missing configuration displays a setup message on the files page. Compose forwards all storage settings and sets
-the Node adapter's body limit to `12M`; direct Node deployments must also set
-`BODY_SIZE_LIMIT=12M`. Keep the same minimum request-body limit in any reverse proxy.
+the Node adapter's body limit to `20M`; direct Node deployments must also set
+`BODY_SIZE_LIMIT=20M`. Keep the same minimum request-body limit in any reverse proxy.
 
 See [Garage's JavaScript guide](https://garagehq.deuxfleurs.fr/documentation/build/javascript/).
 

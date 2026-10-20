@@ -4,6 +4,8 @@
 	import { hasIdentityAreas, type TemplateInfo } from '#lib/clearance/definition.js';
 	import { readClearanceTestHandwriting } from '#lib/actions/clearance.remote.js';
 	import type { IdentityReadings } from '#lib/clearance/identity.js';
+	import { MAX_HANDWRITING_CROP_BASE64_LENGTH } from '#lib/clearance/ai.js';
+	import { isHttpError } from '@sveltejs/kit';
 	import { getErrorMessage } from '#lib/errors.js';
 	import { UNIT_CORNERS, type Corners } from '#lib/clearance/clearance.js';
 	import { ScanLine } from '@lucide/svelte';
@@ -71,12 +73,18 @@
 				name: crops.name.toDataURL('image/png'),
 				studentNumber: crops.studentNumber.toDataURL('image/png')
 			};
+			const encoded = {
+				name: cropPreviews.name.split(',')[1],
+				studentNumber: cropPreviews.studentNumber.split(',')[1]
+			};
+			if (Object.values(encoded).some((crop) => crop.length > MAX_HANDWRITING_CROP_BASE64_LENGTH)) {
+				handwritingError =
+					'Each encoded handwriting crop must be at most 8 MiB. Narrow the saved input areas or use a smaller image.';
+				return;
+			}
 			const result = await readClearanceTestHandwriting({
 				revision: template.revision,
-				crops: {
-					name: crops.name.toDataURL('image/png').split(',')[1],
-					studentNumber: crops.studentNumber.toDataURL('image/png').split(',')[1]
-				}
+				crops: encoded
 			});
 			if (!destroyed && version === readingVersion) {
 				if (result.success) handwriting = result.readings;
@@ -84,7 +92,9 @@
 			}
 		} catch (cause) {
 			if (!destroyed && version === readingVersion)
-				handwritingError = getErrorMessage(cause, 'Could not read handwriting. Try again.');
+				handwritingError = isHttpError(cause, 413)
+					? 'The live server rejected the image size. Set BODY_SIZE_LIMIT=20M, allow at least 20 MiB in the reverse proxy, and restart or redeploy the application.'
+					: getErrorMessage(cause, 'Could not read handwriting. Try again.');
 		} finally {
 			reading = false;
 		}

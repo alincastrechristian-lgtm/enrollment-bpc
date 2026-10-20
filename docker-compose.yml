@@ -17,7 +17,7 @@ services:
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
       GARAGE_API_ENDPOINT: ${GARAGE_API_ENDPOINT:-}
       GARAGE_REGION: ${GARAGE_REGION:-garage}
-      BODY_SIZE_LIMIT: 12M
+      BODY_SIZE_LIMIT: 20M
     volumes:
       - ./data:/app/data
     restart: unless-stopped

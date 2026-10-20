@@ -20,6 +20,7 @@ import {
 	aiKeySchema,
 	ollamaUrlSchema,
 	aiModelSchema,
+	MAX_HANDWRITING_CROP_BASE64_LENGTH,
 	AI_PROVIDER_LABELS
 } from '#lib/clearance/ai.js';
 import { geminiModelSchema } from '#lib/clearance/gemini.js';
@@ -363,7 +364,7 @@ export const testClearanceAi = command(
 const testCrop = z
 	.string()
 	.min(1)
-	.max(1_000_000)
+	.max(MAX_HANDWRITING_CROP_BASE64_LENGTH)
 	.regex(/^[A-Za-z0-9+/]+={0,2}$/);
 export const readClearanceTestHandwriting = command(
 	z

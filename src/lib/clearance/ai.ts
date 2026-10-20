@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Two encoded crops fit inside the deployment's bounded 20 MiB request limit.
+export const MAX_HANDWRITING_CROP_BASE64_LENGTH = 8 * 1024 * 1024;
+
 export const aiProviderSchema = z.enum(['gemini', 'openai', 'ollama']);
 export type AiProvider = z.infer<typeof aiProviderSchema>;
 export const AI_PROVIDER_LABELS = {
