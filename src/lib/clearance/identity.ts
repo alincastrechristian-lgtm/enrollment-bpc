@@ -89,7 +89,13 @@ function compareField(detected: string, expected: string, number: boolean): Iden
 		status: 'different',
 		similarity,
 		detail: number
-			? 'Student number differs beyond the one-digit tolerance, or digits are missing.'
+			? numericNumber && /^\d+$/.test(actual) && actual.length !== target.length
+				? `Read ${actual.length} digits; student record has ${target.length}. ${
+						actual.length < target.length
+							? `${target.length - actual.length} digit${target.length - actual.length === 1 ? '' : 's'} missing from the reading`
+							: `${actual.length - target.length} extra digit${actual.length - target.length === 1 ? '' : 's'} in the reading`
+					}. MA- and separators are ignored. Check the original image, especially repeated or leading zeros; digits are never added or removed automatically.`
+				: 'Student number differs beyond the one-digit tolerance, or digits are missing.'
 			: 'Name differs beyond the matching tolerance. Poor handwriting recognition can also cause this.'
 	};
 }

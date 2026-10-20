@@ -1,26 +1,26 @@
 <script lang="ts">
 	import {
 		getStudentClearance,
-		uploadClearance,
-		requestEnrollment
+		requestEnrollment,
+		uploadClearance
 	} from '#lib/actions/clearance.remote.js';
-	import BorderEditor from '#lib/clearance/BorderEditor.svelte';
 	import { getStudentDocuments } from '#lib/actions/documents.remote.js';
+	import BorderEditor from '#lib/clearance/BorderEditor.svelte';
+	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
 	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
+	import { CLEARANCE_CLIENT_TIMEOUT_MS, withDeadline } from '#lib/clearance/deadline.js';
+	import { clearanceTermFromEnrollment, getTemplateSetupIssue } from '#lib/clearance/definition.js';
 	import {
 		clearanceCanSubmit,
 		clearanceNeedsIdentityReview,
 		hasCurrentClearanceChecks,
 		type ClearanceReport
 	} from '#lib/clearance/report.js';
-	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
-	import { clearanceTermFromEnrollment, getTemplateSetupIssue } from '#lib/clearance/definition.js';
-	import { resolve } from '$app/paths';
-	import { isHttpError } from '@sveltejs/kit';
 	import { getErrorMessage } from '#lib/errors.js';
-	import { withDeadline, CLEARANCE_CLIENT_TIMEOUT_MS } from '#lib/clearance/deadline.js';
-	import { onDestroy } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { ArrowRight, ClipboardCheck, FileImage, Upload } from '@lucide/svelte';
+	import { isHttpError } from '@sveltejs/kit';
+	import { onDestroy } from 'svelte';
 	const progress = getStudentClearance();
 	const documents = getStudentDocuments();
 	const documentBlock = $derived(documents.current?.uploadBlock);
@@ -458,7 +458,7 @@
 								(!!report && !clearanceCanSubmit(report))}
 							onclick={request}
 						>
-							Request enrollment
+							Enroll Now
 							<ArrowRight size={15} aria-hidden="true" />
 						</button>
 					</div>

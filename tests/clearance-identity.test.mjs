@@ -94,6 +94,30 @@ test('similar names support review only; blank and unrelated details cannot matc
 	assert.equal(compare({ name: 'Maria Santos', studentNumber: 'MA-99999999' }).verdict, 'mismatch');
 });
 
+test('separated student numbers match all digits, and missing or extra digits explain their counts', () => {
+	const record = { name: 'Example Student', studentNumber: 'MA-202610-00002' };
+	for (const studentNumber of ['20261000002', 'MA-202610-00002', 'MA-MA-202610-00002']) {
+		const result = core.matchIdentity({ ...record, studentNumber }, record);
+		assert.equal(result.studentNumber.status, 'exact');
+		assert.equal(result.verdict, 'match');
+	}
+	for (const [studentNumber, count, difference] of [
+		['2026100002', 10, '1 digit missing'],
+		['202610000002', 12, '1 extra digit']
+	]) {
+		const result = core.matchIdentity({ ...record, studentNumber }, record);
+		assert.equal(result.studentNumber.status, 'different');
+		assert.equal(result.verdict, 'review');
+		assert.equal(result.studentNumber.detected, studentNumber);
+		assert.equal(result.studentNumber.expected, record.studentNumber);
+		assert.match(
+			result.studentNumber.detail,
+			new RegExp(`Read ${count} digits; student record has 11`)
+		);
+		assert(result.studentNumber.detail.includes(difference));
+	}
+});
+
 const { Role } = load('src/lib/Roles.ts');
 const schema = load('src/lib/schema.ts', {
 	'#lib/Roles.js': { Role },
@@ -265,6 +289,11 @@ test('Gemini receives two PNG crops and no expected identity; endpoint compares 
 		assert.match(body.contents[0].parts[0].text, /only the numeric portion/);
 		assert.match(body.contents[0].parts[0].text, /printed, handwritten, or repeated/);
 		assert.match(body.contents[0].parts[0].text, /including leading zeros/);
+		assert.match(
+			body.contents[0].parts[0].text,
+			/retaining visible hyphens or spaces between digit groups/
+		);
+		assert.match(body.contents[0].parts[0].text, /Do not collapse repeated zeros/);
 		assert.equal(body.generationConfig.responseMimeType, 'application/json');
 		assert.deepEqual(
 			body.contents[0].parts.filter((p) => p.inlineData).map((p) => p.inlineData),
@@ -285,6 +314,18 @@ test('Gemini receives two PNG crops and no expected identity; endpoint compares 
 	assert.equal(result.studentNumber.detected, '99999999');
 	assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n, before);
 	assert.equal(calls.length, 1);
+});
+
+test('grouped identifier transcription preserves zero runs through the provider parser and comparison', async (t) => {
+	const f = fixture(t);
+	mockTranscription(t, async () => reply('Example Student', '202610-00002'));
+	const readings = await f.service.recognizeIdentity(crops, new AbortController().signal);
+	assert.equal(readings.studentNumber, '202610-00002');
+	assert.equal(
+		core.matchIdentity(readings, { name: 'Example Student', studentNumber: 'MA-202610-00002' })
+			.verdict,
+		'match'
+	);
 });
 
 test('unfinished, blocked and invalid Gemini output forces review and never accepts partial text', async (t) => {
