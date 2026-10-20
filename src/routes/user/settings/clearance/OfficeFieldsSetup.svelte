@@ -34,6 +34,7 @@
 	let controller: AbortController | undefined;
 	let destroyed = false;
 	const active = $derived(rows[selected]);
+	const incompleteRows = $derived(rows.filter((row) => !row.cleared || !row.signature));
 	const valid = $derived(officeRowsSchema.safeParse(rows));
 	const locked = $derived(disabled || detecting);
 	const kinds = Object.keys(OFFICE_AREA_LABELS) as OfficeAreaKind[];
@@ -131,6 +132,8 @@
 		</h3>
 		<p class="mt-1 text-sm text-base-content/65">
 			Select an office, then adjust its name, cleared checkbox and signature / stamp area.
+			Auto-detection fills the draft. Use Save all template settings above to keep the detected
+			boxes.
 		</p>
 	</div>
 	<div class="space-y-3 rounded-xl border border-base-300 bg-base-200/40 p-4">
@@ -194,6 +197,13 @@
 	{#if active}
 		<div class="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
 			<div class="min-w-0 space-y-4 rounded-xl border border-base-300 bg-base-100 p-4">
+				{#if incompleteRows.length}
+					<p class="text-xs text-warning" role="status">
+						{incompleteRows.length}
+						{incompleteRows.length === 1 ? 'office needs' : 'offices need'} missing boxes before student
+						uploads are available.
+					</p>
+				{/if}
 				<ul class="max-h-72 space-y-1.5 overflow-y-auto pr-1" aria-label="Office rows">
 					{#each rows as row, i (row.id)}
 						<li class="flex items-start gap-1 rounded-lg border border-base-300 bg-base-100 p-1">
@@ -206,7 +216,15 @@
 									selected = i;
 								}}
 							>
-								{row.label}
+								<span class="block">{row.label}</span>
+								{#if !row.cleared || !row.signature}
+									<span class="mt-1 block text-warning">
+										Missing: {[
+											...(!row.cleared ? ['checkbox'] : []),
+											...(!row.signature ? ['signature / stamp'] : [])
+										].join(', ')}
+									</span>
+								{/if}
 							</button>
 							<button
 								type="button"
@@ -241,8 +259,8 @@
 				{/if}
 				{#if !active.cleared || !active.signature}
 					<p class="text-xs text-base-content/65">
-						Some boxes are not marked. Add the cleared checkbox and signature space present on this
-						form; missing boxes stay unavailable for later inspection.
+						Draw the missing cleared checkbox or signature / stamp area. Both are required for
+						student uploads. Saving a draft keeps your progress.
 					</p>
 				{/if}
 			</div>

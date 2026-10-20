@@ -333,6 +333,7 @@
 					<div hidden={workspace !== 'setup'}>
 						<TemplateSetup
 							template={current.template}
+							personalInfoVerificationEnabled={current.personalInfoVerificationEnabled}
 							bind:step={setupStep}
 							disabled={busy || testBusy || replacing}
 							onbusychange={(value) => {

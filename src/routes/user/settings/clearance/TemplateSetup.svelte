@@ -9,7 +9,7 @@
 	import { UNIT_CORNERS, validCorners, type Corners } from '#lib/clearance/clearance.js';
 	import {
 		definitionSchema,
-		hasIdentityAreas,
+		getTemplateSetupIssue,
 		type TemplateArea,
 		type PersonalFieldArea,
 		type OfficeRow,
@@ -23,11 +23,13 @@
 		template,
 		disabled,
 		onbusychange,
+		personalInfoVerificationEnabled = true,
 		step = $bindable('printed')
 	}: {
 		template: TemplateInfo;
 		disabled: boolean;
 		onbusychange: (busy: boolean) => void;
+		personalInfoVerificationEnabled?: boolean;
 		step?: 'outline' | 'printed' | 'offices' | 'personal';
 	} = $props();
 	const steps = [
@@ -209,7 +211,12 @@
 		error = '';
 		try {
 			await saveClearanceAreas({ revision: template.revision, definition: parsed.data });
-			showSuccess('Template areas, personal inputs and office boxes saved.');
+			const issue = getTemplateSetupIssue(parsed.data, personalInfoVerificationEnabled);
+			showSuccess(
+				issue
+					? `Template draft saved. Student uploads remain unavailable. ${issue.message}`
+					: 'Template settings saved. Required checking areas are configured.'
+			);
 		} catch (cause) {
 			error = getErrorMessage(cause, 'Could not save template areas.');
 		} finally {
@@ -305,6 +312,39 @@
 		</div>
 	{/if}
 	{#if aligned}
+		{@const issue = getTemplateSetupIssue(
+			valid.success ? valid.data : null,
+			personalInfoVerificationEnabled
+		)}
+		<div
+			class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-300 bg-base-200/40 p-4"
+		>
+			<div class="min-w-0 text-xs text-base-content/60">
+				<p>
+					Auto-detected and manually drawn areas are drafts until saved. Save applies all steps.
+				</p>
+
+				{#if issue}
+					<p class="mt-1 text-warning">{issue.message}</p>
+				{/if}
+				{#if suggestions}
+					<p class="mt-1 text-warning">
+						Apply or discard the printed-area suggestions before saving.
+					</p>
+				{/if}
+				{#if !valid.success}
+					<p class="mt-1 text-warning">{valid.error.issues[0]?.message}</p>
+				{/if}
+			</div>
+			<button
+				type="button"
+				class="btn btn-primary btn-sm"
+				onclick={save}
+				disabled={locked || !valid.success || !!suggestions}
+			>
+				<Save size={16} />{saving ? 'Saving...' : 'Save all template settings'}
+			</button>
+		</div>
 		<div hidden={step !== 'printed'} class="space-y-5">
 			<div>
 				<h3 class="text-base font-semibold">Printed areas</h3>
@@ -619,32 +659,6 @@
 					officeBusy = value;
 				}}
 			/>
-		</div>
-		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-4">
-			<div class="min-w-0 text-xs text-base-content/60">
-				<p>Save applies all steps. Tests use your saved settings.</p>
-				{#if !hasIdentityAreas(draft)}
-					<p class="mt-1 text-warning">
-						Mark student name and student number in Personal inputs to enable student uploads.
-					</p>
-				{/if}
-				{#if suggestions}
-					<p class="mt-1 text-warning">
-						Apply or discard the printed-area suggestions before saving.
-					</p>
-				{/if}
-				{#if !valid.success}
-					<p class="mt-1 text-warning">{valid.error.issues[0]?.message}</p>
-				{/if}
-			</div>
-			<button
-				type="button"
-				class="btn btn-primary btn-sm"
-				onclick={save}
-				disabled={locked || !valid.success || !!suggestions}
-			>
-				<Save size={16} />{saving ? 'Saving...' : 'Save template areas'}
-			</button>
 		</div>
 	{/if}
 	{#if error}

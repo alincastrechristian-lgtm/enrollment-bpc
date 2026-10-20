@@ -353,7 +353,7 @@ test(
 				'Library services'
 			);
 			await expect(office.getByLabel('x %', { exact: true })).toHaveValue('9');
-			await page.getByRole('button', { name: 'Save template areas', exact: true }).click();
+			await page.getByRole('button', { name: 'Save all template settings', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.saved.length)).toBe(1);
 			await expect(
 				steps.getByRole('button', { name: 'Offices & signatures', exact: true })
@@ -437,15 +437,47 @@ test(
 				page.getByRole('group', { name: 'Marked area editor', exact: true })
 			).toHaveCount(0);
 			await expect(
-				page.getByRole('button', { name: 'Save template areas', exact: true })
+				page.getByRole('button', { name: 'Save all template settings', exact: true })
 			).toBeDisabled();
 			await page.getByRole('button', { name: /Use suggestions/ }).click();
 			await expect(
 				page.getByRole('group', { name: 'Marked area editor', exact: true })
 			).toHaveCount(1);
 			await expect(
-				page.getByRole('button', { name: 'Save template areas', exact: true })
+				page.getByRole('button', { name: 'Save all template settings', exact: true })
 			).toBeEnabled();
+
+			// Save detected office mappings using the shared action above the editor.
+			await steps.getByRole('button', { name: 'Offices & signatures', exact: true }).click();
+			await page.evaluate(() => (window.deferDetection = false));
+			await office.getByRole('button', { name: 'Auto-detect office rows', exact: true }).click();
+			await expect(office.getByText('Found 2 office rows', { exact: true })).toBeVisible();
+			const saveSettings = page.getByRole('button', {
+				name: 'Save all template settings',
+				exact: true
+			});
+			const saveBounds = await saveSettings.boundingBox();
+			const editorBounds = await office.boundingBox();
+			assert(saveBounds.y < editorBounds.y, 'Save action appears before the office editor.');
+			await saveSettings.click();
+			await expect.poll(() => page.evaluate(() => window.saved.length)).toBe(2);
+			assert.equal(await page.evaluate(() => window.saved.at(-1).definition.officeRows.length), 2);
+			await expect
+				.poll(() => page.evaluate(() => window.messages.at(-1)))
+				.toBe(
+					'Template draft saved. Student uploads remain unavailable. The clearance template needs student name and student number areas. An administrator must complete Personal inputs and save template settings.'
+				);
+			await expect(office.getByLabel('Office name', { exact: true })).toHaveValue('Library');
+			await office.getByRole('button', { name: 'Signature / stamp', exact: true }).click();
+			await office.getByRole('button', { name: 'Remove this box', exact: true }).click();
+			await expect(office.getByText('Missing: signature / stamp', { exact: true })).toBeVisible();
+			await saveSettings.click();
+			await expect.poll(() => page.evaluate(() => window.saved.length)).toBe(3);
+			await expect
+				.poll(() => page.evaluate(() => window.messages.at(-1)))
+				.toContain(
+					'Template draft saved. Student uploads remain unavailable. The clearance template needs office checkboxes and signature areas.'
+				);
 			await page.evaluate(() => window.clearTemplate());
 			await expect(page.getByLabel('Choose template image', { exact: true })).toBeVisible();
 			await expect(workspace).toHaveCount(0);
