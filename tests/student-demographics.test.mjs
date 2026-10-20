@@ -18,7 +18,7 @@ function load(file, dependencies = {}) {
 	return exports;
 }
 const demographics = load('src/lib/student-demographics.ts');
-const { createStudentSchema } = load('src/lib/students.ts', {
+const { createStudentSchema, updateStudentSchema } = load('src/lib/students.ts', {
 	'./person-name': load('src/lib/person-name.ts'),
 	'./student-demographics': demographics
 });
@@ -74,7 +74,7 @@ test('students require name parts, birth date and sex; only middle name is optio
 		assert.equal(createStudentSchema.safeParse({ ...personal, sex }).success, false, String(sex));
 	assert.equal(
 		createStudentSchema.safeParse({ ...personal, birthDate: demographics.todayInManila() }).success,
-		true
+		false
 	);
 });
 
@@ -202,5 +202,54 @@ test('required personal details migration refuses existing accounts without modi
 	assert.equal(
 		sqlite.pragma('table_info(user)').some((column) => column.name === 'first_name'),
 		false
+	);
+});
+
+test('new students must be 17 on the Manila calendar date, including birthday and leap-year boundaries', () => {
+	const schema = load('src/lib/students.ts', {
+		'./person-name': load('src/lib/person-name.ts'),
+		'./student-demographics': {
+			...demographics,
+			todayInManila: () => '2026-10-20',
+			latestStudentBirthDate: () => demographics.latestStudentBirthDate('2026-10-20')
+		}
+	}).createStudentSchema;
+	for (const birthDate of ['2009-10-20', '2009-10-19', '2000-02-29'])
+		assert.equal(schema.safeParse({ ...personal, birthDate }).success, true, birthDate);
+	for (const birthDate of ['2009-10-21', '2010-01-01', '2026-10-20'])
+		assert.equal(schema.safeParse({ ...personal, birthDate }).success, false, birthDate);
+	assert.equal(demographics.latestStudentBirthDate('2024-02-29'), '2007-02-28');
+	assert.equal(demographics.latestStudentBirthDate('2025-02-28'), '2008-02-28');
+	assert.equal(demographics.latestStudentBirthDate('2025-03-01'), '2008-03-01');
+});
+test('creation requires exactly 11 phone digits and accepts spaces or hyphens; legacy profiles stay editable', () => {
+	for (const contactNumber of ['09123456789', '0912 345 6789', '0912-345-6789', ' 09123456789 '])
+		assert.equal(
+			createStudentSchema.safeParse({ ...personal, contactNumber }).success,
+			true,
+			contactNumber
+		);
+	for (const contactNumber of [
+		'0917',
+		'0912345678',
+		'091234567890',
+		'0912abc6789',
+		'+639123456789',
+		'???????????'
+	])
+		assert.equal(
+			createStudentSchema.safeParse({ ...personal, contactNumber }).success,
+			false,
+			contactNumber
+		);
+	assert.equal(
+		updateStudentSchema.safeParse({
+			...personal,
+			birthDate: demographics.todayInManila(),
+			contactNumber: '123',
+			userId: 'legacy',
+			original: { ...personal, name: 'Ana Munoz', middleName: '' }
+		}).success,
+		true
 	);
 });

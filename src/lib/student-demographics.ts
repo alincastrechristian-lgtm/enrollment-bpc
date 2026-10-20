@@ -25,3 +25,11 @@ export function todayInManila() {
 		.map((type) => parts.find((part) => part.type === type)!.value)
 		.join('-');
 }
+
+// Latest birth date for a new student aged at least 17, using calendar dates.
+export function latestStudentBirthDate(today = todayInManila()) {
+	const [year, month, day] = today.split('-').map(Number);
+	const birthYear = year - 17;
+	const lastDay = new Date(Date.UTC(birthYear, month, 0)).getUTCDate();
+	return `${birthYear}-${String(month).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+}

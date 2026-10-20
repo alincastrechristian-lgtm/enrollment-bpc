@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { studentSexValues, todayInManila } from './student-demographics';
+import { latestStudentBirthDate, studentSexValues, todayInManila } from './student-demographics';
 import { personNameSchema } from './person-name';
 
-export const createStudentSchema = personNameSchema.extend({
+const studentInformationSchema = personNameSchema.extend({
 	email: z.email('Enter a valid email address').trim().toLowerCase(),
 	address: z.string().trim().min(1, 'Address is required').max(500),
 	contactNumber: z.string().trim().min(1, 'Contact number is required').max(30),
@@ -10,6 +10,19 @@ export const createStudentSchema = personNameSchema.extend({
 		.date('Enter a valid birth date')
 		.refine((value) => value <= todayInManila(), 'Birth date cannot be in the future'),
 	sex: z.enum(studentSexValues, { error: 'Choose a valid sex' })
+});
+
+// Shared with the native form pattern; separators do not count as phone digits.
+export const studentContactNumberPattern = ' *[0-9](?:[ \\-]*[0-9]){10} *';
+export const createStudentSchema = studentInformationSchema.extend({
+	contactNumber: studentInformationSchema.shape.contactNumber.regex(
+		new RegExp(`^${studentContactNumberPattern}$`),
+		'Contact number must contain exactly 11 digits. Spaces and hyphens are allowed.'
+	),
+	birthDate: studentInformationSchema.shape.birthDate.refine(
+		(value) => value <= latestStudentBirthDate(),
+		'Student must be at least 17 years old.'
+	)
 });
 
 // Compare exactly what staff opened, without normalizing the original values.
@@ -27,7 +40,7 @@ export const studentInformationSnapshotSchema = z.object({
 export type StudentInformationSnapshot = z.infer<typeof studentInformationSnapshotSchema>;
 export type EditableStudentInformation = StudentInformationSnapshot & { userId: string };
 
-export const updateStudentSchema = createStudentSchema.extend({
+export const updateStudentSchema = studentInformationSchema.extend({
 	userId: z.string().min(1),
 	original: studentInformationSnapshotSchema
 });

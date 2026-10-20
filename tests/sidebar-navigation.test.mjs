@@ -28,10 +28,8 @@ for (const [role, expected] of [
 		'admin',
 		[
 			'Dashboard',
-			'Administrators',
-			'Registrars',
-			'Students',
-			'Enrollment requests',
+			'Enrollment Request',
+			'User Management',
 			'Masterlist',
 			'Subjects',
 			'Programs',
@@ -45,8 +43,8 @@ for (const [role, expected] of [
 		'registrar',
 		[
 			'Dashboard',
+			'Enrollment Request',
 			'Students',
-			'Enrollment requests',
 			'Masterlist',
 			'Subjects',
 			'Programs',
@@ -58,12 +56,24 @@ for (const [role, expected] of [
 	],
 	['student', ['Dashboard', 'Enrollment', 'Notifications', 'Settings']]
 ]) {
-	test(`${role} keeps existing navigation and receives the correct settings links`, () => {
+	test(`${role} receives the correct navigation groups and settings links`, () => {
 		const items = getSidebarItems(role);
 		assert.deepEqual(
 			items.map((item) => item.label),
 			expected
 		);
+		const users = items.find((item) => item.id === 'users');
+		if (role === 'admin') {
+			assert.deepEqual(
+				users.children.map((item) => item.label),
+				['Students', 'Registrars', 'Administrators']
+			);
+			for (const route of ['/user/students/123', '/user/registrars', '/user/admins'])
+				assert.equal(isActiveItem(users, route), true);
+			assert.equal(isActiveItem(users, '/user/dashboard'), false);
+		} else {
+			assert.equal(users, undefined);
+		}
 		const settings = items.find((item) => item.id === 'settings');
 		assert.deepEqual(
 			settings.children.map((item) => item.label),

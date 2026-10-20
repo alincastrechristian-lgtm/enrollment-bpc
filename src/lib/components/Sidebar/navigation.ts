@@ -7,8 +7,8 @@ import {
 	ClipboardCheck,
 	ClipboardList,
 	Gauge,
-	HardDrive,
 	GraduationCap,
+	HardDrive,
 	Layers,
 	Mail,
 	Settings,
@@ -32,15 +32,25 @@ export type SidebarItem = SidebarLink | SidebarGroup;
 const staff = [Role.ADMIN, Role.REGISTRAR];
 const items: SidebarItem[] = [
 	{ label: 'Dashboard', href: resolve('/user/dashboard'), icon: Gauge },
-	{ label: 'Administrators', href: resolve('/user/admins'), icon: UserShield, roles: [Role.ADMIN] },
-	{ label: 'Registrars', href: resolve('/user/registrars'), icon: UserShield, roles: [Role.ADMIN] },
-	{ label: 'Students', href: resolve('/user/students'), icon: Users, roles: staff },
 	{
-		label: 'Enrollment requests',
+		label: 'Enrollment Request',
 		href: resolve('/user/clearances'),
 		icon: ClipboardCheck,
 		roles: staff
 	},
+	{
+		id: 'users',
+		label: 'User Management',
+		icon: Users,
+		roles: [Role.ADMIN],
+		children: [
+			{ label: 'Students', href: resolve('/user/students'), icon: Users },
+			{ label: 'Registrars', href: resolve('/user/registrars'), icon: UserShield },
+			{ label: 'Administrators', href: resolve('/user/admins'), icon: UserShield }
+		]
+	},
+	{ label: 'Students', href: resolve('/user/students'), icon: Users, roles: [Role.REGISTRAR] },
+
 	{ label: 'Masterlist', href: resolve('/user/masterlist'), icon: ClipboardList, roles: staff },
 	{
 		label: 'Enrollment',

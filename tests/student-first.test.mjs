@@ -1385,3 +1385,19 @@ test('student filters combine current enrollment fields without matching enrollm
 	await assert.rejects(request('filter.semester=invalid'), status(400));
 	await assert.rejects(request('filter.section=E'), status(400));
 });
+
+test('invalid student age or phone fails before account creation, numbering, or invitations', async (t) => {
+	const f = fixture(t);
+	for (const invalid of [
+		{ birthDate: load('src/lib/student-demographics.ts').todayInManila() },
+		{ contactNumber: '0917' },
+		{ contactNumber: '091234567890' }
+	])
+		await assert.rejects(f.createStudent({ ...personal, ...invalid }), (cause) =>
+			cause.issues?.some((issue) => issue.path[0] === Object.keys(invalid)[0])
+		);
+	assert.equal(f.state.creates, 0);
+	assert.equal(f.state.emails, 0);
+	assert.equal(f.db.select().from(schema.studentData).all().length, 0);
+	assert.equal(f.db.select().from(schema.studentSequence).all().length, 0);
+});

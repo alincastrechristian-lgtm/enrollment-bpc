@@ -109,6 +109,10 @@ function fixture(
 		}
 	};
 	const dependencies = {
+		'#lib/server/documents.js': { documentEnrollmentBlock: () => null },
+		'#lib/server/clearance-settings.js': loadModule('src/lib/server/clearance-settings.ts', {
+			'#lib/schema.js': schema
+		}),
 		'#lib/server/notifications.js': { recordNotification: () => {} },
 		'#lib/server/email/index.js': { sendEmail: async () => true },
 		'#lib/server/email/templates.js': {
@@ -158,7 +162,7 @@ const studentInput = {
 	sex: 'female',
 	email: 'taken@example.com',
 	address: 'Bulacan',
-	contactNumber: '0917'
+	contactNumber: '09171234567'
 };
 
 for (const [role, label] of [

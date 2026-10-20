@@ -1,24 +1,23 @@
 <script lang="ts">
-	import EnrollmentRecordActions from './EnrollmentRecordActions.svelte';
-	import CORDownload from '#lib/components/CORDownload.svelte';
-	import { getErrorMessage } from '#lib/errors.js';
 	import { rejectClearance } from '#lib/actions/clearance.remote.js';
-	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
-	import { clearanceCanSubmit, clearanceNeedsIdentityReview } from '#lib/clearance/report.js';
 	import {
-		finalizeEnrollmentGrades,
 		completeEnrollmentFollowUp,
 		dropEnrollment,
+		finalizeEnrollmentGrades,
 		sendEnrollmentMeetingRequest,
 		updateEnrollmentGrades,
 		verifyEnrollmentClearance
 	} from '#lib/actions/grades.remote.js';
-	import { showYesNo, showSuccess } from '#lib/components/Popup/Popup.svelte.js';
+	import ClearanceFindings from '#lib/clearance/ClearanceFindings.svelte';
+	import { clearanceCanSubmit, clearanceNeedsIdentityReview } from '#lib/clearance/report.js';
+	import CORDownload from '#lib/components/CORDownload.svelte';
+	import { showSuccess, showYesNo } from '#lib/components/Popup/Popup.svelte.js';
 	import {
 		formatGrade,
 		getEnrollmentLockReason,
 		getGradeConcerns
 	} from '#lib/enrollment-grades.js';
+	import { getErrorMessage } from '#lib/errors.js';
 	import { beforeNavigate, goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
@@ -35,6 +34,7 @@
 	import { untrack } from 'svelte';
 	import { semesterLabel } from '../curriculum/SubjectLayout.svelte';
 	import type { PageData } from './[userId]/enrollments/[enrollmentId]/$types';
+	import EnrollmentRecordActions from './EnrollmentRecordActions.svelte';
 
 	let { data }: { data: PageData } = $props();
 	let rows = $state(
@@ -812,7 +812,11 @@
 								message = '';
 							}}
 						>
-							<Pencil class="size-4" aria-hidden="true" />Edit grades
+							<Pencil class="size-4" aria-hidden="true" />{rows.some(
+								(row) => row.savedGrade != null
+							)
+								? 'Edit grade'
+								: 'Add grade'}
 						</button>
 						{#if canFinalize}
 							<button

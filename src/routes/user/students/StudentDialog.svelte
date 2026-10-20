@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { createStudent, updateStudent } from '#lib/actions/user.remote.js';
 	import type { EditableStudentInformation, StudentInformationSnapshot } from '#lib/students.js';
+	import { studentContactNumberPattern } from '#lib/students.js';
 	import { getErrorMessage } from '#lib/errors.js';
 	import {
 		formatStudentSex,
+		latestStudentBirthDate,
 		studentSexValues,
 		todayInManila,
 		type StudentSex
@@ -254,11 +256,18 @@
 						<input
 							class="input w-full bg-base-200"
 							type="date"
+							aria-label="Birth date"
 							required
 							bind:value={birthDate}
-							max={todayInManila()}
+							max={editingUserId ? todayInManila() : latestStudentBirthDate()}
 							autocomplete="bday"
+							aria-describedby={!editingUserId ? 'student-birth-date-help' : undefined}
 						/>
+						{#if !editingUserId}
+							<span id="student-birth-date-help" class="block text-xs text-base-content/60">
+								Student must be at least 17 years old.
+							</span>
+						{/if}
 					</label>
 					<label class="space-y-2">
 						<span class="text-sm font-semibold">Sex</span>
@@ -285,12 +294,22 @@
 						<input
 							class="input w-full bg-base-200"
 							type="tel"
+							aria-label="Contact number"
+							inputmode="numeric"
 							bind:value={contactNumber}
 							required
+							pattern={editingUserId ? undefined : studentContactNumberPattern}
+							minlength={editingUserId ? undefined : 11}
 							maxlength="30"
 							autocomplete="tel"
 							placeholder="e.g. 0917 123 4567"
+							aria-describedby={!editingUserId ? 'student-contact-number-help' : undefined}
 						/>
+						{#if !editingUserId}
+							<span id="student-contact-number-help" class="block text-xs text-base-content/60">
+								Enter 11 digits. Spaces and hyphens are allowed.
+							</span>
+						{/if}
 					</label>
 					<label class="space-y-2 sm:col-span-2">
 						<span class="text-sm font-semibold">Address</span>
