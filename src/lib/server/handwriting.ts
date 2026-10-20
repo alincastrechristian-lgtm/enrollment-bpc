@@ -6,7 +6,7 @@ import type { IdentityReadings, IdentityStudent } from '#lib/clearance/identity.
 import { db } from './db';
 import { systemSettings } from '#lib/schema.js';
 import { and, eq, isNull } from 'drizzle-orm';
-import { getSystemSettings } from './settings';
+import { getSystemSettings, encryptSettingsSecrets } from './settings';
 import {
 	DEFAULT_GEMINI_MODEL,
 	geminiModelSchema,
@@ -151,16 +151,10 @@ export async function getGeminiApiKey() {
 	const settings = await getSystemSettings();
 	if (settings.geminiApiKey !== null) return settings.geminiApiKey;
 	db.update(systemSettings)
-		.set({ geminiApiKey: GEMINI_API_KEY?.trim() ?? '' })
+		.set(encryptSettingsSecrets({ geminiApiKey: GEMINI_API_KEY?.trim() ?? '' }))
 		.where(and(eq(systemSettings.id, 1), isNull(systemSettings.geminiApiKey)))
 		.run();
-	return (
-		db
-			.select({ key: systemSettings.geminiApiKey })
-			.from(systemSettings)
-			.where(eq(systemSettings.id, 1))
-			.get()?.key ?? ''
-	);
+	return (await getSystemSettings()).geminiApiKey ?? '';
 }
 
 export async function getGeminiModel(): Promise<GeminiModel> {

@@ -4,9 +4,15 @@ import { ensureGarageBucket } from '#lib/server/garage/index.js';
 import { building } from '$app/env';
 import type { Handle, HandleServerError, ServerInit } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
+import { client } from '#lib/server/db/index.js';
+import { DATA_ENCRYPTION_KEY } from '$app/env/private';
+import { migrateSettingsSecrets } from '#lib/server/secrets.js';
 
 export const init: ServerInit = async () => {
-	if (!building) await ensureGarageBucket();
+	if (!building) {
+		migrateSettingsSecrets(client, DATA_ENCRYPTION_KEY);
+		await ensureGarageBucket();
+	}
 };
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {

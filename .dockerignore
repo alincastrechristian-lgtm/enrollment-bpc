@@ -5,6 +5,8 @@ node_modules
 .pnpm-store
 build
 .output
+.tmp
+defense
 .env
 .env.*
 !.env.example

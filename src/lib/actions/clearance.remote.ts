@@ -12,6 +12,11 @@ import { command, form, getRequestEvent, query } from '$app/server';
 import { error, isHttpError } from '@sveltejs/kit';
 import { z } from 'zod';
 import { db } from '#lib/server/db/index.js';
+import {
+	getSystemSettings,
+	encryptSettingsSecrets,
+	decryptSettingsSecrets
+} from '#lib/server/settings.js';
 import { clearanceTemplate, enrollment, studentData, systemSettings } from '#lib/schema.js';
 import { getClearancePolicy } from '#lib/server/clearance-settings.js';
 import { getGeminiApiKey, getGeminiModel, recognizeIdentity } from '#lib/server/handwriting.js';
@@ -147,7 +152,7 @@ export const rejectClearance = command(
 export const getClearanceSettings = query(async () => {
 	validateUser(getRequestEvent().locals, [Role.ADMIN]);
 	const key = await getGeminiApiKey();
-	const settings = db.select().from(systemSettings).where(eq(systemSettings.id, 1)).get()!;
+	const settings = await getSystemSettings();
 	return {
 		configured: fileStorageConfigured(),
 		template: getClearanceTemplateInfo(),
@@ -168,13 +173,7 @@ export const fetchClearanceOpenaiModels = command(
 	async ({ openaiApiKey }) => {
 		const { locals, request } = getRequestEvent();
 		validateUser(locals, [Role.ADMIN]);
-		const key =
-			openaiApiKey ||
-			db
-				.select({ key: systemSettings.openaiApiKey })
-				.from(systemSettings)
-				.where(eq(systemSettings.id, 1))
-				.get()?.key;
+		const key = openaiApiKey || (await getSystemSettings()).openaiApiKey;
 		if (!key) error(400, 'Enter or save an OpenAI API key first.');
 		try {
 			const response = await fetch('https://api.openai.com/v1/models', {
@@ -286,7 +285,8 @@ export const saveClearanceVerification = command(
 		await getGeminiApiKey();
 		db.transaction(
 			(tx) => {
-				const existingKey = tx.select().from(systemSettings).where(eq(systemSettings.id, 1)).get();
+				const stored = tx.select().from(systemSettings).where(eq(systemSettings.id, 1)).get()!;
+				const existingKey = decryptSettingsSecrets(stored);
 				const key = input.clearGeminiKey
 					? ''
 					: input.geminiApiKey || existingKey?.geminiApiKey || '';
@@ -304,17 +304,19 @@ export const saveClearanceVerification = command(
 						'Enter an API key for the selected provider before enabling personal information verification.'
 					);
 				tx.update(systemSettings)
-					.set({
-						automatedClearanceVerificationEnabled: input.automatedClearanceVerificationEnabled,
-						personalInfoVerificationEnabled: input.personalInfoVerificationEnabled,
-						geminiApiKey: key,
-						aiProvider: input.aiProvider,
-						openaiApiKey: openaiKey,
-						openaiModel: input.openaiModel,
-						ollamaBaseUrl: input.ollamaBaseUrl,
-						ollamaModel: input.ollamaModel,
-						geminiModel: input.geminiModel
-					})
+					.set(
+						encryptSettingsSecrets({
+							automatedClearanceVerificationEnabled: input.automatedClearanceVerificationEnabled,
+							personalInfoVerificationEnabled: input.personalInfoVerificationEnabled,
+							geminiApiKey: key,
+							aiProvider: input.aiProvider,
+							openaiApiKey: openaiKey,
+							openaiModel: input.openaiModel,
+							ollamaBaseUrl: input.ollamaBaseUrl,
+							ollamaModel: input.ollamaModel,
+							geminiModel: input.geminiModel
+						})
+					)
 					.where(eq(systemSettings.id, 1))
 					.run();
 			},
@@ -336,7 +338,7 @@ export const testClearanceAi = command(
 	async (input) => {
 		validateUser(getRequestEvent().locals, [Role.ADMIN]);
 		await getGeminiApiKey();
-		const settings = db.select().from(systemSettings).where(eq(systemSettings.id, 1)).get()!;
+		const settings = await getSystemSettings();
 		const provider = input.aiProvider ?? (settings.aiProvider as 'gemini' | 'openai' | 'ollama');
 		const label = AI_PROVIDER_LABELS[provider];
 		if (provider === 'gemini' && !(input.geminiApiKey || (await getGeminiApiKey())))

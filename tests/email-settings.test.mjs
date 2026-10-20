@@ -1,3 +1,4 @@
+import { secretsDependencies } from './secrets-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -16,7 +17,10 @@ function loadTypeScript(file, dependencies = {}) {
 		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	});
 	const exports = {};
-	new Function('require', 'exports', outputText)((id) => dependencies[id] ?? require(id), exports);
+	new Function('require', 'exports', outputText)(
+		(id) => dependencies[id] ?? secretsDependencies[id] ?? require(id),
+		exports
+	);
 	return exports;
 }
 const email = loadTypeScript('lib/email.ts');
@@ -138,6 +142,11 @@ test('admin can switch providers, retain blank secrets, replace keys, and load o
 	await f.updateSystemSettings({ ...sender, emailApiType: 'resend', resendApiKey: 're_secret' });
 	await f.updateSystemSettings({ ...sender, emailApiType: 'resend', resendApiKey: '  ' });
 	let current = await f.getSystemSettings();
+	const stored = f.sqlite
+		.prepare('SELECT sender_password, resend_api_key FROM system_settings')
+		.get();
+	assert.match(stored.sender_password, /^enc:v1:/);
+	assert.match(stored.resend_api_key, /^enc:v1:/);
 	assert.equal(current.resendApiKey, 're_secret');
 	assert.equal(current.senderPassword, 'smtp-secret');
 	assert.equal(current.smtpHost, 'smtp.example.com');
@@ -207,7 +216,7 @@ test('email migration preserves SMTP, defaults to SMTP, supports retry, rollback
 		"INSERT INTO system_settings (id, sender_email, sender_password) VALUES (1, 'system@example.com', 'smtp-secret')"
 	);
 	const before = sqlite.prepare('SELECT * FROM system_settings').get();
-	const config = { migrationsFolder: 'drizzle' };
+	const config = migrationConfigThrough(t, 19);
 	migrate(drizzle(sqlite), config);
 	const expanded = { ...before, email_api_type: 'smtp', resend_api_key: null };
 	assert.deepEqual(sqlite.prepare('SELECT * FROM system_settings').get(), expanded);

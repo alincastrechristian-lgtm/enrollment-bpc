@@ -38,9 +38,12 @@ COPY --from=build --chown=node:node /app/src/lib/schema.ts ./src/lib/schema.ts
 COPY --from=build --chown=node:node /app/src/lib/email.ts ./src/lib/email.ts
 COPY --from=build --chown=node:node /app/src/lib/Roles.ts ./src/lib/Roles.ts
 COPY --from=build --chown=node:node /app/src/lib/server/auth-names.ts ./src/lib/server/auth-names.ts
+COPY --from=build --chown=node:node /app/src/lib/server/secrets.ts ./src/lib/server/secrets.ts
 COPY --from=build --chown=node:node /app/src/lib/person-name.ts ./src/lib/person-name.ts
 COPY --chown=root:root docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY --chown=node:node scripts/migrate.mjs ./scripts/migrate.mjs
+COPY --chown=node:node scripts/settings-secrets.ts ./scripts/settings-secrets.ts
+COPY --chown=node:node scripts/defense-database.mjs ./scripts/defense-database.mjs
 
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

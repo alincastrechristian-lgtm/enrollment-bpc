@@ -6,7 +6,7 @@ import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { z } from 'zod';
 import { db } from '../server/db';
-import { getSystemSettings } from '../server/settings';
+import { getSystemSettings, encryptSettingsSecrets } from '../server/settings';
 
 const updateEmailSettingsSchema = z
 	.object({
@@ -45,11 +45,11 @@ export const updateSystemSettings = command(updateEmailSettingsSchema, async (da
 	if (data.emailApiType === EmailApiType.SMTP && !data.senderPassword && !settings.senderPassword)
 		error(400, 'Enter a sender password before selecting SMTP.');
 
-	const updateData = {
+	const updateData = encryptSettingsSecrets({
 		...data,
 		senderPassword: data.senderPassword || undefined,
 		resendApiKey: data.resendApiKey || undefined
-	};
+	});
 
 	await db
 		.insert(systemSettings)

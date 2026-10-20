@@ -1,3 +1,4 @@
+import { secretsDependencies } from './secrets-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -16,6 +17,7 @@ function load(file, deps = {}) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			deps[id] ??
+			secretsDependencies[id] ??
 			(id === '#lib/clearance/deadline.js' ? load('src/lib/clearance/deadline.ts') : undefined) ??
 			(id === '#lib/clearance/ai.js' ? load('src/lib/clearance/ai.ts') : undefined) ??
 			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : undefined) ??
@@ -223,6 +225,10 @@ function fixture(t) {
 		}
 	});
 	const remote = load('src/lib/actions/clearance.remote.ts', {
+		'#lib/server/settings.js': load('src/lib/server/settings.ts', {
+			'../schema': schema,
+			'./db': { db }
+		}),
 		...deps,
 		'#lib/server/clearance-template.js': {},
 		'#lib/server/garage/files.js': files,

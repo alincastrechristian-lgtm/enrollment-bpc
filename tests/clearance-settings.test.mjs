@@ -1,3 +1,4 @@
+import { secretsDependencies, secrets, testEncryptionKey } from './secrets-fixture.mjs';
 import assert from 'node:assert/strict';
 import { randomFillSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -20,6 +21,7 @@ function load(file, dependencies = {}, override) {
 	new Function('require', 'exports', outputText)(
 		(id) =>
 			dependencies[id] ??
+			secretsDependencies[id] ??
 			(id === '#lib/clearance/deadline.js' ? load('src/lib/clearance/deadline.ts') : undefined) ??
 			(id === '#lib/clearance/ai.js' ? load('src/lib/clearance/ai.ts') : undefined) ??
 			(id === '#lib/clearance/gemini.js' ? load('src/lib/clearance/gemini.ts') : undefined) ??
@@ -504,8 +506,16 @@ test('admin settings import legacy key once, never expose it, preserve blank inp
 	assert.equal(settings.automatedClearanceVerificationEnabled, true);
 	assert(!JSON.stringify(settings).includes('legacy-test-key'));
 	await f.remote.saveClearanceVerification(settingInput({ geminiApiKey: 'new-secret-key' }));
+	assert.match(f.db.select().from(schema.systemSettings).get().geminiApiKey, /^enc:v1:/);
 	await f.remote.saveClearanceVerification(settingInput({ geminiApiKey: '' }));
-	assert.equal(f.db.select().from(schema.systemSettings).get().geminiApiKey, 'new-secret-key');
+	assert.equal(
+		secrets.decryptSecret(
+			f.db.select().from(schema.systemSettings).get().geminiApiKey,
+			testEncryptionKey,
+			'geminiApiKey'
+		),
+		'new-secret-key'
+	);
 	await assert.rejects(
 		f.remote.saveClearanceVerification(settingInput({ clearGeminiKey: true })),
 		hasStatus(400)
@@ -542,7 +552,14 @@ test('Gemini test uses unsaved or saved key, sends blank PNG samples, and keeps 
 	};
 	assert.equal((await f.remote.testClearanceAi({ geminiApiKey: 'unsaved-key' })).success, true);
 	assert.equal(calls[0].input.headers['x-goog-api-key'], 'unsaved-key');
-	assert.equal(f.db.select().from(schema.systemSettings).get().geminiApiKey, 'legacy-test-key');
+	assert.equal(
+		secrets.decryptSecret(
+			f.db.select().from(schema.systemSettings).get().geminiApiKey,
+			testEncryptionKey,
+			'geminiApiKey'
+		),
+		'legacy-test-key'
+	);
 	const parts = JSON.parse(calls[0].input.body).contents[0].parts;
 	assert.equal(parts.filter((p) => p.inlineData?.mimeType === 'image/png').length, 2);
 	assert(!JSON.stringify(parts).includes('Student User'));
